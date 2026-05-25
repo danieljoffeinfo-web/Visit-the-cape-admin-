@@ -35,7 +35,8 @@ function decodeReturnUrl(request: NextRequest, status: 'connected' | 'error', re
 
 export async function GET(request: NextRequest) {
   const url = request.url
-  const xero = createXeroClient()
+  const state = request.nextUrl.searchParams.get('state') || undefined
+  const xero = createXeroClient(state)
 
   try {
     const tokenSet = await xero.apiCallback(url)

@@ -1,11 +1,12 @@
 import { XeroClient } from 'xero-node'
 import { supabase } from './supabase'
 
-export function createXeroClient() {
+export function createXeroClient(state?: string) {
   return new XeroClient({
     clientId: process.env.XERO_CLIENT_ID!,
     clientSecret: process.env.XERO_CLIENT_SECRET!,
     redirectUris: [process.env.XERO_REDIRECT_URI!],
+    state,
     scopes: [
       'accounting.settings',
       'accounting.contacts',
