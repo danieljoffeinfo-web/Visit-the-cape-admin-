@@ -1,5 +1,5 @@
 import { XeroClient } from 'xero-node'
-import { supabase } from './supabase'
+import { supabaseAdmin } from './supabase-admin'
 
 export function createXeroClient(state?: string) {
   return new XeroClient({
@@ -21,7 +21,7 @@ export function createXeroClient(state?: string) {
 }
 
 export async function getXeroTokens() {
-  const { data } = await supabase
+  const { data } = await supabaseAdmin
     .from('xero_tokens')
     .select('*')
     .order('updated_at', { ascending: false })
@@ -37,7 +37,7 @@ export async function saveXeroTokens(tokens: {
   org_name: string
   expires_at: string
 }) {
-  const { error } = await supabase.from('xero_tokens').upsert(
+  const { error } = await supabaseAdmin.from('xero_tokens').upsert(
     { ...tokens, updated_at: new Date().toISOString() },
     { onConflict: 'tenant_id' }
   )
