@@ -107,6 +107,7 @@ export function SocialsPanel() {
   const [activePlatform, setActivePlatform] = useState<Platform>('instagram')
   const [month, setMonth] = useState(startOfMonth(new Date()))
   const [selectedDate, setSelectedDate] = useState(today)
+  const [selectedDayOpen, setSelectedDayOpen] = useState(true)
   const [entries, setEntries] = useState<SocialEntry[]>(() => readStored<SocialEntry[]>(STORAGE_KEY, []))
   const [briefs, setBriefs] = useState<ContentBrief[]>(() => readStored<ContentBrief[]>(BRIEFS_KEY, []))
 
@@ -150,6 +151,11 @@ export function SocialsPanel() {
 
   function updateEntry(id: string, patch: Partial<SocialEntry>) {
     setEntries(current => current.map(entry => entry.id === id ? { ...entry, ...patch } : entry))
+  }
+
+  function completeEntry(id: string) {
+    updateEntry(id, { status: 'posted' })
+    setSelectedDayOpen(false)
   }
 
   function removeEntry(id: string) {
@@ -238,7 +244,7 @@ export function SocialsPanel() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.45fr) minmax(320px, 0.9fr)', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: selectedDayOpen ? 'minmax(0, 1.45fr) minmax(320px, 0.9fr)' : 'minmax(0, 1fr)', gap: 20, alignItems: 'start' }}>
         <section style={{ ...panel, padding: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <button aria-label="Previous month" onClick={() => setMonth(current => subMonths(current, 1))} style={iconButton}>
@@ -259,7 +265,10 @@ export function SocialsPanel() {
               const dayEntries = filteredEntries.filter(entry => entry.date === dateKey)
               const selected = dateKey === selectedDate
               return (
-                <button key={dateKey} onClick={() => setSelectedDate(dateKey)} style={{
+                <button key={dateKey} onClick={() => {
+                  setSelectedDate(dateKey)
+                  setSelectedDayOpen(true)
+                }} style={{
                   minHeight: 122,
                   textAlign: 'left',
                   borderRadius: 7,
@@ -346,6 +355,7 @@ export function SocialsPanel() {
           </div>
         </section>
 
+        {selectedDayOpen ? (
         <aside style={{ ...panel, padding: 18 }}>
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.42)', marginBottom: 4 }}>Selected day</div>
@@ -424,7 +434,7 @@ export function SocialsPanel() {
                     <Trash2 size={14} />
                     Remove item
                   </button>
-                  <button onClick={() => updateEntry(entry.id, { status: 'posted' })} style={{
+                  <button onClick={() => completeEntry(entry.id)} style={{
                     ...doneButton,
                     background: entry.status === 'posted' ? 'rgba(76,175,132,0.16)' : '#4caf84',
                     color: entry.status === 'posted' ? '#4caf84' : '#07110c',
@@ -438,6 +448,7 @@ export function SocialsPanel() {
             ))}
           </div>
         </aside>
+        ) : null}
       </div>
 
       <section style={{ marginTop: 24, ...panel, padding: 20 }}>
