@@ -88,6 +88,10 @@ function entryLabel(entry: SocialEntry) {
   return `${platformLabel(entry.platform)} ${entry.kind === 'post' ? 'Post' : 'Story'}`
 }
 
+function entryDescription(entry: SocialEntry) {
+  return entry.caption.trim() || `Add description for this ${entry.kind}`
+}
+
 function readStored<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback
   try {
@@ -246,7 +250,7 @@ export function SocialsPanel() {
             </button>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(78px, 1fr))', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(104px, 1fr))', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
               <div key={day} style={{ color: 'rgba(240,236,228,0.42)', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 4px 6px' }}>{day}</div>
             ))}
@@ -256,7 +260,7 @@ export function SocialsPanel() {
               const selected = dateKey === selectedDate
               return (
                 <button key={dateKey} onClick={() => setSelectedDate(dateKey)} style={{
-                  minHeight: 96,
+                  minHeight: 122,
                   textAlign: 'left',
                   borderRadius: 7,
                   border: selected ? '1px solid rgba(184,149,106,0.8)' : '1px solid rgba(240,236,228,0.08)',
@@ -268,12 +272,73 @@ export function SocialsPanel() {
                   flexDirection: 'column',
                   gap: 6,
                 }}>
-                  <span style={{ fontWeight: 800, fontSize: 13 }}>{format(day, 'd')}</span>
-                  <span style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 800, fontSize: 13 }}>{format(day, 'd')}</span>
+                    {dayEntries.length > 0 ? (
+                      <span style={{
+                        color: selected ? '#d4b896' : 'rgba(240,236,228,0.5)',
+                        fontSize: 10,
+                        fontWeight: 800,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                      }}>
+                        {dayEntries.length}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span style={{ display: 'grid', gap: 4, minWidth: 0 }}>
                     {dayEntries.slice(0, 3).map(entry => (
-                      <span key={entry.id} title={entryLabel(entry)} style={{ width: 8, height: 8, borderRadius: '50%', background: entry.status === 'posted' ? '#4caf84' : platformColor[entry.platform] }} />
+                      <span key={entry.id} title={`${entryLabel(entry)}: ${entryDescription(entry)}`} style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'auto minmax(0, 1fr)',
+                        gap: 6,
+                        alignItems: 'center',
+                        minWidth: 0,
+                        borderRadius: 5,
+                        background: entry.status === 'posted' ? 'rgba(76,175,132,0.13)' : 'rgba(12,11,9,0.36)',
+                        border: `1px solid ${entry.status === 'posted' ? 'rgba(76,175,132,0.22)' : 'rgba(240,236,228,0.08)'}`,
+                        padding: '5px 6px',
+                      }}>
+                        <span style={{
+                          width: 6,
+                          height: 24,
+                          borderRadius: 999,
+                          background: entry.status === 'posted' ? '#4caf84' : platformColor[entry.platform],
+                        }} />
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{
+                            display: 'block',
+                            color: entry.status === 'posted' ? '#7dd1a6' : platformColor[entry.platform],
+                            fontSize: 10,
+                            fontWeight: 900,
+                            lineHeight: 1,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}>
+                            {entry.kind} {entry.status === 'posted' ? 'done' : 'draft'}
+                          </span>
+                          <span style={{
+                            display: 'block',
+                            marginTop: 3,
+                            color: entry.caption.trim() ? 'rgba(240,236,228,0.76)' : 'rgba(240,236,228,0.36)',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            lineHeight: 1.15,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}>
+                            {entryDescription(entry)}
+                          </span>
+                        </span>
+                      </span>
                     ))}
-                    {dayEntries.length > 3 ? <span style={{ fontSize: 10, color: 'rgba(240,236,228,0.45)' }}>+{dayEntries.length - 3}</span> : null}
+                    {dayEntries.length > 3 ? (
+                      <span style={{ fontSize: 10, color: 'rgba(240,236,228,0.45)', fontWeight: 700 }}>+{dayEntries.length - 3} more item{dayEntries.length - 3 === 1 ? '' : 's'}</span>
+                    ) : null}
                   </span>
                 </button>
               )
@@ -326,7 +391,7 @@ export function SocialsPanel() {
                   </button>
                 </div>
 
-                <textarea value={entry.caption} onChange={(event) => updateEntry(entry.id, { caption: event.target.value })} placeholder="Caption or posting notes" rows={3} style={{ ...inputStyle, resize: 'vertical', marginBottom: 12 }} />
+                <textarea value={entry.caption} onChange={(event) => updateEntry(entry.id, { caption: event.target.value })} placeholder="Description shown on the calendar" rows={3} style={{ ...inputStyle, resize: 'vertical', marginBottom: 12 }} />
 
                 <label style={{ ...secondaryButton, width: '100%', justifyContent: 'center', marginBottom: 10 }}>
                   <ImagePlus size={15} />
