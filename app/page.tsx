@@ -9,6 +9,7 @@ import { ToursPanel } from '@/components/panels/tours-panel'
 import { AccountingPanel } from '@/components/panels/accounting-panel'
 import { CrmPanel } from '@/components/panels/crm-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
+import { SocialsPanel } from '@/components/panels/socials-panel'
 import { PlaceholderPanel } from '@/components/panels/placeholder-panel'
 import { useSearchParams } from 'next/navigation'
 
@@ -67,7 +68,7 @@ function AdminApp() {
           {panel === 'tours' && <ToursPanel />}
           {panel === 'fleet' && <PlaceholderPanel id="fleet" />}
           {panel === 'accounting' && <AccountingPanel />}
-          {panel === 'socials' && <PlaceholderPanel id="socials" />}
+          {panel === 'socials' && <SocialsPanel />}
           {panel === 'crm' && <CrmPanel />}
           {panel === 'settings' && <SettingsPanel />}
         </div>
