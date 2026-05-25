@@ -143,3 +143,26 @@
   --dft-muted2: rgba(240,236,228,0.12);
   --dft-muted3: rgba(240,236,228,0.06);
 }
+
+.socials-document-editor p {
+  margin: 0 0 14px;
+}
+
+.socials-document-editor table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.socials-document-editor td,
+.socials-document-editor th {
+  border: 1px solid rgba(26, 24, 21, 0.22);
+  min-width: 120px;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.socials-document-editor:empty::before {
+  color: rgba(26, 24, 21, 0.38);
+  content: "Write the shoot notes, hooks, locations, copy angles, or content brief here.";
+}

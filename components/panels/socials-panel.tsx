@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, startOfMonth, startOfWeek, subMonths } from 'date-fns'
-import { Check, ChevronLeft, ChevronRight, Download, FileText, ImagePlus, Plus, Trash2 } from 'lucide-react'
+import { Bold, Check, ChevronLeft, ChevronRight, Download, FileText, ImagePlus, Plus, Save, Table2, Trash2, Underline, X } from 'lucide-react'
 
 type Platform = 'instagram' | 'tiktok' | 'facebook'
 type PostKind = 'post' | 'story'
 type PublishStatus = 'draft' | 'posted'
-type BriefKind = 'In person video content briefs' | 'Content briefs'
+type BriefKind = 'Camera shoot' | 'Content brief'
 
 type MediaAsset = {
   id: string
@@ -35,6 +35,7 @@ type ContentBrief = {
   kind: BriefKind
   title: string
   notes: string
+  documentHtml: string
 }
 
 const STORAGE_KEY = 'dft-socials-planner-v1'
@@ -51,7 +52,7 @@ const postKinds: { id: PostKind; label: string }[] = [
   { id: 'story', label: 'Story' },
 ]
 
-const briefKinds: BriefKind[] = ['In person video content briefs', 'Content briefs']
+const briefKinds: BriefKind[] = ['Camera shoot', 'Content brief']
 
 const platformColor: Record<Platform, string> = {
   instagram: '#d4b896',
@@ -102,6 +103,30 @@ function readStored<T>(key: string, fallback: T): T {
   }
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;')
+}
+
+function normalizeBrief(brief: ContentBrief): ContentBrief {
+  const legacyKind = brief.kind as string
+  const kind: BriefKind = legacyKind === 'In person video content briefs'
+    ? 'Camera shoot'
+    : legacyKind === 'Content briefs'
+      ? 'Content brief'
+      : brief.kind
+
+  return {
+    ...brief,
+    kind,
+    documentHtml: brief.documentHtml || '',
+  }
+}
+
 export function SocialsPanel() {
   const today = format(new Date(), 'yyyy-MM-dd')
   const [activePlatform, setActivePlatform] = useState<Platform>('instagram')
@@ -109,7 +134,11 @@ export function SocialsPanel() {
   const [selectedDate, setSelectedDate] = useState(today)
   const [selectedDayOpen, setSelectedDayOpen] = useState(true)
   const [entries, setEntries] = useState<SocialEntry[]>(() => readStored<SocialEntry[]>(STORAGE_KEY, []))
-  const [briefs, setBriefs] = useState<ContentBrief[]>(() => readStored<ContentBrief[]>(BRIEFS_KEY, []))
+  const [briefs, setBriefs] = useState<ContentBrief[]>(() => readStored<ContentBrief[]>(BRIEFS_KEY, []).map(normalizeBrief))
+  const [openBriefId, setOpenBriefId] = useState<string | null>(null)
+  const editorRef = useRef<HTMLDivElement | null>(null)
+
+  const openBrief = briefs.find(brief => brief.id === openBriefId)
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
@@ -169,9 +198,10 @@ export function SocialsPanel() {
         id: makeId(),
         date: selectedDate,
         time: '09:00',
-        kind: 'In person video content briefs',
+        kind: 'Camera shoot',
         title: '',
         notes: '',
+        documentHtml: '',
       },
     ])
   }
@@ -182,6 +212,36 @@ export function SocialsPanel() {
 
   function removeBrief(id: string) {
     setBriefs(current => current.filter(brief => brief.id !== id))
+    if (openBriefId === id) setOpenBriefId(null)
+  }
+
+  function getBriefDocument(brief: ContentBrief) {
+    return brief.documentHtml || (brief.notes ? `<p>${escapeHtml(brief.notes)}</p>` : '')
+  }
+
+  function openBriefDocument(id: string) {
+    setOpenBriefId(id)
+    window.setTimeout(() => editorRef.current?.focus(), 0)
+  }
+
+  function runEditorCommand(command: string, value?: string) {
+    editorRef.current?.focus()
+    document.execCommand(command, false, value)
+  }
+
+  function insertTable() {
+    editorRef.current?.focus()
+    document.execCommand('insertHTML', false, '<table><tbody><tr><td>Topic</td><td>Notes</td></tr><tr><td></td><td></td></tr></tbody></table><p></p>')
+  }
+
+  function saveBriefDocument() {
+    if (!openBriefId || !editorRef.current) return
+    const html = editorRef.current.innerHTML
+    updateBrief(openBriefId, {
+      documentHtml: html,
+      notes: editorRef.current.textContent?.trim() || '',
+    })
+    setOpenBriefId(null)
   }
 
   async function handleFiles(entryId: string, fileList: FileList | null) {
@@ -455,7 +515,7 @@ export function SocialsPanel() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 16 }}>
           <div>
             <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Content planner</h2>
-            <p style={{ color: 'rgba(240,236,228,0.5)', fontSize: 13, marginTop: 2 }}>Dates, times, in person video content briefs, and content briefs.</p>
+            <p style={{ color: 'rgba(240,236,228,0.5)', fontSize: 13, marginTop: 2 }}>Dates, times, camera shoots, and content documents.</p>
           </div>
           <button onClick={addBrief} style={primaryButton}>
             <Plus size={14} />
@@ -472,7 +532,7 @@ export function SocialsPanel() {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 860 }}>
               <thead>
                 <tr>
-                  {['Date', 'Time', 'Brief type', 'Title', 'Brief notes', ''].map(head => (
+                  {['Date', 'Time', 'Content type', 'Title', 'Document', ''].map(head => (
                     <th key={head} style={{ textAlign: 'left', color: 'rgba(240,236,228,0.42)', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 800, padding: '0 8px 10px' }}>{head}</th>
                   ))}
                 </tr>
@@ -494,8 +554,11 @@ export function SocialsPanel() {
                     <td style={{ padding: 8, width: 180 }}>
                       <input value={brief.title} onChange={(event) => updateBrief(brief.id, { title: event.target.value })} placeholder="Shoot or brief title" style={inputStyle} />
                     </td>
-                    <td style={{ padding: 8 }}>
-                      <input value={brief.notes} onChange={(event) => updateBrief(brief.id, { notes: event.target.value })} placeholder="Key shots, copy angles, locations, hooks" style={inputStyle} />
+                    <td style={{ padding: 8, width: 210 }}>
+                      <button onClick={() => openBriefDocument(brief.id)} style={{ ...secondaryButton, width: '100%', justifyContent: 'center' }}>
+                        <FileText size={14} />
+                        {brief.notes ? 'View document' : 'Add document'}
+                      </button>
                     </td>
                     <td style={{ padding: 8, width: 46 }}>
                       <button aria-label="Remove brief" onClick={() => removeBrief(brief.id)} style={iconButton}>
@@ -543,6 +606,112 @@ export function SocialsPanel() {
             ))}
           </div>
         </section>
+      ) : null}
+
+      {openBrief ? (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 50,
+          background: 'rgba(12,11,9,0.94)',
+          padding: 24,
+          overflowY: 'auto',
+        }}>
+          <div style={{
+            maxWidth: 980,
+            minHeight: 'calc(100vh - 48px)',
+            margin: '0 auto',
+            background: '#1a1815',
+            border: '1px solid rgba(240,236,228,0.12)',
+            borderRadius: 8,
+            boxShadow: '0 24px 70px rgba(0,0,0,0.48)',
+            display: 'flex',
+            flexDirection: 'column',
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              padding: '18px 20px',
+              borderBottom: '1px solid rgba(240,236,228,0.1)',
+            }}>
+              <div>
+                <div style={{ color: 'rgba(240,236,228,0.42)', fontSize: 11, fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  {openBrief.kind} · {format(new Date(`${openBrief.date}T12:00:00`), 'd MMM yyyy')} · {openBrief.time}
+                </div>
+                <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 24, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 4 }}>
+                  {openBrief.title || 'Untitled content document'}
+                </h3>
+              </div>
+              <button aria-label="Close document" onClick={() => setOpenBriefId(null)} style={iconButton}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '12px 20px',
+              borderBottom: '1px solid rgba(240,236,228,0.08)',
+              flexWrap: 'wrap',
+            }}>
+              <button title="Bold" onClick={() => runEditorCommand('bold')} style={iconButton}>
+                <Bold size={15} />
+              </button>
+              <button title="Underline" onClick={() => runEditorCommand('underline')} style={iconButton}>
+                <Underline size={15} />
+              </button>
+              <label title="Text colour" style={{ ...iconButton, width: 42 }}>
+                <input type="color" defaultValue="#d4b896" onChange={(event) => runEditorCommand('foreColor', event.target.value)} style={{ width: 24, height: 24, border: 'none', padding: 0, background: 'transparent', cursor: 'pointer' }} />
+              </label>
+              <button onClick={insertTable} style={{ ...secondaryButton, padding: '8px 10px' }}>
+                <Table2 size={15} />
+                Table
+              </button>
+            </div>
+
+            <div style={{ padding: 20, flex: 1 }}>
+              <div
+                ref={editorRef}
+                className="socials-document-editor"
+                contentEditable
+                suppressContentEditableWarning
+                dangerouslySetInnerHTML={{ __html: getBriefDocument(openBrief) }}
+                style={{
+                  minHeight: 'calc(100vh - 245px)',
+                  background: '#f0ece4',
+                  color: '#1a1815',
+                  borderRadius: 6,
+                  padding: '34px 38px 92px',
+                  fontFamily: "'Barlow', sans-serif",
+                  fontSize: 16,
+                  lineHeight: 1.55,
+                  outline: 'none',
+                  boxShadow: 'inset 0 0 0 1px rgba(12,11,9,0.08)',
+                }}
+              />
+            </div>
+
+            <div style={{
+              position: 'sticky',
+              bottom: 0,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              padding: '14px 20px',
+              background: 'rgba(26,24,21,0.96)',
+              borderTop: '1px solid rgba(240,236,228,0.1)',
+              borderBottomLeftRadius: 8,
+              borderBottomRightRadius: 8,
+            }}>
+              <button onClick={saveBriefDocument} style={primaryButton}>
+                <Save size={14} />
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   )
