@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       tenantId,
       undefined,    // ifModifiedSince
       where,        // where
-      'DueDateUTC DESC', // order
+      'DueDate DESC', // order
       undefined,    // IDs
       undefined,    // invoiceNumbers
       undefined,    // contactIDs
