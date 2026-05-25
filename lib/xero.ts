@@ -7,13 +7,14 @@ export function createXeroClient() {
     clientSecret: process.env.XERO_CLIENT_SECRET!,
     redirectUris: [process.env.XERO_REDIRECT_URI!],
     scopes: [
-      'openid', 'profile', 'email',
-      'accounting.transactions',
-      'accounting.contacts',
       'accounting.settings',
-      'accounting.reports.read',
-      'accounting.attachments',
-      'offline_access',
+      'accounting.contacts',
+      'accounting.invoices',
+      'accounting.payments',
+      'accounting.banktransactions',
+      'accounting.reports.profitandloss.read',
+      'accounting.reports.executivesummary.read',
+      'accounting.reports.banksummary.read',
     ],
   })
 }
