@@ -105,7 +105,6 @@ export function SocialsPanel() {
   const [selectedDate, setSelectedDate] = useState(today)
   const [entries, setEntries] = useState<SocialEntry[]>(() => readStored<SocialEntry[]>(STORAGE_KEY, []))
   const [briefs, setBriefs] = useState<ContentBrief[]>(() => readStored<ContentBrief[]>(BRIEFS_KEY, []))
-  const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
@@ -196,13 +195,6 @@ export function SocialsPanel() {
 
   function removeAsset(entryId: string, assetId: string) {
     setEntries(current => current.map(entry => entry.id === entryId ? { ...entry, assets: entry.assets.filter(asset => asset.id !== assetId) } : entry))
-  }
-
-  function submitPlanner() {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
-    window.localStorage.setItem(BRIEFS_KEY, JSON.stringify(briefs))
-    setSubmitted(true)
-    window.setTimeout(() => setSubmitted(false), 1800)
   }
 
   const exportDataUrl = `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify({ entries, briefs }, null, 2))}`
@@ -362,10 +354,21 @@ export function SocialsPanel() {
                   </div>
                 ) : null}
 
-                <button onClick={() => removeEntry(entry.id)} style={{ ...dangerButton, marginTop: 12 }}>
-                  <Trash2 size={14} />
-                  Remove item
-                </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 12 }}>
+                  <button onClick={() => removeEntry(entry.id)} style={dangerButton}>
+                    <Trash2 size={14} />
+                    Remove item
+                  </button>
+                  <button onClick={() => updateEntry(entry.id, { status: 'posted' })} style={{
+                    ...doneButton,
+                    background: entry.status === 'posted' ? 'rgba(76,175,132,0.16)' : '#4caf84',
+                    color: entry.status === 'posted' ? '#4caf84' : '#07110c',
+                    border: entry.status === 'posted' ? '1px solid rgba(76,175,132,0.35)' : '1px solid rgba(76,175,132,0.65)',
+                  }}>
+                    <Check size={14} />
+                    Done
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -465,31 +468,6 @@ export function SocialsPanel() {
           </div>
         </section>
       ) : null}
-
-      <button onClick={submitPlanner} style={{
-        position: 'fixed',
-        right: 28,
-        bottom: 24,
-        zIndex: 80,
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 8,
-        border: '1px solid rgba(212,184,150,0.45)',
-        background: submitted ? '#4caf84' : '#b8956a',
-        color: submitted ? '#07110c' : '#0c0b09',
-        borderRadius: 8,
-        padding: '12px 18px',
-        fontSize: 13,
-        fontWeight: 900,
-        cursor: 'pointer',
-        fontFamily: "'Barlow', sans-serif",
-        boxShadow: '0 12px 28px rgba(0,0,0,0.32)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-      }}>
-        {submitted ? <Check size={15} /> : null}
-        {submitted ? 'Submitted' : 'Submit'}
-      </button>
     </div>
   )
 }
@@ -556,4 +534,18 @@ const dangerButton = {
   fontWeight: 800,
   cursor: 'pointer',
   fontFamily: "'Barlow', sans-serif",
+}
+
+const doneButton = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 8,
+  borderRadius: 6,
+  padding: '8px 12px',
+  fontSize: 12,
+  fontWeight: 900,
+  cursor: 'pointer',
+  fontFamily: "'Barlow', sans-serif",
+  textTransform: 'uppercase' as const,
+  letterSpacing: '0.06em',
 }
