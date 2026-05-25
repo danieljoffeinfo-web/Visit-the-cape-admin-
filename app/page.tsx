@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { DashboardPanel } from '@/components/panels/dashboard-panel'
 import { BookingsPanel } from '@/components/panels/bookings-panel'
@@ -30,19 +30,12 @@ const PANEL_TITLES: Record<Panel, string> = {
 
 function AdminApp() {
   const searchParams = useSearchParams()
-  const [panel, setPanel] = useState<Panel>('dashboard')
-
-  // Allow deep-linking via ?panel=settings
-  useEffect(() => {
+  const [panel, setPanel] = useState<Panel>(() => {
     const p = searchParams?.get('panel') as Panel
-    if (p && PANEL_TITLES[p]) setPanel(p)
-  }, [searchParams])
-
-  // Handle Xero callback redirect to settings
-  useEffect(() => {
-    const xero = searchParams?.get('xero')
-    if (xero) setPanel('settings')
-  }, [searchParams])
+    if (p && PANEL_TITLES[p]) return p
+    if (searchParams?.get('xero')) return 'settings'
+    return 'dashboard'
+  })
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>

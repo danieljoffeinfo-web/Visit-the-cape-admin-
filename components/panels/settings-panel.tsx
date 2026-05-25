@@ -19,10 +19,10 @@ export function SettingsPanel() {
     const xeroParam = searchParams?.get('xero')
     if (xeroParam === 'connected') {
       toast.success('Xero connected successfully!')
-      window.history.replaceState({}, '', '/settings')
+      window.history.replaceState({}, '', '/?panel=settings')
     } else if (xeroParam === 'error') {
       toast.error('Failed to connect Xero. Please try again.')
-      window.history.replaceState({}, '', '/settings')
+      window.history.replaceState({}, '', '/?panel=settings')
     }
   }, [])
 
