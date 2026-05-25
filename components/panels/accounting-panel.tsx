@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { RevenuePayments } from '@/components/accounting/revenue-payments'
 import { AnalyticsReports } from '@/components/accounting/analytics-reports'
 import { AdvancedSync } from '@/components/accounting/advanced-sync'
-import { supabase } from '@/lib/supabase'
 
 type AccountingSection = 'revenue' | 'analytics' | 'advanced'
 
@@ -20,14 +19,10 @@ export function AccountingPanel() {
 
   async function checkXeroConnection() {
     try {
-      const { data } = await supabase
-        .from('xero_tokens')
-        .select('org_name, expires_at')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .single()
+      const res = await fetch('/api/xero/status')
+      const data = await res.json()
 
-      if (data) {
+      if (data.connected) {
         setConnected(true)
         setOrgName(data.org_name || 'Xero')
       }

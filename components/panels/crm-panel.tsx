@@ -32,7 +32,7 @@ export function CrmPanel() {
       const [bookRes, enqRes, xeroRes] = await Promise.all([
         supabase.from('tag_along_bookings').select('name, email, created_at').order('created_at', { ascending: false }),
         supabase.from('enquiries').select('name, email, created_at').order('created_at', { ascending: false }),
-        supabase.from('xero_tokens').select('tenant_id').limit(1).single(),
+        fetch('/api/xero/status').then((res) => res.json()),
       ])
 
       const allContacts = new Map<string, Customer>()
@@ -44,9 +44,9 @@ export function CrmPanel() {
         if (!allContacts.has(e.email)) allContacts.set(e.email, { id: e.email, name: e.name, email: e.email, created_at: e.created_at, total_bookings: 0 })
       }
       setCustomers(Array.from(allContacts.values()))
-      setXeroConnected(!xeroRes.error && !!xeroRes.data)
+      setXeroConnected(!!xeroRes.connected)
 
-      if (!xeroRes.error) {
+      if (xeroRes.connected) {
         const res = await fetch('/api/xero/contacts')
         const contacts = await res.json()
         const map: Record<string, { total: number; status: string }> = {}

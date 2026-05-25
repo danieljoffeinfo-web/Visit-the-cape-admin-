@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
 
 type XeroToken = { tenant_id: string; org_name: string; expires_at: string; updated_at: string } | null
 
@@ -29,13 +28,9 @@ export function SettingsPanel() {
   async function loadXeroStatus() {
     setLoadingXero(true)
     try {
-      const { data } = await supabase
-        .from('xero_tokens')
-        .select('tenant_id, org_name, expires_at, updated_at')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .single()
-      setXeroToken(data)
+      const res = await fetch('/api/xero/status')
+      const data = await res.json()
+      setXeroToken(data.connected ? data : null)
     } catch {
       setXeroToken(null)
     } finally {
@@ -47,7 +42,8 @@ export function SettingsPanel() {
     if (!confirm('Disconnect Xero? All accounting data will stop syncing.')) return
     setDisconnecting(true)
     try {
-      await supabase.from('xero_tokens').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      const res = await fetch('/api/xero/status', { method: 'DELETE' })
+      if (!res.ok) throw new Error()
       setXeroToken(null)
       toast.success('Xero disconnected')
     } catch {

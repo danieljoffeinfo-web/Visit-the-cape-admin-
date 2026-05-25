@@ -60,14 +60,14 @@ export function BookingsPanel() {
       const [bookRes, enqRes, xeroRes] = await Promise.all([
         supabase.from('tag_along_bookings').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('enquiries').select('*').order('created_at', { ascending: false }).limit(50),
-        supabase.from('xero_tokens').select('tenant_id').limit(1).single(),
+        fetch('/api/xero/status').then((res) => res.json()),
       ])
 
       setBookings((bookRes.data || []) as Booking[])
       setEnquiries((enqRes.data || []) as Enquiry[])
-      setXeroConnected(!xeroRes.error && !!xeroRes.data)
+      setXeroConnected(!!xeroRes.connected)
 
-      if (!xeroRes.error) {
+      if (xeroRes.connected) {
         // Load invoice links for all bookings
         const ids = (bookRes.data || []).map((b: Booking) => b.id)
         if (ids.length > 0) {
