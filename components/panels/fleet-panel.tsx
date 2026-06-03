@@ -88,6 +88,18 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     email: '',
     notes: '',
   })
+  const [editingVehicleId, setEditingVehicleId] = useState<string | null>(null)
+  const [editingVehicleForm, setEditingVehicleForm] = useState({
+    title: '',
+    registrationNumber: '',
+    seats: '1',
+    defaultRate: '',
+    notes: '',
+  })
+  const [savingVehicleEdit, setSavingVehicleEdit] = useState(false)
+  const [editingBookingId, setEditingBookingId] = useState<string | null>(null)
+  const [editingBookingAmount, setEditingBookingAmount] = useState('')
+  const [savingBookingEdit, setSavingBookingEdit] = useState(false)
 
   useEffect(() => {
     loadFleet()
@@ -277,6 +289,92 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         endDate: Number.isNaN(start.getTime()) ? current.endDate : format(addDays(start, nextDays - 1), 'yyyy-MM-dd'),
       }
     })
+  }
+
+  function startVehicleEdit(vehicle: VehicleRow) {
+    setEditingVehicleId(vehicle.id)
+    setEditingVehicleForm({
+      title: vehicle.title,
+      registrationNumber: vehicleRegistration(vehicle),
+      seats: String(vehicleSeats(vehicle) || 1),
+      defaultRate: vehicle.base_price === null || vehicle.base_price === undefined ? '' : String(Number(vehicle.base_price)),
+      notes: vehicleNotes(vehicle),
+    })
+  }
+
+  function cancelVehicleEdit() {
+    setEditingVehicleId(null)
+    setEditingVehicleForm({ title: '', registrationNumber: '', seats: '1', defaultRate: '', notes: '' })
+  }
+
+  async function saveVehicleEdit() {
+    if (!editingVehicleId) return
+
+    setSavingVehicleEdit(true)
+    try {
+      const response = await fetch('/api/fleet/vehicles', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingVehicleId,
+          ...editingVehicleForm,
+          seats: Number(editingVehicleForm.seats),
+          defaultRate: editingVehicleForm.defaultRate ? Number(editingVehicleForm.defaultRate) : null,
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update vehicle')
+      }
+
+      toast.success('Vehicle updated')
+      cancelVehicleEdit()
+      loadFleet()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update vehicle')
+    } finally {
+      setSavingVehicleEdit(false)
+    }
+  }
+
+  function startBookingEdit(item: (typeof bookingDetails)[number]) {
+    setEditingBookingId(item.booking.id)
+    setEditingBookingAmount(String(item.totalAmount))
+  }
+
+  function cancelBookingEdit() {
+    setEditingBookingId(null)
+    setEditingBookingAmount('')
+  }
+
+  async function saveBookingEdit() {
+    if (!editingBookingId) return
+
+    setSavingBookingEdit(true)
+    try {
+      const response = await fetch('/api/fleet/bookings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingBookingId,
+          amount: Number(editingBookingAmount),
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update booking amount')
+      }
+
+      toast.success(result.invoiceLinked ? 'Rental amount updated on the dashboard. Xero invoice reference kept linked.' : 'Rental amount updated')
+      cancelBookingEdit()
+      loadFleet()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update booking amount')
+    } finally {
+      setSavingBookingEdit(false)
+    }
   }
 
   async function saveVehicle() {
@@ -587,43 +685,71 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(240,236,228,0.1)' }}>
-                {['Vehicle', 'Customer', 'Dates', 'Revenue', 'Invoice'].map((header) => (
+                {['Vehicle', 'Customer', 'Dates', 'Revenue', 'Invoice', 'Actions'].map((header) => (
                   <th key={header} style={tableHead}>{header}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={5} style={emptyCell}>Loading fleet bookings…</td></tr>
+                <tr><td colSpan={6} style={emptyCell}>Loading fleet bookings…</td></tr>
               ) : bookingDetails.length === 0 ? (
-                <tr><td colSpan={5} style={emptyCell}>No fleet rentals saved yet</td></tr>
-              ) : bookingDetails.map((item) => (
-                <tr key={item.booking.id} style={{ borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
-                  <td style={tableCell}>
-                    <div style={{ fontWeight: 700 }}>{item.vehicleName}</div>
-                    <div style={mutedSmall}>{item.registrationNumber || 'No registration saved'}</div>
-                  </td>
-                  <td style={tableCell}>
-                    <div>{item.customerName}</div>
-                    <div style={mutedSmall}>{usageTypeLabel(item.usageType)} · {item.notes.customer.email}</div>
-                  </td>
-                  <td style={tableCell}>
-                    <div>{format(parseISO(item.startDate), 'd MMM yyyy')} → {format(parseISO(item.endDate), 'd MMM yyyy')}</div>
-                    <div style={mutedSmall}>{item.days} day{item.days === 1 ? '' : 's'} · {item.seatsBooked} seat{item.seatsBooked === 1 ? '' : 's'}</div>
-                  </td>
-                  <td style={tableCell}>{money(item.totalAmount)}</td>
-                  <td style={tableCell}>
-                    {item.invoice ? (
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{item.invoice.xero_invoice_number || 'Xero invoice'}</div>
-                        <div style={mutedSmall}>{item.invoice.status || 'Created'}</div>
-                      </div>
-                    ) : (
-                      <span style={mutedSmall}>Pending Xero</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                <tr><td colSpan={6} style={emptyCell}>No fleet rentals saved yet</td></tr>
+              ) : bookingDetails.flatMap((item) => {
+                const isEditingAmount = editingBookingId === item.booking.id
+                return [
+                  <tr key={item.booking.id} style={{ borderBottom: isEditingAmount ? 'none' : '1px solid rgba(240,236,228,0.06)' }}>
+                    <td style={tableCell}>
+                      <div style={{ fontWeight: 700 }}>{item.vehicleName}</div>
+                      <div style={mutedSmall}>{item.registrationNumber || 'No registration saved'}</div>
+                    </td>
+                    <td style={tableCell}>
+                      <div>{item.customerName}</div>
+                      <div style={mutedSmall}>{usageTypeLabel(item.usageType)} · {item.notes.customer.email}</div>
+                    </td>
+                    <td style={tableCell}>
+                      <div>{format(parseISO(item.startDate), 'd MMM yyyy')} → {format(parseISO(item.endDate), 'd MMM yyyy')}</div>
+                      <div style={mutedSmall}>{item.days} day{item.days === 1 ? '' : 's'} · {item.seatsBooked} seat{item.seatsBooked === 1 ? '' : 's'}</div>
+                    </td>
+                    <td style={tableCell}>{money(item.totalAmount)}</td>
+                    <td style={tableCell}>
+                      {item.invoice ? (
+                        <div>
+                          <div style={{ fontWeight: 700 }}>{item.invoice.xero_invoice_number || 'Xero invoice'}</div>
+                          <div style={mutedSmall}>{item.invoice.status || 'Created'}</div>
+                        </div>
+                      ) : (
+                        <span style={mutedSmall}>Pending Xero</span>
+                      )}
+                    </td>
+                    <td style={tableCell}>
+                      <button type="button" onClick={() => isEditingAmount ? cancelBookingEdit() : startBookingEdit(item)} style={secondaryButton}>
+                        {isEditingAmount ? 'Close' : 'Edit amount'}
+                      </button>
+                    </td>
+                  </tr>,
+                  ...(isEditingAmount
+                    ? [
+                        <tr key={`${item.booking.id}-editor`} style={{ borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
+                          <td colSpan={6} style={{ ...tableCell, paddingTop: 0 }}>
+                            <div style={{ ...pickerCard, marginBottom: 12 }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) auto auto', gap: 12, alignItems: 'end' }}>
+                                <Input label="Amount rented out for" type="number" value={editingBookingAmount} onChange={setEditingBookingAmount} placeholder="4500" />
+                                <button type="button" onClick={saveBookingEdit} disabled={savingBookingEdit} style={primaryButton}>
+                                  {savingBookingEdit ? 'Saving…' : 'Save amount'}
+                                </button>
+                                <button type="button" onClick={cancelBookingEdit} style={secondaryButton}>
+                                  Cancel
+                                </button>
+                              </div>
+                              <div style={mutedSmall}>This updates the fleet dashboard amount for this booking.</div>
+                            </div>
+                          </td>
+                        </tr>,
+                      ]
+                    : []),
+                ]
+              })}
             </tbody>
           </table>
         </div>
@@ -674,10 +800,18 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           ) : vehicles.map((vehicle) => {
             const vehicleBookings = bookingDetails.filter((item) => item.vehicleId === vehicle.id)
             const revenue = vehicleBookings.reduce((sum, item) => sum + item.totalAmount, 0)
+            const isEditingVehicle = editingVehicleId === vehicle.id
             return (
               <div key={vehicle.id} style={{ borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', background: 'rgba(240,236,228,0.02)', padding: 16 }}>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20 }}>{vehicle.title}</div>
-                <div style={mutedSmall}>{vehicleRegistration(vehicle) || 'Registration pending'}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div>
+                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20 }}>{vehicle.title}</div>
+                    <div style={mutedSmall}>{vehicleRegistration(vehicle) || 'Registration pending'}</div>
+                  </div>
+                  <button type="button" onClick={() => isEditingVehicle ? cancelVehicleEdit() : startVehicleEdit(vehicle)} style={secondaryButton}>
+                    {isEditingVehicle ? 'Close' : 'Edit'}
+                  </button>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
                   <MiniInfo label="Seats" value={buildSeatsLabel(vehicleSeats(vehicle) || 0)} />
                   <MiniInfo label="Default rate" value={vehicle.base_price ? money(Number(vehicle.base_price)) : 'Not set'} />
@@ -685,6 +819,25 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                   <MiniInfo label="Revenue" value={money(revenue)} />
                 </div>
                 {vehicleNotes(vehicle) && <div style={{ ...mutedSmall, marginTop: 14 }}>{vehicleNotes(vehicle)}</div>}
+                {isEditingVehicle && (
+                  <div style={{ ...pickerCard, marginTop: 16 }}>
+                    <Input label="Vehicle name" value={editingVehicleForm.title} onChange={(value) => setEditingVehicleForm((current) => ({ ...current, title: value }))} placeholder="Toyota Quantum" />
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                      <Input label="Registration number" value={editingVehicleForm.registrationNumber} onChange={(value) => setEditingVehicleForm((current) => ({ ...current, registrationNumber: value }))} placeholder="CAA691013" />
+                      <Input label="Seats" type="number" value={editingVehicleForm.seats} onChange={(value) => setEditingVehicleForm((current) => ({ ...current, seats: value }))} placeholder="12" />
+                    </div>
+                    <Input label="Default rate" type="number" value={editingVehicleForm.defaultRate} onChange={(value) => setEditingVehicleForm((current) => ({ ...current, defaultRate: value }))} placeholder="2500" />
+                    <TextArea label="Vehicle notes" value={editingVehicleForm.notes} onChange={(value) => setEditingVehicleForm((current) => ({ ...current, notes: value }))} placeholder="Driver notes, colour, or vehicle class" />
+                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      <button type="button" onClick={saveVehicleEdit} disabled={savingVehicleEdit} style={primaryButton}>
+                        {savingVehicleEdit ? 'Saving…' : 'Save changes'}
+                      </button>
+                      <button type="button" onClick={cancelVehicleEdit} style={secondaryButton}>
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -743,6 +896,7 @@ function TogglePlusButton({ open, onClick }: { open: boolean; onClick: () => voi
 const fieldLabel = { fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'rgba(240,236,228,0.45)' }
 const fieldInput = { background: '#100f0d', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, color: '#f0ece4', padding: '10px 12px', fontSize: 14, outline: 'none' }
 const primaryButton = { padding: '10px 16px', borderRadius: 6, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Barlow', sans-serif" }
+const secondaryButton = { padding: '9px 14px', borderRadius: 6, background: 'transparent', color: '#d7bc94', border: '1px solid rgba(184,149,106,0.30)', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Barlow', sans-serif" }
 const tableHead = { padding: '8px 12px', textAlign: 'left' as const, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(240,236,228,0.4)', fontWeight: 500 }
 const tableCell = { padding: '12px', verticalAlign: 'top' as const }
 const emptyCell = { padding: 24, textAlign: 'center' as const, color: 'rgba(240,236,228,0.4)' }

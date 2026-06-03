@@ -219,3 +219,75 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create fleet booking' }, { status: 500 })
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const bookingId = String(body?.id || '').trim()
+    const totalAmount = Number(body?.amount)
+
+    if (!bookingId) {
+      return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
+    }
+
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
+    }
+
+    const { data: bookingRow, error: bookingFetchError } = await supabaseAdmin
+      .from('tour_bookings')
+      .select('id,notes,email')
+      .eq('id', bookingId)
+      .eq('booking_type', 'fleet')
+      .single()
+
+    if (bookingFetchError || !bookingRow) {
+      console.error('Fleet booking fetch error:', bookingFetchError)
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    }
+
+    const parsedNotes = parseFleetBookingNotes(bookingRow.notes)
+    const updatedNotes = parsedNotes
+      ? JSON.stringify({
+          ...parsedNotes,
+          rental: {
+            ...parsedNotes.rental,
+            totalAmount,
+          },
+        })
+      : bookingRow.notes
+
+    const { data: updatedBooking, error: updateError } = await supabaseAdmin
+      .from('tour_bookings')
+      .update({
+        amount: totalAmount,
+        notes: updatedNotes,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', bookingId)
+      .eq('booking_type', 'fleet')
+      .select('id,amount,notes')
+      .single()
+
+    if (updateError || !updatedBooking) {
+      console.error('Fleet booking update error:', updateError)
+      return NextResponse.json({ error: 'Failed to update booking amount' }, { status: 500 })
+    }
+
+    const { data: invoiceLink } = await supabaseAdmin
+      .from('xero_invoice_links')
+      .select('xero_invoice_number,status')
+      .eq('booking_id', bookingId)
+      .maybeSingle()
+
+    return NextResponse.json({
+      booking: updatedBooking,
+      invoiceLinked: Boolean(invoiceLink),
+      invoiceNumber: invoiceLink?.xero_invoice_number || null,
+      invoiceStatus: invoiceLink?.status || null,
+    })
+  } catch (error) {
+    console.error('Fleet booking patch route error:', error)
+    return NextResponse.json({ error: 'Failed to update booking amount' }, { status: 500 })
+  }
+}
