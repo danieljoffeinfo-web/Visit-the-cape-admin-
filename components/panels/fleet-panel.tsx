@@ -211,30 +211,30 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     }
 
     setSavingVehicle(true)
-    const seats = Math.max(1, parseInt(vehicleForm.seats || '1', 10))
-    const { error } = await supabase.from('tour_products').insert({
-      slug: `fleet-${vehicleForm.registrationNumber.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-      title: vehicleForm.title.trim(),
-      family: 'fleet',
-      experience_type: 'vehicle-rental',
-      booking_mode: 'fleet',
-      pricing_model: 'daily-rental',
-      summary: vehicleForm.registrationNumber.trim(),
-      duration_label: buildSeatsLabel(seats),
-      pickup_notes: vehicleForm.notes.trim() || null,
-      base_price: vehicleForm.defaultRate ? Number(vehicleForm.defaultRate) : null,
-      active: true,
-    })
-    setSavingVehicle(false)
+    try {
+      const response = await fetch('/api/fleet/vehicles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...vehicleForm,
+          seats: Number(vehicleForm.seats),
+          defaultRate: vehicleForm.defaultRate ? Number(vehicleForm.defaultRate) : null,
+        }),
+      })
 
-    if (error) {
-      toast.error(error.message.includes('duplicate') ? 'That registration number already exists' : 'Failed to save vehicle')
-      return
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save vehicle')
+      }
+
+      toast.success('Vehicle added to fleet manager')
+      setVehicleForm({ title: '', registrationNumber: '', seats: '7', defaultRate: '', notes: '' })
+      loadFleet()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save vehicle')
+    } finally {
+      setSavingVehicle(false)
     }
-
-    toast.success('Vehicle added to fleet manager')
-    setVehicleForm({ title: '', registrationNumber: '', seats: '7', defaultRate: '', notes: '' })
-    loadFleet()
   }
 
   async function saveBooking() {
