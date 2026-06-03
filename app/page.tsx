@@ -9,8 +9,9 @@ import { ToursPanel } from '@/components/panels/tours-panel'
 import { AccountingPanel } from '@/components/panels/accounting-panel'
 import { CrmPanel } from '@/components/panels/crm-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
+import { FleetPanel } from '@/components/panels/fleet-panel'
+import { CalendarPanel } from '@/components/panels/calendar-panel'
 import { SocialsPanel } from '@/components/panels/socials-panel'
-import { PlaceholderPanel } from '@/components/panels/placeholder-panel'
 import { useSearchParams } from 'next/navigation'
 
 type Panel = 'dashboard' | 'bookings' | 'calendar' | 'enquiries' | 'tours' | 'fleet' | 'accounting' | 'socials' | 'crm' | 'settings'
@@ -56,10 +57,10 @@ function AdminApp() {
         <div style={{ padding: 28, flex: 1 }}>
           {panel === 'dashboard' && <DashboardPanel onNavigate={(p) => setPanel(p as Panel)} />}
           {panel === 'bookings' && <BookingsPanel />}
-          {panel === 'calendar' && <PlaceholderPanel id="calendar" />}
+          {panel === 'calendar' && <CalendarPanel />}
           {panel === 'enquiries' && <EnquiriesPanel />}
           {panel === 'tours' && <ToursPanel />}
-          {panel === 'fleet' && <PlaceholderPanel id="fleet" />}
+          {panel === 'fleet' && <FleetPanel onNavigate={(p) => setPanel(p as Panel)} />}
           {panel === 'accounting' && <AccountingPanel />}
           {panel === 'socials' && <SocialsPanel />}
           {panel === 'crm' && <CrmPanel />}
