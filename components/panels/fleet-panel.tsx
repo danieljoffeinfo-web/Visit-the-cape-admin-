@@ -373,7 +373,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
   }
 
   const card = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px' }
-  const vehicleButtonLabel = selectedVehicle ? `${selectedVehicle.title} · ${vehicleRegistration(selectedVehicle) || 'No reg'}` : 'Select vehicle'
+  const hasVehicles = vehicles.length > 0
+  const vehicleButtonLabel = selectedVehicle ? `${selectedVehicle.title} · ${vehicleRegistration(selectedVehicle) || 'No reg'}` : hasVehicles ? 'Select vehicle' : 'Add a vehicle first'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -449,13 +450,27 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
             <>
               <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <span style={fieldLabel}>Vehicle</span>
-                <button type="button" onClick={() => setVehiclePickerOpen((current) => !current)} style={selectorButton}>
+                <button type="button" onClick={() => hasVehicles && setVehiclePickerOpen((current) => !current)} style={{ ...selectorButton, opacity: hasVehicles ? 1 : 0.65, cursor: hasVehicles ? 'pointer' : 'not-allowed' }}>
                   <span>{vehicleButtonLabel}</span>
-                  <span style={{ color: 'rgba(240,236,228,0.45)' }}>{vehiclePickerOpen ? '▴' : '▾'}</span>
+                  <span style={{ color: 'rgba(240,236,228,0.45)' }}>{hasVehicles ? (vehiclePickerOpen ? '▴' : '▾') : '+'}</span>
                 </button>
               </label>
 
-              {vehiclePickerOpen && (
+              {!hasVehicles ? (
+                <div style={{ ...collapsedHint, borderStyle: 'solid', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <span>No fleet vehicles have been added yet. Add a vehicle first, then come back here to book it out.</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowVehicleForm(true)
+                      setShowBookingForm(false)
+                    }}
+                    style={{ ...primaryButton, padding: '8px 12px', whiteSpace: 'nowrap' }}
+                  >
+                    Add Vehicle
+                  </button>
+                </div>
+              ) : vehiclePickerOpen && (
                 <div style={pickerCard}>
                   <Input label="Find vehicle" value={vehicleSearch} onChange={setVehicleSearch} placeholder="Search by name or registration" />
                   <div style={{ display: 'grid', gap: 8, maxHeight: 230, overflowY: 'auto' }}>
