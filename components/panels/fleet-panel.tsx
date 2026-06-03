@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { addDays, differenceInCalendarDays, format, isAfter, isBefore, parseISO } from 'date-fns'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
 import {
   buildSeatsLabel,
   fullCustomerName,
@@ -97,16 +96,29 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
   async function loadFleet() {
     setLoading(true)
     try {
-      const [vehiclesRes, bookingsRes] = await Promise.all([
-        supabase.from('tour_products').select('id,title,family,summary,duration_label,pickup_notes,base_price,active').eq('family', 'fleet').order('title', { ascending: true }),
-        supabase.from('tour_bookings').select('id,product_id,status,amount,notes,created_at').eq('booking_type', 'fleet').order('created_at', { ascending: false }),
+      const [vehiclesResponse, bookingsResponse] = await Promise.all([
+        fetch('/api/fleet/vehicles', { cache: 'no-store' }),
+        fetch('/api/fleet/bookings', { cache: 'no-store' }),
       ])
 
-      const nextVehicles = ((vehiclesRes.data || []) as VehicleRow[]).filter(isFleetVehicle)
-      const nextBookings = (bookingsRes.data || []) as BookingRow[]
+      const vehiclesResult = await vehiclesResponse.json()
+      const bookingsResult = await bookingsResponse.json()
+
+      if (!vehiclesResponse.ok) {
+        throw new Error(vehiclesResult.error || 'Failed to load vehicles')
+      }
+
+      if (!bookingsResponse.ok) {
+        throw new Error(bookingsResult.error || 'Failed to load bookings')
+      }
+
+      const nextVehicles = ((vehiclesResult.vehicles || []) as VehicleRow[]).filter(isFleetVehicle)
+      const nextBookings = (bookingsResult.bookings || []) as BookingRow[]
+      const linkMap = Object.fromEntries(((bookingsResult.invoiceLinks || []) as InvoiceLink[]).map((link) => [link.booking_id, link]))
 
       setVehicles(nextVehicles)
       setBookings(nextBookings)
+      setInvoiceLinks(linkMap)
       setSelectedVehicleId((current) => current || nextVehicles[0]?.id || '')
       setBookingForm((current) => ({
         ...current,
@@ -114,16 +126,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         seatsBooked: current.seatsBooked || String(vehicleSeats(nextVehicles[0] || { duration_label: '1 seat' })),
         bookingDays: current.bookingDays || '2',
       }))
-
-      if (nextBookings.length > 0) {
-        const invoiceRes = await supabase.from('xero_invoice_links').select('booking_id,xero_invoice_number,status').in('booking_id', nextBookings.map((booking) => booking.id))
-        const linkMap = Object.fromEntries(((invoiceRes.data || []) as InvoiceLink[]).map((link) => [link.booking_id, link]))
-        setInvoiceLinks(linkMap)
-      } else {
-        setInvoiceLinks({})
-      }
-    } catch {
-      toast.error('Failed to load fleet dashboard')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to load fleet dashboard')
     } finally {
       setLoading(false)
     }

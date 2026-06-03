@@ -13,6 +13,39 @@ type TourProductRow = {
   base_price?: number | null
 }
 
+export async function GET() {
+  try {
+    const [bookingsRes, invoicesRes] = await Promise.all([
+      supabaseAdmin
+        .from('tour_bookings')
+        .select('id,product_id,status,amount,notes,created_at')
+        .eq('booking_type', 'fleet')
+        .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('xero_invoice_links')
+        .select('booking_id,xero_invoice_number,status'),
+    ])
+
+    if (bookingsRes.error) {
+      console.error('Fleet bookings fetch error:', bookingsRes.error)
+      return NextResponse.json({ error: 'Failed to load fleet bookings' }, { status: 500 })
+    }
+
+    if (invoicesRes.error) {
+      console.error('Fleet invoice links fetch error:', invoicesRes.error)
+      return NextResponse.json({ error: 'Failed to load fleet bookings' }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      bookings: bookingsRes.data || [],
+      invoiceLinks: invoicesRes.data || [],
+    })
+  } catch (error) {
+    console.error('Fleet bookings route error:', error)
+    return NextResponse.json({ error: 'Failed to load fleet bookings' }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()

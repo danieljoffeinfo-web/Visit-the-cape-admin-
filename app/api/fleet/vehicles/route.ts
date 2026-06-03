@@ -6,6 +6,26 @@ function slugifyRegistrationNumber(value: string) {
   return `fleet-${value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 }
 
+export async function GET() {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('tour_products')
+      .select('id,title,family,summary,duration_label,pickup_notes,base_price,active')
+      .eq('family', 'fleet')
+      .order('title', { ascending: true })
+
+    if (error) {
+      console.error('Fleet vehicles fetch error:', error)
+      return NextResponse.json({ error: 'Failed to load vehicles' }, { status: 500 })
+    }
+
+    return NextResponse.json({ vehicles: data || [] })
+  } catch (error) {
+    console.error('Fleet vehicles route error:', error)
+    return NextResponse.json({ error: 'Failed to load vehicles' }, { status: 500 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
