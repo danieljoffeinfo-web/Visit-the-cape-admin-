@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { differenceInCalendarDays, isValid, parseISO } from 'date-fns'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { buildSeatsLabel, parseFleetBookingNotes, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { buildSeatsLabel, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
 
 type TourProductRow = {
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
       endDate,
       amount,
       seatsBooked,
+      usageType,
       notes,
     } = body
 
@@ -45,6 +46,8 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
       return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
     }
+
+    const bookingUsageType = String(usageType || 'tour').toLowerCase() === 'internal' ? 'internal' : 'tour'
 
     const { data: vehicle, error: vehicleError } = await supabaseAdmin
       .from('tour_products')
@@ -100,6 +103,7 @@ export async function POST(request: NextRequest) {
         days: rentalDays,
         seatsBooked: bookedSeats,
         totalAmount,
+        usageType: bookingUsageType,
         notes: notes ? String(notes).trim() : null,
       },
     }
@@ -141,7 +145,7 @@ export async function POST(request: NextRequest) {
     const invoiceResult = await createXeroInvoiceForBooking({
       contactName: `${String(firstName).trim()} ${String(surname).trim()}`.trim(),
       contactEmail: String(email).trim(),
-      description: `${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''} rental · ${startDate} to ${endDate} · ${rentalDays} day${rentalDays === 1 ? '' : 's'}`,
+      description: `${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''} rental · ${usageTypeLabel(bookingUsageType)} · ${startDate} to ${endDate} · ${rentalDays} day${rentalDays === 1 ? '' : 's'}`,
       amount: totalAmount,
       dueDate: endDate,
       bookingId: insertedBooking.id,
@@ -168,6 +172,7 @@ export async function POST(request: NextRequest) {
         vehicleName: vehicle.title,
         registrationNumber: vehicleRegistration(vehicle),
         seats: buildSeatsLabel(totalSeats),
+        usageType: bookingUsageType,
         startDate,
         endDate,
         rentalDays,

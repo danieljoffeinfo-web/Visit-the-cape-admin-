@@ -10,6 +10,7 @@ import {
   fullCustomerName,
   isFleetVehicle,
   parseFleetBookingNotes,
+  usageTypeLabel,
   vehicleNotes,
   vehicleRegistration,
   vehicleSeats,
@@ -47,6 +48,13 @@ function money(amount: number) {
   return `R ${amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+function computeRentalDays(startDate: string, endDate: string) {
+  const start = parseISO(startDate)
+  const end = parseISO(endDate)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || isBefore(end, start)) return 0
+  return differenceInCalendarDays(end, start) + 1
+}
+
 export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void }) {
   const [vehicles, setVehicles] = useState<VehicleRow[]>([])
   const [bookings, setBookings] = useState<BookingRow[]>([])
@@ -55,6 +63,10 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
   const [savingVehicle, setSavingVehicle] = useState(false)
   const [savingBooking, setSavingBooking] = useState(false)
   const [selectedVehicleId, setSelectedVehicleId] = useState('')
+  const [showVehicleForm, setShowVehicleForm] = useState(false)
+  const [showBookingForm, setShowBookingForm] = useState(false)
+  const [vehiclePickerOpen, setVehiclePickerOpen] = useState(false)
+  const [vehicleSearch, setVehicleSearch] = useState('')
   const [vehicleForm, setVehicleForm] = useState({
     title: '',
     registrationNumber: '',
@@ -64,6 +76,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
   })
   const [bookingForm, setBookingForm] = useState({
     vehicleId: '',
+    usageType: 'tour',
+    bookingDays: '2',
     startDate: format(new Date(), 'yyyy-MM-dd'),
     endDate: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
     amount: '',
@@ -98,6 +112,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         ...current,
         vehicleId: current.vehicleId || nextVehicles[0]?.id || '',
         seatsBooked: current.seatsBooked || String(vehicleSeats(nextVehicles[0] || { duration_label: '1 seat' })),
+        bookingDays: current.bookingDays || '2',
       }))
 
       if (nextBookings.length > 0) {
@@ -131,6 +146,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           startDate: notes.rental.startDate,
           endDate: notes.rental.endDate,
           seatsBooked: notes.rental.seatsBooked,
+          usageType: notes.rental.usageType || 'tour',
           totalAmount: Number(booking.amount || notes.rental.totalAmount || 0),
           customerName: fullCustomerName(notes),
         }
@@ -140,12 +156,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
 
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === (bookingForm.vehicleId || selectedVehicleId)) || vehicles[0] || null
   const selectedVehicleSeats = selectedVehicle ? vehicleSeats(selectedVehicle) : 0
-  const rentalDays = useMemo(() => {
-    const start = parseISO(bookingForm.startDate)
-    const end = parseISO(bookingForm.endDate)
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || isBefore(end, start)) return 0
-    return differenceInCalendarDays(end, start) + 1
-  }, [bookingForm.startDate, bookingForm.endDate])
+  const rentalDays = useMemo(() => computeRentalDays(bookingForm.startDate, bookingForm.endDate), [bookingForm.startDate, bookingForm.endDate])
 
   const selectedVehicleConflicts = useMemo(() => {
     if (!selectedVehicle || rentalDays <= 0) return []
@@ -159,6 +170,15 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       return start <= existingEnd && end >= existingStart
     })
   }, [bookingDetails, bookingForm.endDate, bookingForm.startDate, rentalDays, selectedVehicle])
+
+  const filteredVehicles = useMemo(() => {
+    const query = vehicleSearch.trim().toLowerCase()
+    if (!query) return vehicles
+    return vehicles.filter((vehicle) => {
+      const haystack = `${vehicle.title} ${vehicleRegistration(vehicle)} ${vehicleNotes(vehicle)}`.toLowerCase()
+      return haystack.includes(query)
+    })
+  }, [vehicleSearch, vehicles])
 
   const stats = useMemo(() => {
     const today = new Date()
@@ -204,6 +224,57 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       .filter((item) => item.revenue > 0 || item.bookingCount > 0)
   }, [bookingDetails, vehicles])
 
+  const suggestedAmount = selectedVehicle?.base_price ? Number(selectedVehicle.base_price) * Math.max(1, Number.parseInt(bookingForm.bookingDays, 10) || rentalDays || 1) : 0
+
+  function handleVehicleSelection(value: string) {
+    const nextVehicle = vehicles.find((vehicle) => vehicle.id === value)
+    setBookingForm((current) => ({
+      ...current,
+      vehicleId: value,
+      seatsBooked: nextVehicle ? String(vehicleSeats(nextVehicle)) : current.seatsBooked,
+      amount: !current.amount && nextVehicle?.base_price ? String(Number(nextVehicle.base_price) * Math.max(1, Number.parseInt(current.bookingDays, 10) || rentalDays || 1)) : current.amount,
+    }))
+    setSelectedVehicleId(value)
+    setVehiclePickerOpen(false)
+    setVehicleSearch('')
+  }
+
+  function handleStartDateChange(value: string) {
+    setBookingForm((current) => {
+      const activeDays = Math.max(1, Number.parseInt(current.bookingDays, 10) || computeRentalDays(current.startDate, current.endDate) || 1)
+      const start = parseISO(value)
+      return {
+        ...current,
+        startDate: value,
+        endDate: Number.isNaN(start.getTime()) ? current.endDate : format(addDays(start, activeDays - 1), 'yyyy-MM-dd'),
+      }
+    })
+  }
+
+  function handleEndDateChange(value: string) {
+    setBookingForm((current) => {
+      const nextDays = computeRentalDays(current.startDate, value)
+      return {
+        ...current,
+        endDate: value,
+        bookingDays: nextDays > 0 ? String(nextDays) : current.bookingDays,
+      }
+    })
+  }
+
+  function handleBookingDaysChange(value: string) {
+    const cleanValue = value.replace(/[^\d]/g, '')
+    setBookingForm((current) => {
+      const nextDays = Math.max(1, Number.parseInt(cleanValue || '1', 10))
+      const start = parseISO(current.startDate)
+      return {
+        ...current,
+        bookingDays: cleanValue,
+        endDate: Number.isNaN(start.getTime()) ? current.endDate : format(addDays(start, nextDays - 1), 'yyyy-MM-dd'),
+      }
+    })
+  }
+
   async function saveVehicle() {
     if (!vehicleForm.title.trim() || !vehicleForm.registrationNumber.trim() || !vehicleForm.seats.trim()) {
       toast.error('Add the vehicle name, registration number, and seats')
@@ -229,6 +300,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
 
       toast.success('Vehicle added to fleet manager')
       setVehicleForm({ title: '', registrationNumber: '', seats: '7', defaultRate: '', notes: '' })
+      setShowVehicleForm(false)
       loadFleet()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save vehicle')
@@ -278,6 +350,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       toast.success(result.xeroConnected ? 'Vehicle booked and invoice created in Xero' : 'Vehicle booked. Connect Xero to create the invoice.')
       setBookingForm({
         vehicleId: bookingForm.vehicleId,
+        usageType: bookingForm.usageType,
+        bookingDays: '2',
         startDate: format(new Date(), 'yyyy-MM-dd'),
         endDate: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
         amount: '',
@@ -289,6 +363,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         email: '',
         notes: '',
       })
+      setShowBookingForm(false)
       loadFleet()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create booking')
@@ -298,6 +373,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
   }
 
   const card = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px' }
+  const vehicleButtonLabel = selectedVehicle ? `${selectedVehicle.title} · ${vehicleRegistration(selectedVehicle) || 'No reg'}` : 'Select vehicle'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -327,89 +403,155 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '0.95fr 1.35fr', gap: 20, alignItems: 'start' }}>
-        <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Add Vehicle</div>
-            <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>Save the vehicle registration, number of seats, and the default day rate.</div>
+        <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+            <div>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Add Vehicle</div>
+              <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>Keep this hidden until you need it, then click the plus to open the full vehicle form.</div>
+            </div>
+            <TogglePlusButton open={showVehicleForm} onClick={() => setShowVehicleForm((current) => !current)} />
           </div>
-          <Input label="Vehicle name" value={vehicleForm.title} onChange={(value) => setVehicleForm((current) => ({ ...current, title: value }))} placeholder="Mercedes V-Class" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Registration number" value={vehicleForm.registrationNumber} onChange={(value) => setVehicleForm((current) => ({ ...current, registrationNumber: value }))} placeholder="CA 123 456" />
-            <Input label="Seats" type="number" value={vehicleForm.seats} onChange={(value) => setVehicleForm((current) => ({ ...current, seats: value }))} placeholder="7" />
-          </div>
-          <Input label="Default day rate" type="number" value={vehicleForm.defaultRate} onChange={(value) => setVehicleForm((current) => ({ ...current, defaultRate: value }))} placeholder="2500" />
-          <TextArea label="Vehicle notes" value={vehicleForm.notes} onChange={(value) => setVehicleForm((current) => ({ ...current, notes: value }))} placeholder="Driver notes, colour, or vehicle class" />
-          <button onClick={saveVehicle} disabled={savingVehicle} style={primaryButton}>
-            {savingVehicle ? 'Saving vehicle…' : 'Save Vehicle'}
-          </button>
+
+          {showVehicleForm ? (
+            <>
+              <Input label="Vehicle name" value={vehicleForm.title} onChange={(value) => setVehicleForm((current) => ({ ...current, title: value }))} placeholder="Mercedes V-Class" />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <Input label="Registration number" value={vehicleForm.registrationNumber} onChange={(value) => setVehicleForm((current) => ({ ...current, registrationNumber: value }))} placeholder="CA 123 456" />
+                <Input label="Seats" type="number" value={vehicleForm.seats} onChange={(value) => setVehicleForm((current) => ({ ...current, seats: value }))} placeholder="7" />
+              </div>
+              <Input label="Default day rate" type="number" value={vehicleForm.defaultRate} onChange={(value) => setVehicleForm((current) => ({ ...current, defaultRate: value }))} placeholder="2500" />
+              <TextArea label="Vehicle notes" value={vehicleForm.notes} onChange={(value) => setVehicleForm((current) => ({ ...current, notes: value }))} placeholder="Driver notes, colour, or vehicle class" />
+              <button onClick={saveVehicle} disabled={savingVehicle} style={primaryButton}>
+                {savingVehicle ? 'Saving vehicle…' : 'Save Vehicle'}
+              </button>
+            </>
+          ) : (
+            <div style={collapsedHint}>Click the plus to show the add-vehicle fields.</div>
+          )}
         </div>
 
-        <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
             <div>
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Book Out Vehicle</div>
               <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>Create the rental, store the customer details, and raise the Xero invoice automatically.</div>
             </div>
-            <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(240,236,228,0.04)', minWidth: 140 }}>
-              <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.38)' }}>Rental days</div>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24 }}>{rentalDays || '—'}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(240,236,228,0.04)', minWidth: 140 }}>
+                <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.38)' }}>Rental days</div>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24 }}>{rentalDays || '—'}</div>
+              </div>
+              <TogglePlusButton open={showBookingForm} onClick={() => setShowBookingForm((current) => !current)} />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <SelectField
-              label="Vehicle"
-              value={bookingForm.vehicleId}
-              onChange={(value) => {
-                const nextVehicle = vehicles.find((vehicle) => vehicle.id === value)
-                setBookingForm((current) => ({
-                  ...current,
-                  vehicleId: value,
-                  seatsBooked: nextVehicle ? String(vehicleSeats(nextVehicle)) : current.seatsBooked,
-                  amount: !current.amount && nextVehicle?.base_price ? String(nextVehicle.base_price) : current.amount,
-                }))
-                setSelectedVehicleId(value)
-              }}
-              options={vehicles.map((vehicle) => ({ value: vehicle.id, label: `${vehicle.title} · ${vehicleRegistration(vehicle)}` }))}
-            />
-            <Input label="Start date" type="date" value={bookingForm.startDate} onChange={(value) => setBookingForm((current) => ({ ...current, startDate: value }))} />
-            <Input label="End date" type="date" value={bookingForm.endDate} onChange={(value) => setBookingForm((current) => ({ ...current, endDate: value }))} />
-          </div>
+          {showBookingForm ? (
+            <>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={fieldLabel}>Vehicle</span>
+                <button type="button" onClick={() => setVehiclePickerOpen((current) => !current)} style={selectorButton}>
+                  <span>{vehicleButtonLabel}</span>
+                  <span style={{ color: 'rgba(240,236,228,0.45)' }}>{vehiclePickerOpen ? '▴' : '▾'}</span>
+                </button>
+              </label>
 
-          {selectedVehicle && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
-              <MiniInfo label="Registration" value={vehicleRegistration(selectedVehicle) || '—'} />
-              <MiniInfo label="Seats" value={buildSeatsLabel(selectedVehicleSeats || 0)} />
-              <MiniInfo label="Default rate" value={selectedVehicle.base_price ? money(Number(selectedVehicle.base_price)) : 'Set later'} />
-            </div>
+              {vehiclePickerOpen && (
+                <div style={pickerCard}>
+                  <Input label="Find vehicle" value={vehicleSearch} onChange={setVehicleSearch} placeholder="Search by name or registration" />
+                  <div style={{ display: 'grid', gap: 8, maxHeight: 230, overflowY: 'auto' }}>
+                    {filteredVehicles.length === 0 ? (
+                      <div style={collapsedHint}>No vehicles match that search.</div>
+                    ) : filteredVehicles.map((vehicle) => {
+                      const active = bookingForm.vehicleId === vehicle.id
+                      return (
+                        <button
+                          key={vehicle.id}
+                          type="button"
+                          onClick={() => handleVehicleSelection(vehicle.id)}
+                          style={{
+                            textAlign: 'left',
+                            borderRadius: 8,
+                            border: `1px solid ${active ? 'rgba(184,149,106,0.35)' : 'rgba(240,236,228,0.10)'}`,
+                            background: active ? 'rgba(184,149,106,0.12)' : 'rgba(240,236,228,0.03)',
+                            padding: '12px 14px',
+                            color: '#f0ece4',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
+                            <div>
+                              <div style={{ fontWeight: 700 }}>{vehicle.title}</div>
+                              <div style={mutedSmall}>{vehicleRegistration(vehicle) || 'No registration'} · {buildSeatsLabel(vehicleSeats(vehicle) || 0)}</div>
+                            </div>
+                            <div style={{ fontWeight: 700, color: '#d7bc94' }}>{vehicle.base_price ? money(Number(vehicle.base_price)) : 'No rate'}</div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <SelectField
+                  label="Use type"
+                  value={bookingForm.usageType}
+                  onChange={(value) => setBookingForm((current) => ({ ...current, usageType: value }))}
+                  options={[
+                    { value: 'tour', label: 'Tour use' },
+                    { value: 'internal', label: 'Internal use' },
+                  ]}
+                />
+                <Input label="Days booked" type="number" value={bookingForm.bookingDays} onChange={handleBookingDaysChange} placeholder="2" />
+                <Input label="Amount rented out for" type="number" value={bookingForm.amount} onChange={(value) => setBookingForm((current) => ({ ...current, amount: value }))} placeholder={suggestedAmount ? String(suggestedAmount) : '4500'} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <Input label="Start date" type="date" value={bookingForm.startDate} onChange={handleStartDateChange} />
+                <Input label="End date" type="date" value={bookingForm.endDate} onChange={handleEndDateChange} />
+                <Input label="Seats booked" type="number" value={bookingForm.seatsBooked} onChange={(value) => setBookingForm((current) => ({ ...current, seatsBooked: value }))} placeholder={selectedVehicleSeats ? String(selectedVehicleSeats) : '1'} />
+              </div>
+
+              {selectedVehicle && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
+                  <MiniInfo label="Registration" value={vehicleRegistration(selectedVehicle) || '—'} />
+                  <MiniInfo label="Seats" value={buildSeatsLabel(selectedVehicleSeats || 0)} />
+                  <MiniInfo label="Default rate" value={selectedVehicle.base_price ? money(Number(selectedVehicle.base_price)) : 'Set later'} />
+                  <MiniInfo label="Use type" value={usageTypeLabel(bookingForm.usageType)} />
+                </div>
+              )}
+
+              {suggestedAmount > 0 && !bookingForm.amount && (
+                <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(100,149,237,0.10)', border: '1px solid rgba(100,149,237,0.18)', color: '#cfe0ff', fontSize: 13 }}>
+                  Suggested amount from the saved day rate: {money(suggestedAmount)}.
+                </div>
+              )}
+
+              {selectedVehicleConflicts.length > 0 && (
+                <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(239,83,80,0.08)', border: '1px solid rgba(239,83,80,0.22)', color: '#f2b5b3', fontSize: 13 }}>
+                  That date range clashes with {selectedVehicleConflicts[0].customerName}'s booking from {format(parseISO(selectedVehicleConflicts[0].startDate), 'd MMM yyyy')} to {format(parseISO(selectedVehicleConflicts[0].endDate), 'd MMM yyyy')}.
+                </div>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <Input label="Customer name" value={bookingForm.firstName} onChange={(value) => setBookingForm((current) => ({ ...current, firstName: value }))} placeholder="John" />
+                <Input label="Customer surname" value={bookingForm.surname} onChange={(value) => setBookingForm((current) => ({ ...current, surname: value }))} placeholder="Smith" />
+                <Input label="Account number" value={bookingForm.accountNumber} onChange={(value) => setBookingForm((current) => ({ ...current, accountNumber: value }))} placeholder="ACC-1024" />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <Input label="Phone" value={bookingForm.phone} onChange={(value) => setBookingForm((current) => ({ ...current, phone: value }))} placeholder="+27 ..." />
+                <Input label="Email" type="email" value={bookingForm.email} onChange={(value) => setBookingForm((current) => ({ ...current, email: value }))} placeholder="customer@email.com" />
+                <Input label="Vehicle notes" value={bookingForm.notes} onChange={(value) => setBookingForm((current) => ({ ...current, notes: value }))} placeholder="Airport collection" />
+              </div>
+
+              <button onClick={saveBooking} disabled={savingBooking || loading} style={primaryButton}>
+                {savingBooking ? 'Creating booking…' : 'Book Vehicle & Create Invoice'}
+              </button>
+            </>
+          ) : (
+            <div style={collapsedHint}>Click the plus to show the full booking form.</div>
           )}
-
-          {selectedVehicleConflicts.length > 0 && (
-            <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(239,83,80,0.08)', border: '1px solid rgba(239,83,80,0.22)', color: '#f2b5b3', fontSize: 13 }}>
-              That date range clashes with {selectedVehicleConflicts[0].customerName}'s booking from {format(parseISO(selectedVehicleConflicts[0].startDate), 'd MMM yyyy')} to {format(parseISO(selectedVehicleConflicts[0].endDate), 'd MMM yyyy')}.
-            </div>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Input label="Amount rented out for" type="number" value={bookingForm.amount} onChange={(value) => setBookingForm((current) => ({ ...current, amount: value }))} placeholder="4500" />
-            <Input label="Seats booked" type="number" value={bookingForm.seatsBooked} onChange={(value) => setBookingForm((current) => ({ ...current, seatsBooked: value }))} placeholder={selectedVehicleSeats ? String(selectedVehicleSeats) : '1'} />
-            <Input label="Account number" value={bookingForm.accountNumber} onChange={(value) => setBookingForm((current) => ({ ...current, accountNumber: value }))} placeholder="ACC-1024" />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Input label="Customer name" value={bookingForm.firstName} onChange={(value) => setBookingForm((current) => ({ ...current, firstName: value }))} placeholder="John" />
-            <Input label="Customer surname" value={bookingForm.surname} onChange={(value) => setBookingForm((current) => ({ ...current, surname: value }))} placeholder="Smith" />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-            <Input label="Phone" value={bookingForm.phone} onChange={(value) => setBookingForm((current) => ({ ...current, phone: value }))} placeholder="+27 ..." />
-            <Input label="Email" type="email" value={bookingForm.email} onChange={(value) => setBookingForm((current) => ({ ...current, email: value }))} placeholder="customer@email.com" />
-            <Input label="Vehicle notes" value={bookingForm.notes} onChange={(value) => setBookingForm((current) => ({ ...current, notes: value }))} placeholder="Airport collection" />
-          </div>
-
-          <button onClick={saveBooking} disabled={savingBooking || loading} style={primaryButton}>
-            {savingBooking ? 'Creating booking…' : 'Book Vehicle & Create Invoice'}
-          </button>
         </div>
       </div>
 
@@ -444,7 +586,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                   </td>
                   <td style={tableCell}>
                     <div>{item.customerName}</div>
-                    <div style={mutedSmall}>{item.notes.customer.email}</div>
+                    <div style={mutedSmall}>{usageTypeLabel(item.usageType)} · {item.notes.customer.email}</div>
                   </td>
                   <td style={tableCell}>
                     <div>{format(parseISO(item.startDate), 'd MMM yyyy')} → {format(parseISO(item.endDate), 'd MMM yyyy')}</div>
@@ -556,7 +698,6 @@ function SelectField({ label, value, onChange, options }: { label: string; value
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={fieldLabel}>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)} style={fieldInput}>
-        <option value="">Select vehicle</option>
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </label>
@@ -572,6 +713,14 @@ function MiniInfo({ label, value }: { label: string; value: string }) {
   )
 }
 
+function TogglePlusButton({ open, onClick }: { open: boolean; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} style={{ width: 42, height: 42, borderRadius: 999, border: '1px solid rgba(184,149,106,0.28)', background: 'rgba(184,149,106,0.10)', color: '#d7bc94', cursor: 'pointer', fontSize: 24, lineHeight: 1, fontWeight: 700 }}>
+      {open ? '−' : '+'}
+    </button>
+  )
+}
+
 const fieldLabel = { fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'rgba(240,236,228,0.45)' }
 const fieldInput = { background: '#100f0d', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, color: '#f0ece4', padding: '10px 12px', fontSize: 14, outline: 'none' }
 const primaryButton = { padding: '10px 16px', borderRadius: 6, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Barlow', sans-serif" }
@@ -579,3 +728,6 @@ const tableHead = { padding: '8px 12px', textAlign: 'left' as const, fontSize: 1
 const tableCell = { padding: '12px', verticalAlign: 'top' as const }
 const emptyCell = { padding: 24, textAlign: 'center' as const, color: 'rgba(240,236,228,0.4)' }
 const mutedSmall = { fontSize: 12, color: 'rgba(240,236,228,0.45)', marginTop: 4 }
+const collapsedHint = { padding: '12px 14px', borderRadius: 8, background: 'rgba(240,236,228,0.03)', border: '1px dashed rgba(240,236,228,0.12)', color: 'rgba(240,236,228,0.45)', fontSize: 13 }
+const selectorButton = { ...fieldInput, display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', textAlign: 'left' as const, cursor: 'pointer' }
+const pickerCard = { display: 'grid', gap: 10, borderRadius: 8, border: '1px solid rgba(240,236,228,0.10)', background: 'rgba(240,236,228,0.02)', padding: 12 }

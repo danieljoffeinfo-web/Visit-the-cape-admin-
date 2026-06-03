@@ -9,6 +9,8 @@ export type FleetVehicle = {
   active?: boolean | null
 }
 
+export type FleetUsageType = 'internal' | 'tour'
+
 export type FleetBookingNotes = {
   kind: 'fleet-booking'
   customer: {
@@ -30,6 +32,7 @@ export type FleetBookingNotes = {
     days: number
     seatsBooked: number
     totalAmount: number
+    usageType?: FleetUsageType | null
     notes?: string | null
   }
 }
@@ -53,6 +56,10 @@ export function vehicleNotes(product: Pick<FleetVehicle, 'pickup_notes'>) {
 
 export function buildSeatsLabel(seats: number) {
   return `${Math.max(1, seats)} seats`
+}
+
+export function usageTypeLabel(usageType?: string | null) {
+  return (usageType || '').toLowerCase() === 'internal' ? 'Internal use' : 'Tour use'
 }
 
 export function parseFleetBookingNotes(value?: string | null): FleetBookingNotes | null {

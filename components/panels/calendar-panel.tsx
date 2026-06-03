@@ -17,7 +17,7 @@ import {
 } from 'date-fns'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
-import { fullCustomerName, parseFleetBookingNotes, vehicleRegistration } from '@/lib/fleet'
+import { fullCustomerName, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration } from '@/lib/fleet'
 
 type FleetBookingRow = {
   id: string
@@ -79,7 +79,7 @@ export function CalendarPanel() {
           id: row.id,
           kind: 'fleet',
           title: `${details.vehicle.title}`,
-          subtitle: `${fullCustomerName(details)} · ${vehicleRegistration({ summary: details.vehicle.registrationNumber }) || details.vehicle.registrationNumber}`,
+          subtitle: `${usageTypeLabel(details.rental.usageType)} · ${fullCustomerName(details)} · ${vehicleRegistration({ summary: details.vehicle.registrationNumber }) || details.vehicle.registrationNumber}`,
           start,
           end,
         })
