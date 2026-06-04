@@ -58,6 +58,7 @@ export async function refreshXeroTokenIfNeeded(): Promise<string | null> {
 
   // Need to refresh
   const xero = createXeroClient()
+  await xero.initialize()
   xero.setTokenSet({
     access_token: tokenRow.access_token,
     refresh_token: tokenRow.refresh_token,
@@ -84,6 +85,7 @@ export async function getAuthedXeroClient(): Promise<{ xero: XeroClient; tenantI
   if (!accessToken) return null
 
   const xero = createXeroClient()
+  await xero.initialize()
   xero.setTokenSet({
     access_token: accessToken,
     refresh_token: tokenRow.refresh_token,
