@@ -16,38 +16,14 @@ import {
   subMonths,
 } from 'date-fns'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
-import { fullCustomerName, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration } from '@/lib/fleet'
-
-type FleetBookingRow = {
-  id: string
-  product_id?: string | null
-  amount?: number | null
-  notes?: string | null
-  status?: string | null
-}
-
-type DepartureRow = {
-  id: string
-  product_id: string
-  departure_date: string
-  departure_time?: string | null
-  status?: string | null
-}
-
-type ProductRow = {
-  id: string
-  title: string
-  summary?: string | null
-}
 
 type CalendarEvent = {
   id: string
   kind: 'fleet' | 'tour'
   title: string
   subtitle: string
-  start: Date
-  end: Date
+  start: string
+  end: string
 }
 
 export function CalendarPanel() {
@@ -62,62 +38,41 @@ export function CalendarPanel() {
   async function loadCalendar() {
     setLoading(true)
     try {
-      const [fleetRes, departuresRes, productsRes] = await Promise.all([
-        supabase.from('tour_bookings').select('id,product_id,amount,notes,status').eq('booking_type', 'fleet').order('created_at', { ascending: false }),
-        supabase.from('tour_departures').select('id,product_id,departure_date,departure_time,status').order('departure_date', { ascending: true }),
-        supabase.from('tour_products').select('id,title,summary'),
-      ])
+      const response = await fetch('/api/calendar/events', { cache: 'no-store' })
+      const result = await response.json()
 
-      const products = Object.fromEntries(((productsRes.data || []) as ProductRow[]).map((product) => [product.id, product]))
-      const fleetEvents: CalendarEvent[] = []
-      for (const row of (fleetRes.data || []) as FleetBookingRow[]) {
-        const details = parseFleetBookingNotes(row.notes)
-        if (!details) continue
-        const start = parseISO(details.rental.startDate)
-        const end = parseISO(details.rental.endDate)
-        fleetEvents.push({
-          id: row.id,
-          kind: 'fleet',
-          title: `${details.vehicle.title}`,
-          subtitle: `${usageTypeLabel(details.rental.usageType)} · ${fullCustomerName(details)} · ${vehicleRegistration({ summary: details.vehicle.registrationNumber }) || details.vehicle.registrationNumber}`,
-          start,
-          end,
-        })
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load calendar')
       }
 
-      const departureEvents = ((departuresRes.data || []) as DepartureRow[]).map((departure) => {
-        const product = products[departure.product_id]
-        const date = parseISO(departure.departure_date)
-        return {
-          id: departure.id,
-          kind: 'tour' as const,
-          title: product?.title || 'Service departure',
-          subtitle: departure.departure_time ? `Departure at ${departure.departure_time}` : 'Scheduled departure',
-          start: date,
-          end: date,
-        }
-      })
-
-      setEvents([...fleetEvents, ...departureEvents])
-    } catch {
-      toast.error('Failed to load calendar')
+      setEvents((result.events || []) as CalendarEvent[])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to load calendar')
     } finally {
       setLoading(false)
     }
   }
+
+  const parsedEvents = useMemo(() => {
+    return events.map((event) => ({
+      ...event,
+      startDate: parseISO(event.start),
+      endDate: parseISO(event.end),
+    }))
+  }, [events])
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
   const calendarDays = eachDayOfInterval({ start: startOfWeek(monthStart, { weekStartsOn: 1 }), end: endOfWeek(monthEnd, { weekStartsOn: 1 }) })
 
   const monthEvents = useMemo(() => {
-    return events.filter((event) => {
-      const startsInside = isSameMonth(event.start, currentMonth)
-      const endsInside = isSameMonth(event.end, currentMonth)
-      const spansMonth = event.start < monthStart && event.end > monthEnd
+    return parsedEvents.filter((event) => {
+      const startsInside = isSameMonth(event.startDate, currentMonth)
+      const endsInside = isSameMonth(event.endDate, currentMonth)
+      const spansMonth = event.startDate < monthStart && event.endDate > monthEnd
       return startsInside || endsInside || spansMonth
     })
-  }, [currentMonth, events, monthEnd, monthStart])
+  }, [currentMonth, monthEnd, monthStart, parsedEvents])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -143,7 +98,7 @@ export function CalendarPanel() {
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
             {calendarDays.map((day) => {
-              const dayEvents = events.filter((event) => isWithinInterval(day, { start: event.start, end: event.end }))
+              const dayEvents = parsedEvents.filter((event) => isWithinInterval(day, { start: event.startDate, end: event.endDate }))
               const isToday = isSameDay(day, new Date())
               return (
                 <div key={day.toISOString()} style={{
@@ -199,7 +154,7 @@ export function CalendarPanel() {
               ) : monthEvents.length === 0 ? (
                 <div style={{ color: 'rgba(240,236,228,0.4)' }}>Nothing booked this month yet</div>
               ) : monthEvents
-                .sort((a, b) => a.start.getTime() - b.start.getTime())
+                .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
                 .map((event) => (
                   <div key={event.id} style={{ borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', padding: 12, background: 'rgba(240,236,228,0.02)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
@@ -212,7 +167,7 @@ export function CalendarPanel() {
                       </span>
                     </div>
                     <div style={{ color: 'rgba(240,236,228,0.55)', fontSize: 12, marginTop: 8 }}>
-                      {format(event.start, 'd MMM yyyy')}{!isSameDay(event.start, event.end) ? ` → ${format(event.end, 'd MMM yyyy')}` : ''}
+                      {format(event.startDate, 'd MMM yyyy')}{!isSameDay(event.startDate, event.endDate) ? ` → ${format(event.endDate, 'd MMM yyyy')}` : ''}
                     </div>
                   </div>
                 ))}

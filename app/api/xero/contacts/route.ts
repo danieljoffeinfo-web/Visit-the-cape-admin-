@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
+import { Contact } from 'xero-node'
 import { getAuthedXeroClient } from '@/lib/xero'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function GET() {
   const auth = await getAuthedXeroClient()
@@ -23,19 +24,34 @@ export async function POST(request: Request) {
 
   const { xero, tenantId } = auth
   const body = await request.json()
-  const { contactId, name, email } = body
+  const name = String(body?.name || '').trim()
+  const email = String(body?.email || '').trim()
+  const existingContactId = String(body?.contactId || '').trim() || null
+
+  if (!name || !email) {
+    return NextResponse.json({ error: 'Name and email are required' }, { status: 400 })
+  }
 
   try {
-    // Upsert into Supabase customers
-    const { error } = await supabase.from('customers').upsert(
+    let contactId = existingContactId
+
+    if (!contactId) {
+      const response = await xero.accountingApi.createContacts(tenantId, {
+        contacts: [{ name, emailAddress: email } as Contact],
+      })
+      contactId = response.body.contacts?.[0]?.contactID || null
+    }
+
+    const { error } = await supabaseAdmin.from('customers').upsert(
       { name, email, xero_contact_id: contactId, updated_at: new Date().toISOString() },
       { onConflict: 'email' }
     )
+
     if (error) {
-      // Table may not exist yet — just return ok
-      console.warn('Could not sync to CRM:', error.message)
+      console.warn('Could not sync Xero contact to CRM:', error.message)
     }
-    return NextResponse.json({ ok: true })
+
+    return NextResponse.json({ ok: true, contactId })
   } catch (err) {
     console.error('Xero sync contact error:', err)
     return NextResponse.json({ error: 'Sync failed' }, { status: 500 })

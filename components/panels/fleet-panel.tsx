@@ -37,6 +37,7 @@ type BookingRow = {
 
 type InvoiceLink = {
   booking_id: string
+  xero_invoice_id?: string | null
   xero_invoice_number?: string | null
   status?: string | null
 }
@@ -150,10 +151,13 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       .map((booking) => {
         const notes = parseFleetBookingNotes(booking.notes)
         if (!notes) return null
+        if ((booking.status || '').toLowerCase() === 'cancelled') return null
+        const invoice = invoiceLinks[booking.id]
+        const paymentReceived = (invoice?.status || '').toUpperCase() === 'PAID' || Boolean(notes.rental.paymentReceived)
         return {
           booking,
           notes,
-          invoice: invoiceLinks[booking.id],
+          invoice,
           vehicleId: notes.vehicle.id,
           vehicleName: notes.vehicle.title,
           registrationNumber: notes.vehicle.registrationNumber,
@@ -163,6 +167,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           endDate: notes.rental.endDate,
           seatsBooked: notes.rental.seatsBooked,
           usageType: notes.rental.usageType || 'tour',
+          paymentReceived,
           totalAmount: Number(booking.amount || notes.rental.totalAmount || 0),
           customerName: fullCustomerName(notes),
         }
@@ -377,6 +382,33 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     }
   }
 
+
+  async function deleteBooking(bookingId: string) {
+    const confirmed = window.confirm('Delete this booking from the fleet dashboard?')
+    if (!confirmed) return
+
+    try {
+      const response = await fetch('/api/fleet/bookings', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: bookingId }),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete booking')
+      }
+      toast.success('Booking deleted')
+      cancelBookingEdit()
+      loadFleet()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete booking')
+    }
+  }
+
+  function downloadInvoice(bookingId: string) {
+    window.open(`/api/xero/invoice-pdf?booking_id=${encodeURIComponent(bookingId)}`, '_blank', 'noopener,noreferrer')
+  }
+
   async function saveVehicle() {
     if (!vehicleForm.title.trim() || !vehicleForm.registrationNumber.trim() || !vehicleForm.seats.trim()) {
       toast.error('Add the vehicle name, registration number, and seats')
@@ -539,13 +571,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Book Out Vehicle</div>
               <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>Create the rental, store the customer details, and raise the Xero invoice automatically.</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ padding: '8px 12px', borderRadius: 8, background: 'rgba(240,236,228,0.04)', minWidth: 140 }}>
-                <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.38)' }}>Rental days</div>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24 }}>{rentalDays || '—'}</div>
-              </div>
-              <TogglePlusButton open={showBookingForm} onClick={() => setShowBookingForm((current) => !current)} />
-            </div>
+            <TogglePlusButton open={showBookingForm} onClick={() => setShowBookingForm((current) => !current)} />
           </div>
 
           {showBookingForm ? (
@@ -685,16 +711,16 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid rgba(240,236,228,0.1)' }}>
-                {['Vehicle', 'Customer', 'Dates', 'Revenue', 'Invoice', 'Actions'].map((header) => (
+                {['Vehicle', 'Customer', 'Dates', 'Revenue', 'Invoice', 'Payment received', 'Actions'].map((header) => (
                   <th key={header} style={tableHead}>{header}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={6} style={emptyCell}>Loading fleet bookings…</td></tr>
+                <tr><td colSpan={7} style={emptyCell}>Loading fleet bookings…</td></tr>
               ) : bookingDetails.length === 0 ? (
-                <tr><td colSpan={6} style={emptyCell}>No fleet rentals saved yet</td></tr>
+                <tr><td colSpan={7} style={emptyCell}>No fleet rentals saved yet</td></tr>
               ) : bookingDetails.flatMap((item) => {
                 const isEditingAmount = editingBookingId === item.booking.id
                 return [
@@ -723,15 +749,30 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                       )}
                     </td>
                     <td style={tableCell}>
-                      <button type="button" onClick={() => isEditingAmount ? cancelBookingEdit() : startBookingEdit(item)} style={secondaryButton}>
-                        {isEditingAmount ? 'Close' : 'Edit amount'}
-                      </button>
+                      <span style={{ color: item.paymentReceived ? '#4caf84' : 'rgba(240,236,228,0.55)', fontWeight: 700, fontSize: 13 }}>
+                        {item.paymentReceived ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                    <td style={tableCell}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" onClick={() => isEditingAmount ? cancelBookingEdit() : startBookingEdit(item)} style={secondaryButton}>
+                          {isEditingAmount ? 'Close' : 'Edit amount'}
+                        </button>
+                        {item.invoice ? (
+                          <button type="button" onClick={() => downloadInvoice(item.booking.id)} style={secondaryButton}>
+                            Invoice PDF
+                          </button>
+                        ) : null}
+                        <button type="button" onClick={() => deleteBooking(item.booking.id)} style={dangerButton}>
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>,
                   ...(isEditingAmount
                     ? [
                         <tr key={`${item.booking.id}-editor`} style={{ borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
-                          <td colSpan={6} style={{ ...tableCell, paddingTop: 0 }}>
+                          <td colSpan={7} style={{ ...tableCell, paddingTop: 0 }}>
                             <div style={{ ...pickerCard, marginBottom: 12 }}>
                               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) auto auto', gap: 12, alignItems: 'end' }}>
                                 <Input label="Amount rented out for" type="number" value={editingBookingAmount} onChange={setEditingBookingAmount} placeholder="4500" />
@@ -897,6 +938,7 @@ const fieldLabel = { fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppe
 const fieldInput = { background: '#100f0d', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, color: '#f0ece4', padding: '10px 12px', fontSize: 14, outline: 'none' }
 const primaryButton = { padding: '10px 16px', borderRadius: 6, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Barlow', sans-serif" }
 const secondaryButton = { padding: '9px 14px', borderRadius: 6, background: 'transparent', color: '#d7bc94', border: '1px solid rgba(184,149,106,0.30)', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Barlow', sans-serif" }
+const dangerButton = { padding: '9px 14px', borderRadius: 6, background: 'rgba(239,83,80,0.10)', color: '#f2b5b3', border: '1px solid rgba(239,83,80,0.25)', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Barlow', sans-serif" }
 const tableHead = { padding: '8px 12px', textAlign: 'left' as const, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(240,236,228,0.4)', fontWeight: 500 }
 const tableCell = { padding: '12px', verticalAlign: 'top' as const }
 const emptyCell = { padding: 24, textAlign: 'center' as const, color: 'rgba(240,236,228,0.4)' }

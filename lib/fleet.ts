@@ -33,6 +33,7 @@ export type FleetBookingNotes = {
     seatsBooked: number
     totalAmount: number
     usageType?: FleetUsageType | null
+    paymentReceived?: boolean | null
     notes?: string | null
   }
 }

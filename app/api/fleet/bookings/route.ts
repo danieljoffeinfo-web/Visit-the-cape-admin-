@@ -1,7 +1,9 @@
+import { Invoice } from 'xero-node'
 import { NextRequest, NextResponse } from 'next/server'
 import { differenceInCalendarDays, isValid, parseISO } from 'date-fns'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { buildSeatsLabel, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { getAuthedXeroClient } from '@/lib/xero'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
 
 type TourProductRow = {
@@ -23,7 +25,7 @@ export async function GET() {
         .order('created_at', { ascending: false }),
       supabaseAdmin
         .from('xero_invoice_links')
-        .select('booking_id,xero_invoice_number,status'),
+        .select('booking_id,xero_invoice_id,xero_invoice_number,status'),
     ])
 
     if (bookingsRes.error) {
@@ -36,9 +38,35 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to load fleet bookings' }, { status: 500 })
     }
 
+    const invoiceLinks = (invoicesRes.data || []) as Array<{ booking_id: string; xero_invoice_id?: string | null; xero_invoice_number?: string | null; status?: string | null }>
+    const auth = await getAuthedXeroClient()
+
+    const refreshedInvoiceLinks = auth
+      ? await Promise.all(invoiceLinks.map(async (link) => {
+          if (!link.xero_invoice_id) return link
+
+          try {
+            const response = await auth.xero.accountingApi.getInvoice(auth.tenantId, link.xero_invoice_id)
+            const invoice = response.body.invoices?.[0]
+            const status = invoice?.status ? String(invoice.status) : link.status || null
+
+            if (status && status !== link.status) {
+              await supabaseAdmin
+                .from('xero_invoice_links')
+                .update({ status, updated_at: new Date().toISOString() })
+                .eq('booking_id', link.booking_id)
+            }
+
+            return { ...link, status }
+          } catch {
+            return link
+          }
+        }))
+      : invoiceLinks
+
     return NextResponse.json({
       bookings: bookingsRes.data || [],
-      invoiceLinks: invoicesRes.data || [],
+      invoiceLinks: refreshedInvoiceLinks,
     })
   } catch (error) {
     console.error('Fleet bookings route error:', error)
@@ -137,6 +165,7 @@ export async function POST(request: NextRequest) {
         seatsBooked: bookedSeats,
         totalAmount,
         usageType: bookingUsageType,
+        paymentReceived: false,
         notes: notes ? String(notes).trim() : null,
       },
     }
@@ -192,6 +221,7 @@ export async function POST(request: NextRequest) {
         email: String(email).trim(),
         phone: phone ? String(phone).trim() : null,
         total_bookings: customerBookingCount || 1,
+        xero_contact_id: invoiceResult.invoice.contact?.contactID || null,
         xero_last_status: invoiceResult.invoice.status || null,
         xero_total_invoiced: totalAmount,
         updated_at: new Date().toISOString(),
@@ -224,13 +254,22 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
     const bookingId = String(body?.id || '').trim()
-    const totalAmount = Number(body?.amount)
+    const amountRaw = body?.amount
+    const paymentReceivedRaw = body?.paymentReceived
 
     if (!bookingId) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
     }
 
-    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+    const nextAmount = amountRaw === undefined || amountRaw === null ? null : Number(amountRaw)
+    const updatingAmount = nextAmount !== null
+    const updatingPaymentReceived = typeof paymentReceivedRaw === 'boolean'
+
+    if (!updatingAmount && !updatingPaymentReceived) {
+      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+    }
+
+    if (updatingAmount && (!Number.isFinite(nextAmount) || nextAmount <= 0)) {
       return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
     }
 
@@ -252,7 +291,8 @@ export async function PATCH(request: NextRequest) {
           ...parsedNotes,
           rental: {
             ...parsedNotes.rental,
-            totalAmount,
+            totalAmount: updatingAmount ? nextAmount! : parsedNotes.rental.totalAmount,
+            paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : parsedNotes.rental.paymentReceived || false,
           },
         })
       : bookingRow.notes
@@ -260,7 +300,7 @@ export async function PATCH(request: NextRequest) {
     const { data: updatedBooking, error: updateError } = await supabaseAdmin
       .from('tour_bookings')
       .update({
-        amount: totalAmount,
+        ...(updatingAmount ? { amount: nextAmount } : {}),
         notes: updatedNotes,
         updated_at: new Date().toISOString(),
       })
@@ -285,9 +325,76 @@ export async function PATCH(request: NextRequest) {
       invoiceLinked: Boolean(invoiceLink),
       invoiceNumber: invoiceLink?.xero_invoice_number || null,
       invoiceStatus: invoiceLink?.status || null,
+      paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : null,
     })
   } catch (error) {
     console.error('Fleet booking patch route error:', error)
     return NextResponse.json({ error: 'Failed to update booking amount' }, { status: 500 })
+  }
+}
+
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const bookingId = String(body?.id || '').trim()
+
+    if (!bookingId) {
+      return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
+    }
+
+    const { data: bookingRow, error: bookingError } = await supabaseAdmin
+      .from('tour_bookings')
+      .select('id,status')
+      .eq('id', bookingId)
+      .eq('booking_type', 'fleet')
+      .single()
+
+    if (bookingError || !bookingRow) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    }
+
+    const { data: invoiceLink } = await supabaseAdmin
+      .from('xero_invoice_links')
+      .select('xero_invoice_id,status')
+      .eq('booking_id', bookingId)
+      .maybeSingle()
+
+    if ((invoiceLink?.status || '').toUpperCase() === 'PAID') {
+      return NextResponse.json({ error: 'This booking has a paid Xero invoice and cannot be deleted automatically.' }, { status: 409 })
+    }
+
+    if (invoiceLink?.xero_invoice_id) {
+      const auth = await getAuthedXeroClient()
+      if (auth) {
+        try {
+          await auth.xero.accountingApi.updateInvoice(auth.tenantId, invoiceLink.xero_invoice_id, {
+            invoices: [{ invoiceID: invoiceLink.xero_invoice_id, status: Invoice.StatusEnum.VOIDED }],
+          })
+          await supabaseAdmin
+            .from('xero_invoice_links')
+            .update({ status: 'VOIDED', updated_at: new Date().toISOString() })
+            .eq('booking_id', bookingId)
+        } catch (error) {
+          console.error('Xero invoice void error:', error)
+        }
+      }
+    }
+
+    const { error: cancelError } = await supabaseAdmin
+      .from('tour_bookings')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', bookingId)
+      .eq('booking_type', 'fleet')
+
+    if (cancelError) {
+      console.error('Fleet booking cancel error:', cancelError)
+      return NextResponse.json({ error: 'Failed to delete booking' }, { status: 500 })
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('Fleet booking delete route error:', error)
+    return NextResponse.json({ error: 'Failed to delete booking' }, { status: 500 })
   }
 }
