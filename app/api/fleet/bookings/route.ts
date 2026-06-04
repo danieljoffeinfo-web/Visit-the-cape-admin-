@@ -39,7 +39,14 @@ export async function GET() {
     }
 
     const invoiceLinks = (invoicesRes.data || []) as Array<{ booking_id: string; xero_invoice_id?: string | null; xero_invoice_number?: string | null; status?: string | null }>
-    const auth = await getAuthedXeroClient()
+
+    let auth: Awaited<ReturnType<typeof getAuthedXeroClient>> = null
+    try {
+      auth = await getAuthedXeroClient()
+    } catch (error) {
+      console.error('Fleet bookings Xero auth warning:', error)
+      auth = null
+    }
 
     const refreshedInvoiceLinks = auth
       ? await Promise.all(invoiceLinks.map(async (link) => {

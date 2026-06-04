@@ -8,6 +8,10 @@ export function createXeroClient(state?: string) {
     redirectUris: [process.env.XERO_REDIRECT_URI!],
     state,
     scopes: [
+      'openid',
+      'profile',
+      'email',
+      'offline_access',
       'accounting.settings',
       'accounting.contacts',
       'accounting.invoices',
@@ -56,42 +60,51 @@ export async function refreshXeroTokenIfNeeded(): Promise<string | null> {
     return tokenRow.access_token
   }
 
-  // Need to refresh
-  const xero = createXeroClient()
-  await xero.initialize()
-  xero.setTokenSet({
-    access_token: tokenRow.access_token,
-    refresh_token: tokenRow.refresh_token,
-  })
+  try {
+    const xero = createXeroClient()
+    await xero.initialize()
+    xero.setTokenSet({
+      access_token: tokenRow.access_token,
+      refresh_token: tokenRow.refresh_token,
+    })
 
-  const newTokenSet = await xero.refreshToken()
+    const newTokenSet = await xero.refreshToken()
 
-  await saveXeroTokens({
-    access_token: newTokenSet.access_token!,
-    refresh_token: newTokenSet.refresh_token!,
-    tenant_id: tokenRow.tenant_id,
-    org_name: tokenRow.org_name,
-    expires_at: new Date(Date.now() + (newTokenSet.expires_in || 1800) * 1000).toISOString(),
-  })
+    await saveXeroTokens({
+      access_token: newTokenSet.access_token!,
+      refresh_token: newTokenSet.refresh_token!,
+      tenant_id: tokenRow.tenant_id,
+      org_name: tokenRow.org_name,
+      expires_at: new Date(Date.now() + (newTokenSet.expires_in || 1800) * 1000).toISOString(),
+    })
 
-  return newTokenSet.access_token!
+    return newTokenSet.access_token!
+  } catch (error) {
+    console.error('Xero token refresh failed:', error)
+    return null
+  }
 }
 
 export async function getAuthedXeroClient(): Promise<{ xero: XeroClient; tenantId: string } | null> {
   const tokenRow = await getXeroTokens()
   if (!tokenRow) return null
 
-  const accessToken = await refreshXeroTokenIfNeeded()
-  if (!accessToken) return null
+  try {
+    const accessToken = await refreshXeroTokenIfNeeded()
+    if (!accessToken) return null
 
-  const xero = createXeroClient()
-  await xero.initialize()
-  xero.setTokenSet({
-    access_token: accessToken,
-    refresh_token: tokenRow.refresh_token,
-  })
+    const xero = createXeroClient()
+    await xero.initialize()
+    xero.setTokenSet({
+      access_token: accessToken,
+      refresh_token: tokenRow.refresh_token,
+    })
 
-  return { xero, tenantId: tokenRow.tenant_id }
+    return { xero, tenantId: tokenRow.tenant_id }
+  } catch (error) {
+    console.error('Failed to initialize authed Xero client:', error)
+    return null
+  }
 }
 
 export function formatZAR(amount: number): string {

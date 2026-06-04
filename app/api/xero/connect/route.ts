@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const xeroScopes = [
+  'openid',
+  'profile',
+  'email',
+  'offline_access',
   'accounting.settings',
   'accounting.contacts',
   'accounting.invoices',
