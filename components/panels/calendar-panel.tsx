@@ -35,26 +35,27 @@ type EventColor = {
 }
 
 const FLEET_EVENT_COLORS: EventColor[] = [
-  { bg: 'rgba(184,149,106,0.20)', border: 'rgba(184,149,106,0.45)', text: '#f5d6ab', accent: '#b8956a', soft: 'rgba(184,149,106,0.10)' },
-  { bg: 'rgba(76,175,132,0.20)', border: 'rgba(76,175,132,0.42)', text: '#95efbe', accent: '#4caf84', soft: 'rgba(76,175,132,0.10)' },
-  { bg: 'rgba(100,149,237,0.20)', border: 'rgba(100,149,237,0.42)', text: '#a9c7ff', accent: '#6495ed', soft: 'rgba(100,149,237,0.10)' },
-  { bg: 'rgba(239,83,80,0.18)', border: 'rgba(239,83,80,0.42)', text: '#ffb2af', accent: '#ef5350', soft: 'rgba(239,83,80,0.10)' },
-  { bg: 'rgba(244,197,66,0.18)', border: 'rgba(244,197,66,0.42)', text: '#ffe08a', accent: '#f4c542', soft: 'rgba(244,197,66,0.10)' },
-  { bg: 'rgba(142,106,216,0.18)', border: 'rgba(142,106,216,0.42)', text: '#ceb4ff', accent: '#8e6ad8', soft: 'rgba(142,106,216,0.10)' },
-  { bg: 'rgba(0,188,212,0.18)', border: 'rgba(0,188,212,0.42)', text: '#8ff2ff', accent: '#00bcd4', soft: 'rgba(0,188,212,0.10)' },
-  { bg: 'rgba(255,112,67,0.18)', border: 'rgba(255,112,67,0.42)', text: '#ffc0ab', accent: '#ff7043', soft: 'rgba(255,112,67,0.10)' },
+  { bg: 'rgba(184,149,106,0.18)', border: 'rgba(184,149,106,0.34)', text: '#f2d3a8', accent: '#b8956a', soft: 'rgba(184,149,106,0.08)' },
+  { bg: 'rgba(76,175,132,0.18)', border: 'rgba(76,175,132,0.34)', text: '#99efc0', accent: '#4caf84', soft: 'rgba(76,175,132,0.08)' },
+  { bg: 'rgba(100,149,237,0.18)', border: 'rgba(100,149,237,0.34)', text: '#acc9ff', accent: '#6495ed', soft: 'rgba(100,149,237,0.08)' },
+  { bg: 'rgba(239,83,80,0.18)', border: 'rgba(239,83,80,0.34)', text: '#ffb4b1', accent: '#ef5350', soft: 'rgba(239,83,80,0.08)' },
+  { bg: 'rgba(142,106,216,0.18)', border: 'rgba(142,106,216,0.34)', text: '#d2b8ff', accent: '#8e6ad8', soft: 'rgba(142,106,216,0.08)' },
+  { bg: 'rgba(0,188,212,0.18)', border: 'rgba(0,188,212,0.34)', text: '#96f1ff', accent: '#00bcd4', soft: 'rgba(0,188,212,0.08)' },
+  { bg: 'rgba(255,112,67,0.18)', border: 'rgba(255,112,67,0.34)', text: '#ffc3af', accent: '#ff7043', soft: 'rgba(255,112,67,0.08)' },
+  { bg: 'rgba(244,197,66,0.18)', border: 'rgba(244,197,66,0.34)', text: '#ffe28e', accent: '#f4c542', soft: 'rgba(244,197,66,0.08)' },
 ]
 
 const TOUR_EVENT_COLOR: EventColor = {
-  bg: 'rgba(80,122,201,0.18)',
-  border: 'rgba(122,169,255,0.34)',
-  text: '#a9c7ff',
+  bg: 'rgba(122,169,255,0.16)',
+  border: 'rgba(122,169,255,0.30)',
+  text: '#acc9ff',
   accent: '#7aa9ff',
   soft: 'rgba(122,169,255,0.08)',
 }
 
 export function CalendarPanel() {
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()))
+  const [selectedDate, setSelectedDate] = useState(new Date())
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -85,15 +86,19 @@ export function CalendarPanel() {
       ...event,
       startDate: parseISO(event.start),
       endDate: parseISO(event.end),
+      label: getEventLabel(event),
+      meta: getEventMeta(event),
       colorKey: getEventColorKey(event),
       palette: getEventColor(event),
-      label: getEventLabel(event),
     }))
   }, [events])
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
-  const calendarDays = eachDayOfInterval({ start: startOfWeek(monthStart, { weekStartsOn: 1 }), end: endOfWeek(monthEnd, { weekStartsOn: 1 }) })
+  const calendarDays = eachDayOfInterval({
+    start: startOfWeek(monthStart, { weekStartsOn: 1 }),
+    end: endOfWeek(monthEnd, { weekStartsOn: 1 }),
+  })
 
   const monthEvents = useMemo(() => {
     return parsedEvents.filter((event) => {
@@ -104,6 +109,12 @@ export function CalendarPanel() {
     })
   }, [currentMonth, monthEnd, monthStart, parsedEvents])
 
+  const selectedDayEvents = useMemo(() => {
+    return parsedEvents
+      .filter((event) => isWithinInterval(selectedDate, { start: event.startDate, end: event.endDate }))
+      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+  }, [parsedEvents, selectedDate])
+
   const monthStats = useMemo(() => {
     const fleetEvents = monthEvents.filter((event) => event.kind === 'fleet')
     const serviceEvents = monthEvents.filter((event) => event.kind === 'tour')
@@ -111,33 +122,25 @@ export function CalendarPanel() {
 
     for (const event of fleetEvents) {
       const current = vehicleCounts.get(event.colorKey)
-      if (current) {
-        current.count += 1
-      } else {
-        vehicleCounts.set(event.colorKey, { label: event.label, count: 1, palette: event.palette })
-      }
+      if (current) current.count += 1
+      else vehicleCounts.set(event.colorKey, { label: event.label, count: 1, palette: event.palette })
     }
-
-    const fleetDays = fleetEvents.reduce((sum, event) => {
-      return sum + calendarDays.filter((day) => isSameMonth(day, currentMonth) && isWithinInterval(day, { start: event.startDate, end: event.endDate })).length
-    }, 0)
 
     return {
       fleetCount: fleetEvents.length,
       serviceCount: serviceEvents.length,
       totalCount: monthEvents.length,
-      fleetDays,
       vehicleLegend: Array.from(vehicleCounts.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
     }
-  }, [calendarDays, currentMonth, monthEvents])
+  }, [monthEvents])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 30, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 4 }}>Calendar</h1>
-          <p style={{ color: 'rgba(240,236,228,0.60)', fontSize: 13, marginTop: 0, maxWidth: 720 }}>
-            Fleet bookings and service departures now sit in one cleaner planner. Every vehicle has its own colour so the road schedule is easier to read at a glance.
+          <p style={{ color: 'rgba(240,236,228,0.58)', fontSize: 13, margin: 0, maxWidth: 720 }}>
+            Cleaner monthly planner for fleet vehicles and service departures. Click any day to view the full booking details on the right.
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 999, background: 'rgba(240,236,228,0.04)', border: '1px solid rgba(240,236,228,0.08)' }}>
@@ -147,168 +150,148 @@ export function CalendarPanel() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.65fr) minmax(320px, 0.95fr)', gap: 20, alignItems: 'start' }}>
-        <div style={{ ...cardStyle, padding: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.75fr) minmax(320px, 0.85fr)', gap: 20, alignItems: 'start' }}>
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
             <div>
-              <div style={sectionTitle}>Road planner</div>
-              <div style={subtleText}>Different vehicles now keep their own colours across the month view and agenda.</div>
+              <div style={sectionTitle}>Monthly planner</div>
+              <div style={subtleText}>Compact day cells. Booking details stay in the side panel instead of filling the whole grid.</div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <LegendPill label="Fleet vehicle" palette={FLEET_EVENT_COLORS[0]} />
               <LegendPill label="Service departure" palette={TOUR_EVENT_COLOR} />
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8, marginBottom: 8 }}>
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-              <div key={day} style={{ textAlign: 'center', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.36)', paddingBottom: 2 }}>
-                {day}
-              </div>
+              <div key={day} style={{ textAlign: 'left', fontSize: 11, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.34)', padding: '0 4px' }}>{day}</div>
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
             {calendarDays.map((day) => {
-              const dayEvents = parsedEvents.filter((event) => isWithinInterval(day, { start: event.startDate, end: event.endDate }))
-              const visibleEvents = dayEvents.slice(0, 4)
+              const dayEvents = parsedEvents
+                .filter((event) => isWithinInterval(day, { start: event.startDate, end: event.endDate }))
+                .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+              const visibleEvents = dayEvents.slice(0, 2)
               const extraCount = Math.max(0, dayEvents.length - visibleEvents.length)
               const isToday = isSameDay(day, new Date())
+              const isSelected = isSameDay(day, selectedDate)
               const inCurrentMonth = isSameMonth(day, currentMonth)
 
               return (
-                <div
+                <button
                   key={day.toISOString()}
+                  type="button"
+                  onClick={() => setSelectedDate(day)}
                   style={{
-                    minHeight: 154,
-                    borderRadius: 16,
-                    border: `1px solid ${isToday ? 'rgba(184,149,106,0.58)' : 'rgba(240,236,228,0.08)'}`,
-                    background: isToday
-                      ? 'linear-gradient(180deg, rgba(184,149,106,0.12), rgba(240,236,228,0.03))'
-                      : inCurrentMonth
-                        ? 'linear-gradient(180deg, rgba(255,255,255,0.025), rgba(255,255,255,0.01))'
-                        : 'rgba(240,236,228,0.015)',
+                    minHeight: 110,
+                    borderRadius: 14,
+                    border: `1px solid ${isSelected ? 'rgba(184,149,106,0.48)' : isToday ? 'rgba(122,169,255,0.34)' : 'rgba(240,236,228,0.08)'}`,
+                    background: isSelected
+                      ? 'linear-gradient(180deg, rgba(184,149,106,0.10), rgba(255,255,255,0.02))'
+                      : isToday
+                        ? 'linear-gradient(180deg, rgba(122,169,255,0.09), rgba(255,255,255,0.02))'
+                        : 'rgba(255,255,255,0.015)',
                     padding: 10,
-                    opacity: inCurrentMonth ? 1 : 0.42,
-                    boxShadow: isToday ? '0 0 0 1px rgba(184,149,106,0.15) inset' : 'none',
+                    opacity: inCurrentMonth ? 1 : 0.32,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    boxShadow: isSelected ? '0 0 0 1px rgba(184,149,106,0.12) inset' : 'none',
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <span style={{
-                      fontFamily: "'Barlow Condensed', sans-serif",
-                      fontWeight: 800,
-                      fontSize: 20,
-                      color: isToday ? '#f5d6ab' : '#f0ece4',
-                    }}>
-                      {format(day, 'd')}
-                    </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 6 }}>
+                    <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, color: isSelected ? '#f2d3a8' : '#f0ece4' }}>{format(day, 'd')}</span>
                     {dayEvents.length > 0 ? (
-                      <span style={{ fontSize: 11, color: 'rgba(240,236,228,0.55)', padding: '3px 8px', borderRadius: 999, background: 'rgba(240,236,228,0.06)' }}>
-                        {dayEvents.length} on road
+                      <span style={{ fontSize: 10, color: 'rgba(240,236,228,0.58)', padding: '3px 7px', borderRadius: 999, background: 'rgba(240,236,228,0.05)' }}>
+                        {dayEvents.length}
                       </span>
                     ) : null}
                   </div>
 
-                  <div style={{ display: 'grid', gap: 7 }}>
-                    {dayEvents.length === 0 ? (
-                      <div style={{ color: 'rgba(240,236,228,0.18)', fontSize: 12, paddingTop: 10 }}>No bookings</div>
-                    ) : (
-                      visibleEvents.map((event) => (
-                        <div
-                          key={`${day.toISOString()}-${event.id}`}
-                          style={{
-                            padding: '8px 9px',
-                            borderRadius: 10,
-                            background: event.palette.bg,
-                            border: `1px solid ${event.palette.border}`,
-                            boxShadow: `inset 3px 0 0 ${event.palette.accent}`,
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                            <span style={{ width: 8, height: 8, borderRadius: 999, background: event.palette.accent, flexShrink: 0 }} />
-                            <div style={{ fontWeight: 700, fontSize: 12, color: event.palette.text, lineHeight: 1.2 }}>{event.title}</div>
-                          </div>
-                          <div style={{ color: 'rgba(240,236,228,0.65)', fontSize: 11, lineHeight: 1.3 }}>{event.subtitle}</div>
-                        </div>
-                      ))
-                    )}
-                    {extraCount > 0 ? <div style={{ color: 'rgba(240,236,228,0.48)', fontSize: 11, paddingLeft: 2 }}>+ {extraCount} more</div> : null}
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {visibleEvents.map((event) => (
+                      <div
+                        key={`${day.toISOString()}-${event.id}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 7,
+                          minWidth: 0,
+                          padding: '6px 8px',
+                          borderRadius: 999,
+                          background: event.palette.bg,
+                          border: `1px solid ${event.palette.border}`,
+                        }}
+                      >
+                        <span style={{ width: 8, height: 8, borderRadius: 999, background: event.palette.accent, flexShrink: 0 }} />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: event.palette.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {event.label}
+                        </span>
+                      </div>
+                    ))}
+                    {extraCount > 0 ? <div style={{ fontSize: 11, color: 'rgba(240,236,228,0.44)', paddingLeft: 2 }}>+{extraCount} more</div> : null}
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={cardStyle}>
-            <div style={sectionTitle}>Month overview</div>
-            <div style={{ color: 'rgba(240,236,228,0.48)', fontSize: 13, marginBottom: 16 }}>
-              Quick view of what is happening in {format(currentMonth, 'MMMM')}.
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-              <StatCard label="Fleet rentals" value={String(monthStats.fleetCount)} accent="#d7bc94" />
-              <StatCard label="Service departures" value={String(monthStats.serviceCount)} accent="#8ab2ff" />
-              <StatCard label="Total items" value={String(monthStats.totalCount)} accent="#95efbe" />
-              <StatCard label="Vehicle days busy" value={String(monthStats.fleetDays)} accent="#ceb4ff" />
-            </div>
+            <div style={sectionTitle}>Selected day</div>
+            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 26, marginBottom: 6 }}>{format(selectedDate, 'EEEE, d MMMM yyyy')}</div>
+            <div style={subtleText}>{selectedDayEvents.length === 0 ? 'No vehicles on the road for this date.' : `${selectedDayEvents.length} booking${selectedDayEvents.length === 1 ? '' : 's'} on this date.`}</div>
           </div>
 
           <div style={cardStyle}>
-            <div style={sectionTitle}>Vehicle colour key</div>
-            <div style={{ color: 'rgba(240,236,228,0.48)', fontSize: 13, marginBottom: 14 }}>
-              Each vehicle keeps the same colour wherever it appears this month.
-            </div>
+            <div style={sectionTitle}>Schedule details</div>
             <div style={{ display: 'grid', gap: 10 }}>
-              {monthStats.vehicleLegend.length === 0 ? (
-                <div style={{ color: 'rgba(240,236,228,0.4)' }}>No fleet vehicles booked this month yet</div>
-              ) : monthStats.vehicleLegend.map((vehicle) => (
-                <div key={vehicle.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 12, background: vehicle.palette.soft, border: `1px solid ${vehicle.palette.border}` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <span style={{ width: 12, height: 12, borderRadius: 999, background: vehicle.palette.accent, flexShrink: 0 }} />
-                    <span style={{ fontWeight: 700, color: '#f0ece4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vehicle.label}</span>
+              {loading ? (
+                <div style={{ color: 'rgba(240,236,228,0.42)' }}>Loading calendar…</div>
+              ) : selectedDayEvents.length === 0 ? (
+                <div style={{ color: 'rgba(240,236,228,0.42)' }}>Nothing booked for this date.</div>
+              ) : selectedDayEvents.map((event) => (
+                <div key={event.id} style={{ borderRadius: 14, border: `1px solid ${event.palette.border}`, background: event.palette.soft, padding: 14, boxShadow: `inset 3px 0 0 ${event.palette.accent}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, color: '#f0ece4', fontSize: 15 }}>{event.title}</div>
+                      <div style={{ color: event.palette.text, fontSize: 12, marginTop: 4 }}>{event.label}</div>
+                    </div>
+                    <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: event.palette.text, background: event.palette.bg, border: `1px solid ${event.palette.border}`, borderRadius: 999, padding: '4px 8px', flexShrink: 0 }}>
+                      {event.kind === 'fleet' ? 'Vehicle' : 'Service'}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 12, color: 'rgba(240,236,228,0.6)', flexShrink: 0 }}>{vehicle.count} booking{vehicle.count === 1 ? '' : 's'}</span>
+                  <div style={{ color: 'rgba(240,236,228,0.62)', fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>{event.meta}</div>
+                  <div style={{ color: 'rgba(240,236,228,0.52)', fontSize: 12, marginTop: 10 }}>
+                    {format(event.startDate, 'd MMM yyyy')}{!isSameDay(event.startDate, event.endDate) ? ` → ${format(event.endDate, 'd MMM yyyy')}` : ''}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
 
           <div style={cardStyle}>
-            <div style={sectionTitle}>Agenda</div>
-            <div style={{ display: 'grid', gap: 10 }}>
-              {loading ? (
-                <div style={{ color: 'rgba(240,236,228,0.4)' }}>Loading calendar…</div>
-              ) : monthEvents.length === 0 ? (
-                <div style={{ color: 'rgba(240,236,228,0.4)' }}>Nothing booked this month yet</div>
-              ) : monthEvents
-                .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-                .map((event) => (
-                  <div key={event.id} style={{ borderRadius: 14, border: `1px solid ${event.palette.border}`, padding: 14, background: event.palette.soft, boxShadow: `inset 3px 0 0 ${event.palette.accent}` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, color: '#f0ece4' }}>{event.title}</div>
-                        <div style={{ color: 'rgba(240,236,228,0.58)', fontSize: 12, marginTop: 4 }}>{event.subtitle}</div>
-                      </div>
-                      <span style={{
-                        fontSize: 10,
-                        letterSpacing: '0.12em',
-                        textTransform: 'uppercase',
-                        color: event.palette.text,
-                        background: event.palette.bg,
-                        border: `1px solid ${event.palette.border}`,
-                        borderRadius: 999,
-                        padding: '4px 8px',
-                        flexShrink: 0,
-                      }}>
-                        {event.kind === 'fleet' ? event.label : 'Service'}
-                      </span>
-                    </div>
-                    <div style={{ color: 'rgba(240,236,228,0.68)', fontSize: 12, marginTop: 10 }}>
-                      {format(event.startDate, 'd MMM yyyy')}{!isSameDay(event.startDate, event.endDate) ? ` → ${format(event.endDate, 'd MMM yyyy')}` : ''}
-                    </div>
+            <div style={sectionTitle}>Month overview</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
+              <StatCard label="Fleet" value={String(monthStats.fleetCount)} accent="#f2d3a8" />
+              <StatCard label="Service" value={String(monthStats.serviceCount)} accent="#acc9ff" />
+              <StatCard label="Total" value={String(monthStats.totalCount)} accent="#99efc0" />
+            </div>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {monthStats.vehicleLegend.length === 0 ? (
+                <div style={{ color: 'rgba(240,236,228,0.42)' }}>No fleet vehicles booked this month yet.</div>
+              ) : monthStats.vehicleLegend.map((vehicle) => (
+                <div key={vehicle.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '8px 10px', borderRadius: 12, background: vehicle.palette.soft, border: `1px solid ${vehicle.palette.border}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: 999, background: vehicle.palette.accent, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#f0ece4', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vehicle.label}</span>
                   </div>
-                ))}
+                  <span style={{ fontSize: 11, color: 'rgba(240,236,228,0.55)', flexShrink: 0 }}>{vehicle.count}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -318,9 +301,16 @@ export function CalendarPanel() {
 }
 
 function getEventLabel(event: CalendarEvent) {
-  if (event.kind !== 'fleet') return 'Service departure'
+  if (event.kind !== 'fleet') return event.title
   const parts = event.subtitle.split('·').map((part) => part.trim()).filter(Boolean)
   return parts[parts.length - 1] || event.title
+}
+
+function getEventMeta(event: CalendarEvent) {
+  if (event.kind !== 'fleet') return event.subtitle
+  const parts = event.subtitle.split('·').map((part) => part.trim()).filter(Boolean)
+  if (parts.length <= 1) return event.subtitle
+  return parts.slice(0, parts.length - 1).join(' • ')
 }
 
 function getEventColorKey(event: CalendarEvent) {
@@ -346,9 +336,9 @@ function LegendPill({ label, palette }: { label: string; palette: EventColor }) 
 
 function StatCard({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
-    <div style={{ borderRadius: 14, border: '1px solid rgba(240,236,228,0.10)', background: 'rgba(240,236,228,0.035)', padding: '14px 14px 12px' }}>
-      <div style={{ color: 'rgba(240,236,228,0.52)', fontSize: 12, marginBottom: 8 }}>{label}</div>
-      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, lineHeight: 1, color: accent }}>{value}</div>
+    <div style={{ borderRadius: 12, border: '1px solid rgba(240,236,228,0.10)', background: 'rgba(240,236,228,0.03)', padding: '12px 12px 10px' }}>
+      <div style={{ color: 'rgba(240,236,228,0.50)', fontSize: 11, marginBottom: 8 }}>{label}</div>
+      <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 26, lineHeight: 1, color: accent }}>{value}</div>
     </div>
   )
 }
@@ -357,7 +347,7 @@ const cardStyle = {
   background: '#1a1815',
   border: '1px solid rgba(240,236,228,0.12)',
   borderRadius: 18,
-  padding: '20px 24px',
+  padding: '18px',
   boxShadow: '0 18px 40px rgba(0,0,0,0.18)',
 }
 
