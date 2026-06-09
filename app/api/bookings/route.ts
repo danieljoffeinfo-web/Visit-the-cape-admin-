@@ -3,8 +3,6 @@ import { logActivityServer } from '@/lib/activity-log-server'
 import { generateBookingReference, getApprovedAdminUser } from '@/lib/auth-server'
 import {
   filterBookingsByTab,
-  normalizeEnquiryRow,
-  normalizeFleetRow,
   normalizeTagAlongRow,
   sortBookings,
   type BookingTab,
@@ -12,36 +10,14 @@ import {
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 async function fetchAllBookings() {
-  const [tagAlongRes, enquiriesRes, fleetRes, invoicesRes] = await Promise.all([
-    supabaseAdmin.from('tag_along_bookings').select('*').order('created_at', { ascending: false }).limit(200),
-    supabaseAdmin.from('enquiries').select('*').order('created_at', { ascending: false }).limit(200),
-    supabaseAdmin
-      .from('tour_bookings')
-      .select('id,name,email,passengers,amount,status,notes,created_at')
-      .eq('booking_type', 'fleet')
-      .order('created_at', { ascending: false })
-      .limit(200),
-    supabaseAdmin.from('xero_invoice_links').select('booking_id,status'),
-  ])
+  const { data, error } = await supabaseAdmin
+    .from('tag_along_bookings')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(200)
 
-  if (tagAlongRes.error) throw tagAlongRes.error
-  if (enquiriesRes.error) throw enquiriesRes.error
-  if (fleetRes.error) throw fleetRes.error
-
-  const invoiceMap = Object.fromEntries(
-    ((invoicesRes.data || []) as Array<{ booking_id: string; status?: string | null }>).map((link) => [
-      link.booking_id,
-      link.status,
-    ]),
-  )
-
-  const tagAlong = (tagAlongRes.data || []).map(normalizeTagAlongRow)
-  const privateRows = (enquiriesRes.data || []).map(normalizeEnquiryRow)
-  const fleet = (fleetRes.data || []).map((row) =>
-    normalizeFleetRow(row, invoiceMap[row.id] || null),
-  )
-
-  return sortBookings([...tagAlong, ...privateRows, ...fleet])
+  if (error) throw error
+  return sortBookings((data || []).map(normalizeTagAlongRow))
 }
 
 export async function GET(request: NextRequest) {
@@ -50,8 +26,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let type = (request.nextUrl.searchParams.get('type') || 'all') as BookingTab | 'tour'
-  if (type === 'tour') type = 'tours'
+  let type = (request.nextUrl.searchParams.get('type') || 'all') as BookingTab | 'tour' | 'internal'
+  if (type === 'tour' || type === 'internal') type = 'tours'
 
   try {
     const all = await fetchAllBookings()
@@ -148,12 +124,8 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Booking id and kind required' }, { status: 400 })
   }
 
-  if (kind === 'fleet') {
-    return NextResponse.json({ error: 'Use /api/fleet/bookings for fleet updates' }, { status: 400 })
-  }
-
-  if (kind === 'private') {
-    return NextResponse.json({ error: 'Private enquiries are read-only in bookings hub' }, { status: 400 })
+  if (kind !== 'tour' && kind !== 'internal') {
+    return NextResponse.json({ error: 'Only tour bookings can be edited here' }, { status: 400 })
   }
 
   const { data: existing } = await supabaseAdmin
@@ -167,13 +139,18 @@ export async function PATCH(request: NextRequest) {
   }
 
   const allowed: Record<string, unknown> = {}
+  if (updates.customerName !== undefined) allowed.name = String(updates.customerName).trim()
+  if (updates.customerEmail !== undefined) allowed.email = String(updates.customerEmail).trim()
+  if (updates.customerPhone !== undefined) allowed.phone = updates.customerPhone ? String(updates.customerPhone).trim() : null
+  if (updates.tourName !== undefined) allowed.tour_name = String(updates.tourName).trim()
+  if (updates.tourDate !== undefined) allowed.tour_date = updates.tourDate
   if (updates.status !== undefined) allowed.status = updates.status
   if (updates.payment_status !== undefined) allowed.payment_status = updates.payment_status
   if (updates.invoice_status !== undefined) allowed.invoice_status = updates.invoice_status
-  if (updates.vehicle_name !== undefined) allowed.vehicle_name = updates.vehicle_name
-  if (updates.notes !== undefined) allowed.notes = updates.notes
+  if (updates.vehicleName !== undefined) allowed.vehicle_name = updates.vehicleName || null
+  if (updates.notes !== undefined) allowed.notes = updates.notes || null
   if (updates.guestsCount !== undefined) allowed.passengers = parseInt(String(updates.guestsCount), 10)
-  if (updates.amount !== undefined) allowed.amount = parseFloat(String(updates.amount))
+  if (updates.amount !== undefined) allowed.amount = updates.amount === '' || updates.amount === null ? null : parseFloat(String(updates.amount))
   allowed.updated_at = new Date().toISOString()
 
   const { data, error } = await supabaseAdmin
@@ -207,4 +184,49 @@ export async function PATCH(request: NextRequest) {
   })
 
   return NextResponse.json({ booking: normalizeTagAlongRow(data) })
+}
+
+export async function DELETE(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const body = await request.json()
+  const { id, kind } = body
+  if (!id || !kind) {
+    return NextResponse.json({ error: 'Booking id and kind required' }, { status: 400 })
+  }
+
+  if (kind !== 'tour' && kind !== 'internal') {
+    return NextResponse.json({ error: 'Only tour bookings can be deleted here' }, { status: 400 })
+  }
+
+  const { data: existing } = await supabaseAdmin
+    .from('tag_along_bookings')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!existing) {
+    return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+  }
+
+  const { error } = await supabaseAdmin.from('tag_along_bookings').delete().eq('id', id)
+  if (error) {
+    console.error('Booking delete error:', error)
+    return NextResponse.json({ error: 'Failed to delete booking' }, { status: 500 })
+  }
+
+  const internal = existing.source === 'internal' || existing.booking_type === 'internal'
+  await logActivityServer({
+    admin,
+    action: internal ? 'Deleted internal booking' : 'Deleted tour booking',
+    entityType: internal ? 'internal_booking' : 'tour_booking',
+    entityId: id,
+    entityLabel: existing.name ? `${existing.name} — ${existing.tour_name || 'Booking'}` : id,
+    oldValue: existing,
+  })
+
+  return NextResponse.json({ ok: true })
 }

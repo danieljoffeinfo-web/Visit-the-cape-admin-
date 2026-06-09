@@ -126,7 +126,7 @@ import type { BookingTab } from '@/lib/bookings'
 export function DashboardPanel({
   onNavigate,
 }: {
-  onNavigate: (p: string, opts?: { tab?: BookingTab; action?: string }) => void
+  onNavigate: (p: string, opts?: { tab?: BookingTab; action?: string; createMode?: 'tour' | 'internal' }) => void
 }) {
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -217,9 +217,9 @@ export function DashboardPanel({
   const quickActions = [
     { icon: '＋', label: 'Schedule a Tag-Along Tour', desc: 'Add a new departure date with seats', to: 'tours' as const },
     { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' as const },
-    { icon: '📋', label: 'New Internal Booking', desc: 'Create a booking from the admin dashboard', to: 'bookings' as const, tab: 'internal' as BookingTab, action: 'create' },
-    { icon: '🎫', label: 'New Tour Booking', desc: 'Create a manual tour booking on request', to: 'bookings' as const, tab: 'tours' as BookingTab, action: 'create' },
-    { icon: '🚐', label: 'New Fleet Booking', desc: 'Book a vehicle for a tour or rental', to: 'bookings' as const, tab: 'fleet' as BookingTab, action: 'create' },
+    { icon: '📋', label: 'New Internal Booking', desc: 'Create a booking from the admin dashboard', to: 'bookings' as const, tab: 'tours' as BookingTab, action: 'create', createMode: 'internal' as const },
+    { icon: '🎫', label: 'New Tour Booking', desc: 'Create a manual tour booking on request', to: 'bookings' as const, tab: 'tours' as BookingTab, action: 'create', createMode: 'tour' as const },
+    { icon: '🚐', label: 'Fleet Manager', desc: 'Manage vehicles, labels, and service scheduling', to: 'fleet' as const },
     { icon: '📜', label: 'View Activity Logs', desc: 'See who changed what and when', to: 'activity-logs' as const },
     { icon: '₤', label: 'Accounting', desc: 'Invoices, payments and reports', to: 'accounting' as const },
   ]
@@ -519,7 +519,7 @@ export function DashboardPanel({
         {quickActions.map((a) => (
           <div
             key={a.label}
-            onClick={() => onNavigate(a.to, 'tab' in a ? { tab: a.tab, action: a.action } : undefined)}
+            onClick={() => onNavigate(a.to, 'tab' in a ? { tab: a.tab, action: a.action, createMode: 'createMode' in a ? a.createMode : undefined } : undefined)}
             style={{
               display: 'flex',
               alignItems: 'center',
