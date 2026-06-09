@@ -1,145 +1,548 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
+import {
+  getCrmSnapshot,
+  getFleetStatus,
+  getOutstandingInvoices,
+  getRevenueLast7Days,
+  getSeatsRemainingNext30Days,
+  getUnreadEnquiries,
+  getUnreadEnquiriesCount,
+  getUpcomingDeparturesNext7Days,
+  type CrmSnapshot,
+  type DepartureRow,
+  type EnquiryRow,
+  type FleetVehicleStatus,
+  type OutstandingInvoices,
+  type RevenueDay,
+} from '@/lib/dashboard'
 
-type Tour = { id: string; name: string; date: string; seats_total: number; booked_seats: number; price_per_person: number }
-type Enquiry = { id: string; name: string; created_at: string; tour_type?: string }
+const card = {
+  background: '#1a1815',
+  border: '1px solid rgba(240,236,228,0.12)',
+  borderRadius: 8,
+  padding: '20px 24px',
+} as const
 
-export function DashboardPanel({ onNavigate }: { onNavigate: (p: string) => void }) {
-  const [stats, setStats] = useState({ enquiries: 0, bookings: 0, tours: 0, week: 0 })
-  const [schedule, setSchedule] = useState<Tour[]>([])
-  const [departures, setDepartures] = useState<Tour[]>([])
-  const [kn, setKn] = useState({ seatsBooked: 0, seatsAvail: 0, private: 0, tagalong: 0 })
+const sectionTitle = {
+  fontFamily: "'Barlow Condensed', sans-serif",
+  fontWeight: 800,
+  fontSize: 17,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase' as const,
+}
 
-  useEffect(() => { loadAll() }, [])
+const muted = 'rgba(240,236,228,0.45)'
+const mutedLight = 'rgba(240,236,228,0.35)'
 
-  async function loadAll() {
-    const today = format(new Date(), 'yyyy-MM-dd')
-    const weekAgo = format(new Date(Date.now() - 7 * 86400000), 'yyyy-MM-dd')
-    const in30 = format(new Date(Date.now() + 30 * 86400000), 'yyyy-MM-dd')
+function formatZAR(amount: number) {
+  return `R ${amount.toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
 
-    const [enqRes, bookRes, toursRes, weekEnqRes, todayRes] = await Promise.all([
-      supabase.from('enquiries').select('id', { count: 'exact', head: true }),
-      supabase.from('tag_along_bookings').select('id', { count: 'exact', head: true }),
-      supabase.from('tag_along_tours').select('*').gte('date', today).lte('date', in30).order('date'),
-      supabase.from('enquiries').select('id', { count: 'exact', head: true }).gte('created_at', weekAgo),
-      supabase.from('tag_along_tours').select('*').eq('date', today),
-    ])
+function FleetStatusDot({ status }: { status: FleetVehicleStatus['status'] }) {
+  const color =
+    status === 'available' ? '#4caf84' : status === 'on_tour' ? '#b8956a' : 'rgba(240,236,228,0.35)'
+  return (
+    <span
+      style={{
+        width: 7,
+        height: 7,
+        borderRadius: '50%',
+        background: color,
+        flexShrink: 0,
+        boxShadow: status === 'available' ? '0 0 6px rgba(76,175,132,0.5)' : undefined,
+      }}
+    />
+  )
+}
 
-    setStats({
-      enquiries: enqRes.count || 0,
-      bookings: bookRes.count || 0,
-      tours: (toursRes.data || []).length,
-      week: weekEnqRes.count || 0,
-    })
-    setSchedule((todayRes.data || []) as Tour[])
-    setDepartures(((toursRes.data || []).slice(0, 5)) as Tour[])
+function ProgressBar({ filled, total }: { filled: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, (filled / total) * 100) : 0
+  return (
+    <div style={{ height: 4, borderRadius: 2, background: 'rgba(240,236,228,0.08)', overflow: 'hidden', marginTop: 6 }}>
+      <div
+        style={{
+          height: '100%',
+          width: `${pct}%`,
+          borderRadius: 2,
+          background: pct >= 100 ? '#ef5350' : '#b8956a',
+          transition: 'width 0.3s ease',
+        }}
+      />
+    </div>
+  )
+}
 
-    const allTours = (toursRes.data || []) as Tour[]
-    setKn({
-      seatsBooked: allTours.reduce((s, t) => s + (t.booked_seats || 0), 0),
-      seatsAvail: allTours.reduce((s, t) => s + ((t.seats_total || 0) - (t.booked_seats || 0)), 0),
-      private: enqRes.count || 0,
-      tagalong: bookRes.count || 0,
-    })
+function RevenueSparkline({ days }: { days: RevenueDay[] }) {
+  const max = Math.max(...days.map((d) => d.amount), 1)
+  const hasData = days.some((d) => d.amount > 0)
+
+  if (!hasData) {
+    return (
+      <div style={{ color: mutedLight, fontSize: 13, padding: '20px 0' }}>
+        No confirmed booking revenue in the last 7 days
+      </div>
+    )
   }
 
-  const card = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px' }
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: 72, marginTop: 8 }}>
+      {days.map((d) => (
+        <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+          <div
+            style={{
+              width: '100%',
+              maxWidth: 36,
+              height: `${Math.max(4, (d.amount / max) * 56)}px`,
+              borderRadius: 3,
+              background: d.amount > 0 ? 'rgba(184,149,106,0.75)' : 'rgba(240,236,228,0.06)',
+            }}
+            title={d.amount > 0 ? formatZAR(d.amount) : undefined}
+          />
+          <span style={{ fontSize: 10, color: mutedLight, letterSpacing: '0.04em' }}>{d.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PulseSkeleton() {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+      {[0, 1, 2].map((i) => (
+        <div key={i} style={{ ...card, minHeight: 100, opacity: 0.5 }}>
+          <div style={{ height: 10, width: '50%', background: 'rgba(240,236,228,0.08)', borderRadius: 4, marginBottom: 12 }} />
+          <div style={{ height: 32, width: '30%', background: 'rgba(184,149,106,0.15)', borderRadius: 4 }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export function DashboardPanel({ onNavigate }: { onNavigate: (p: string) => void }) {
+  const [loading, setLoading] = useState(true)
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [seatsRemaining, setSeatsRemaining] = useState(0)
+  const [invoices, setInvoices] = useState<OutstandingInvoices>({ connected: false, total: null, fallback: 'no_data' })
+  const [departures, setDepartures] = useState<DepartureRow[]>([])
+  const [enquiries, setEnquiries] = useState<EnquiryRow[]>([])
+  const [revenueDays, setRevenueDays] = useState<RevenueDay[]>([])
+  const [fleet, setFleet] = useState<FleetVehicleStatus[]>([])
+  const [crm, setCrm] = useState<CrmSnapshot>({ newThisWeek: 0, totalCustomers: 0, repeatBookerPercent: null })
+
+  useEffect(() => {
+    loadDashboard()
+  }, [])
+
+  async function loadDashboard() {
+    setLoading(true)
+    try {
+      const [
+        unreadTotal,
+        seats,
+        invoiceData,
+        schedule,
+        unreadFeed,
+        revenue,
+        fleetStatus,
+        crmData,
+      ] = await Promise.all([
+        getUnreadEnquiriesCount(),
+        getSeatsRemainingNext30Days(),
+        getOutstandingInvoices(),
+        getUpcomingDeparturesNext7Days(),
+        getUnreadEnquiries(5),
+        getRevenueLast7Days(),
+        getFleetStatus(),
+        getCrmSnapshot(),
+      ])
+
+      setUnreadCount(unreadTotal)
+      setSeatsRemaining(seats)
+      setInvoices(invoiceData)
+      setDepartures(schedule)
+      setEnquiries(unreadFeed)
+      setRevenueDays(revenue)
+      setFleet(fleetStatus)
+      setCrm(crmData)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const revenueTotal = revenueDays.reduce((s, d) => s + d.amount, 0)
+
+  const pulseCards = [
+    {
+      label: 'Unread Enquiries',
+      value: loading ? '—' : String(unreadCount),
+      sub: unreadCount > 0 ? 'Needs response' : 'All caught up',
+      urgent: unreadCount > 0,
+      onClick: () => onNavigate('enquiries'),
+    },
+    {
+      label: 'Seats Remaining',
+      value: loading ? '—' : String(seatsRemaining),
+      sub: 'Next 30 days',
+      urgent: false,
+      onClick: () => onNavigate('tours'),
+    },
+    {
+      label: 'Outstanding Invoices',
+      value: loading
+        ? '—'
+        : invoices.fallback === 'connect'
+          ? '—'
+          : invoices.fallback === 'no_data'
+            ? '—'
+            : formatZAR(invoices.total || 0),
+      sub: invoices.fallback === 'connect'
+        ? 'Connect Xero'
+        : invoices.fallback === 'no_data'
+          ? 'No invoice data'
+          : 'AUTHORISED unpaid',
+      urgent: (invoices.total || 0) > 0,
+      onClick: () => onNavigate('accounting'),
+    },
+  ]
+
+  const quickActions = [
+    { icon: '＋', label: 'Schedule a Tag-Along Tour', desc: 'Add a new departure date with seats', to: 'tours' },
+    { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' },
+    { icon: '✓', label: 'Manage Bookings', desc: 'View tag-along booking details', to: 'bookings' },
+    { icon: '🚐', label: 'New Fleet Booking', desc: 'Book a vehicle for a tour or rental', to: 'fleet' },
+    { icon: '₤', label: 'Accounting', desc: 'Invoices, payments and reports', to: 'accounting' },
+  ]
 
   return (
-    <div>
-      <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 24 }}>Dashboard</h1>
+    <div className="dashboard-root">
+      <style>{`
+        .dashboard-root { max-width: 100%; overflow-x: hidden; }
+        .dashboard-pulse { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .dashboard-operations { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 24px; }
+        .dashboard-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .dashboard-quick { margin-bottom: 0; }
+        .pulse-card { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+        .pulse-card:hover { border-color: rgba(184,149,106,0.35) !important; background: rgba(184,149,106,0.04) !important; }
+        .enquiry-row { cursor: pointer; transition: background 0.12s; border-radius: 4px; margin: 0 -8px; padding: 10px 8px !important; }
+        .enquiry-row:hover { background: rgba(240,236,228,0.04); }
+        @media (min-width: 900px) {
+          .dashboard-operations { grid-template-columns: 1.65fr 1fr; }
+        }
+      `}</style>
 
-      {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 24 }}>
-        {[
-          { label: 'Total Enquiries', value: stats.enquiries, sub: 'All time' },
-          { label: 'Tag-Along Bookings', value: stats.bookings, sub: 'All time' },
-          { label: 'Upcoming Tours', value: stats.tours, sub: 'Next 30 days' },
-          { label: 'New This Week', value: stats.week, sub: 'Enquiries + bookings' },
-        ].map(s => (
-          <div key={s.label} style={card}>
-            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.45)', marginBottom: 6 }}>{s.label}</div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 36, color: '#b8956a', lineHeight: 1 }}>{s.value}</div>
-            <div style={{ fontSize: 12, color: 'rgba(240,236,228,0.35)', marginTop: 4 }}>{s.sub}</div>
+      <h1
+        style={{
+          fontFamily: "'Barlow Condensed', sans-serif",
+          fontWeight: 900,
+          fontSize: 28,
+          letterSpacing: '0.04em',
+          textTransform: 'uppercase',
+          marginBottom: 24,
+        }}
+      >
+        Dashboard
+      </h1>
+
+      {/* Pulse Bar */}
+      {loading ? (
+        <PulseSkeleton />
+      ) : (
+        <div className="dashboard-pulse">
+          {pulseCards.map((p) => (
+            <div
+              key={p.label}
+              className="pulse-card"
+              style={{
+                ...card,
+                borderColor: p.urgent ? 'rgba(184,149,106,0.4)' : card.border,
+              }}
+              onClick={p.onClick}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && p.onClick()}
+            >
+              <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: muted, marginBottom: 6 }}>
+                {p.label}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Barlow Condensed', sans-serif",
+                  fontWeight: 900,
+                  fontSize: 36,
+                  color: p.urgent ? '#b8956a' : 'rgba(240,236,228,0.85)',
+                  lineHeight: 1,
+                }}
+              >
+                {p.value}
+              </div>
+              <div style={{ fontSize: 12, color: mutedLight, marginTop: 4 }}>{p.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Operations */}
+      <div className="dashboard-operations">
+        {/* Today's Schedule + Next 7 Days */}
+        <div style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+            <h3 style={sectionTitle}>Today&apos;s Schedule + Next 7 Days</h3>
+            <button
+              onClick={() => onNavigate('tours')}
+              style={{
+                padding: '5px 12px',
+                borderRadius: 4,
+                border: '1px solid rgba(184,149,106,0.35)',
+                background: 'transparent',
+                color: '#b8956a',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontFamily: "'Barlow', sans-serif",
+              }}
+            >
+              Add Tour
+            </button>
           </div>
-        ))}
-      </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        {/* Today's Schedule */}
+          {loading ? (
+            <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>Loading schedule...</div>
+          ) : departures.length === 0 ? (
+            <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>
+              No departures scheduled.{' '}
+              <button
+                onClick={() => onNavigate('tours')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#b8956a',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontFamily: "'Barlow', sans-serif",
+                  padding: 0,
+                  textDecoration: 'underline',
+                  textUnderlineOffset: 3,
+                }}
+              >
+                Schedule a departure →
+              </button>
+            </div>
+          ) : (
+            departures.map((d) => (
+              <div
+                key={d.id}
+                style={{ padding: '12px 0', borderBottom: '1px solid rgba(240,236,228,0.06)' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{d.name}</div>
+                    <div style={{ fontSize: 12, color: muted, marginTop: 3 }}>
+                      {format(new Date(d.date), 'EEE, d MMM')}
+                      {d.departure_time ? ` · ${d.departure_time}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontSize: 13, color: '#b8956a', fontWeight: 600 }}>
+                      {d.booked_seats}/{d.seats_total}
+                    </div>
+                    <div style={{ fontSize: 11, color: mutedLight }}>seats filled</div>
+                  </div>
+                </div>
+                <ProgressBar filled={d.booked_seats} total={d.seats_total} />
+                {d.vehicle_name ? (
+                  <div style={{ fontSize: 11, color: mutedLight, marginTop: 6 }}>Vehicle: {d.vehicle_name}</div>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Unread Enquiries Feed */}
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Today&apos;s Schedule</h3>
-            <button onClick={() => onNavigate('tours')} style={{ padding: '5px 12px', borderRadius: 4, border: '1px solid rgba(184,149,106,0.35)', background: 'transparent', color: '#b8956a', cursor: 'pointer', fontSize: 12, fontFamily: "'Barlow', sans-serif" }}>Add Tour</button>
+            <h3 style={sectionTitle}>Unread Enquiries</h3>
+            {unreadCount > 0 && (
+              <span
+                style={{
+                  fontSize: 11,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: '#b8956a',
+                  background: 'rgba(184,149,106,0.12)',
+                  padding: '2px 8px',
+                  borderRadius: 10,
+                }}
+              >
+                {unreadCount} new
+              </span>
+            )}
           </div>
-          {schedule.length === 0 ? (
-            <div style={{ color: 'rgba(240,236,228,0.35)', fontSize: 13, padding: '12px 0' }}>No tours scheduled for today</div>
-          ) : schedule.map(t => (
-            <div key={t.id} style={{ padding: '10px 0', borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{t.name}</div>
-              <div style={{ fontSize: 12, color: 'rgba(240,236,228,0.5)', marginTop: 3 }}>{t.booked_seats}/{t.seats_total} seats booked</div>
-            </div>
-          ))}
-        </div>
 
-        {/* Key Numbers */}
-        <div style={card}>
-          <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 14 }}>Key Numbers</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-            {[
-              { v: kn.seatsBooked, l: 'Seats Booked' },
-              { v: kn.seatsAvail, l: 'Seats Available' },
-              { v: kn.private, l: 'Private Enquiries' },
-              { v: kn.tagalong, l: 'Tag-Along Bookings' },
-            ].map(k => (
-              <div key={k.l} style={{ background: 'rgba(240,236,228,0.04)', borderRadius: 6, padding: '12px 14px' }}>
-                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 28, color: '#b8956a' }}>{k.v}</div>
-                <div style={{ fontSize: 12, color: 'rgba(240,236,228,0.45)', marginTop: 2 }}>{k.l}</div>
+          {loading ? (
+            <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>Loading enquiries...</div>
+          ) : enquiries.length === 0 ? (
+            <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>No unread enquiries</div>
+          ) : (
+            enquiries.map((e) => (
+              <div
+                key={e.id}
+                className="enquiry-row"
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(240,236,228,0.06)' }}
+                onClick={() => onNavigate('enquiries')}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(ev) => ev.key === 'Enter' && onNavigate('enquiries')}
+              >
+                <span
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: '#b8956a',
+                    marginTop: 6,
+                    flexShrink: 0,
+                    boxShadow: '0 0 6px rgba(184,149,106,0.5)',
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{e.name}</div>
+                  {e.tour_type && (
+                    <div style={{ fontSize: 12, color: muted, marginTop: 2 }}>{e.tour_type}</div>
+                  )}
+                  <div style={{ fontSize: 11, color: mutedLight, marginTop: 3 }}>
+                    {formatDistanceToNow(new Date(e.created_at), { addSuffix: true })}
+                  </div>
+                </div>
               </div>
-            ))}
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Business Health */}
+      <div className="dashboard-health">
+        {/* Revenue Sparkline */}
+        <div style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+            <h3 style={sectionTitle}>Revenue</h3>
+            {!loading && revenueTotal > 0 && (
+              <span style={{ fontSize: 13, color: '#b8956a', fontWeight: 600 }}>{formatZAR(revenueTotal)}</span>
+            )}
           </div>
+          <div style={{ fontSize: 11, color: mutedLight, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>
+            Last 7 days · confirmed bookings
+          </div>
+          {loading ? (
+            <div style={{ color: mutedLight, fontSize: 13, padding: '20px 0' }}>Loading...</div>
+          ) : (
+            <RevenueSparkline days={revenueDays} />
+          )}
         </div>
 
-        {/* Upcoming Departures */}
+        {/* Fleet Status */}
         <div style={card}>
-          <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 14 }}>Upcoming Departures</h3>
-          {departures.length === 0 ? (
-            <div style={{ color: 'rgba(240,236,228,0.35)', fontSize: 13 }}>No upcoming tours</div>
-          ) : departures.map(t => (
-            <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 500 }}>{t.name}</div>
-                <div style={{ fontSize: 12, color: 'rgba(240,236,228,0.45)', marginTop: 2 }}>{format(new Date(t.date), 'EEE, d MMM')}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 13, color: '#b8956a', fontWeight: 600 }}>{t.booked_seats}/{t.seats_total}</div>
-                <div style={{ fontSize: 11, color: 'rgba(240,236,228,0.35)' }}>seats</div>
-              </div>
+          <h3 style={{ ...sectionTitle, marginBottom: 14 }}>Fleet Status</h3>
+          {loading ? (
+            <div style={{ color: mutedLight, fontSize: 13 }}>Loading fleet...</div>
+          ) : fleet.length === 0 ? (
+            <div style={{ color: mutedLight, fontSize: 13 }}>
+              No vehicles added yet
+              {/* TODO: Fleet data — vehicles live in tour_products (family=fleet) via /api/fleet/vehicles */}
             </div>
-          ))}
+          ) : (
+            fleet.map((v) => (
+              <div
+                key={v.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 0',
+                  borderBottom: '1px solid rgba(240,236,228,0.06)',
+                }}
+              >
+                <FleetStatusDot status={v.status} />
+                <span style={{ flex: 1, fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {v.name}
+                </span>
+                <span style={{ fontSize: 11, color: muted, letterSpacing: '0.04em', flexShrink: 0 }}>{v.statusLabel}</span>
+              </div>
+            ))
+          )}
         </div>
 
-        {/* Quick Actions */}
+        {/* CRM Snapshot */}
         <div style={card}>
-          <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 14 }}>Quick Actions</h3>
-          {[
-            { icon: '＋', label: 'Schedule a Tag-Along Tour', desc: 'Add a new departure date with seats', to: 'tours' },
-            { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' },
-            { icon: '✓', label: 'Manage Bookings', desc: 'View tag-along booking details', to: 'bookings' },
-            { icon: '₤', label: 'Accounting', desc: 'Invoices, payments and reports', to: 'accounting' },
-          ].map(a => (
-            <div key={a.label} onClick={() => onNavigate(a.to)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid rgba(240,236,228,0.06)', cursor: 'pointer' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(184,149,106,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b8956a', fontSize: 16, flexShrink: 0 }}>{a.icon}</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
-                <div style={{ fontSize: 12, color: 'rgba(240,236,228,0.45)', marginTop: 1 }}>{a.desc}</div>
+          <h3 style={{ ...sectionTitle, marginBottom: 14 }}>CRM Snapshot</h3>
+          {loading ? (
+            <div style={{ color: mutedLight, fontSize: 13 }}>Loading CRM...</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 12, color: muted }}>New this week</span>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24, color: '#b8956a' }}>
+                  {crm.newThisWeek}
+                </span>
               </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <span style={{ fontSize: 12, color: muted }}>Total customers</span>
+                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24, color: 'rgba(240,236,228,0.85)' }}>
+                  {crm.totalCustomers}
+                </span>
+              </div>
+              {crm.repeatBookerPercent !== null && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                  <span style={{ fontSize: 12, color: muted }}>Repeat bookers</span>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24, color: 'rgba(240,236,228,0.85)' }}>
+                    {crm.repeatBookerPercent}%
+                  </span>
+                </div>
+              )}
             </div>
-          ))}
+          )}
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div style={card} className="dashboard-quick">
+        <h3 style={{ ...sectionTitle, marginBottom: 14 }}>Quick Actions</h3>
+        {quickActions.map((a) => (
+          <div
+            key={a.label}
+            onClick={() => onNavigate(a.to)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '10px 0',
+              borderBottom: '1px solid rgba(240,236,228,0.06)',
+              cursor: 'pointer',
+            }}
+          >
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+                background: 'rgba(184,149,106,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#b8956a',
+                fontSize: 16,
+                flexShrink: 0,
+              }}
+            >
+              {a.icon}
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
+              <div style={{ fontSize: 12, color: muted, marginTop: 1 }}>{a.desc}</div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
