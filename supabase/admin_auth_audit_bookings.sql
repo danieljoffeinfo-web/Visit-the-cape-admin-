@@ -207,14 +207,19 @@ CREATE POLICY enquiries_select ON enquiries
   USING (is_approved_admin());
 
 -- ---------------------------------------------------------------------------
--- Seed placeholder admin users (replace emails after creating Auth users)
--- 1. Create each user in Supabase Auth (Dashboard → Authentication → Users)
--- 2. Update auth_user_id below with the real UUID from auth.users
--- 3. Disable public signups in Supabase Auth settings
+-- Seed approved admin users (Visit The Cape — 4 users)
+-- Prerequisite: users already exist in Supabase Auth (Authentication → Users)
+-- Disable public signups in Supabase Auth settings before going live.
 -- ---------------------------------------------------------------------------
--- INSERT INTO admin_users (auth_user_id, full_name, email, role, color, is_approved) VALUES
---   ('00000000-0000-0000-0000-000000000001', 'Owner User',       'owner@example.com',  'owner', 'Bronze', true),
---   ('00000000-0000-0000-0000-000000000002', 'Admin User One',   'admin1@example.com', 'admin', 'Blue',   true),
---   ('00000000-0000-0000-0000-000000000003', 'Admin User Two',   'admin2@example.com', 'admin', 'Green',  true),
---   ('00000000-0000-0000-0000-000000000004', 'Staff User One',   'staff1@example.com', 'staff', 'Purple', true),
---   ('00000000-0000-0000-0000-000000000005', 'Staff User Two',   'staff2@example.com', 'staff', 'Red',    true);
+INSERT INTO admin_users (auth_user_id, full_name, email, role, color, is_approved) VALUES
+  ('95d5bceb-c2b2-47b7-90f6-b3e3aff70192', 'Daniel Joffe', 'danieljoffeinfo@gmail.com', 'owner', 'Bronze', true),
+  ('6fafc185-13d4-4843-b437-e006bff96b66', 'Fernando Brito', 'fernando@britos.co.za', 'admin', 'Blue', true),
+  ('bb05b641-98ea-4227-b3a2-a62d56b3ac65', 'Tanya', 'tanya@visitthecape.co.za', 'admin', 'Green', true),
+  ('6676f498-8e8c-4a85-b450-c341b389a401', 'Tyron', 'tyron@drivingforce.biz', 'staff', 'Purple', true)
+ON CONFLICT (auth_user_id) DO UPDATE SET
+  full_name = EXCLUDED.full_name,
+  email = EXCLUDED.email,
+  role = EXCLUDED.role,
+  color = EXCLUDED.color,
+  is_approved = EXCLUDED.is_approved,
+  updated_at = now();
