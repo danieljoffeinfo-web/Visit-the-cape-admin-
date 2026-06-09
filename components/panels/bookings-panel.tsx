@@ -1,21 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { toast } from 'sonner'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
-
-type Booking = {
-  id: string
-  name: string
-  email: string
-  phone?: string
-  passengers?: number
-  created_at: string
-  tour_name?: string
-  tour_date?: string
-  amount?: number
-}
+import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
+import type { BookingTab, UnifiedBooking } from '@/lib/bookings'
+import { cardStyle, filterBookingsByTab } from '@/lib/bookings'
+import { BookingsTabBar } from '@/components/bookings/bookings-tab-bar'
+import { BookingsTable } from '@/components/bookings/bookings-table'
+import { CreateTourForm, emptyTourForm } from '@/components/bookings/create-tour-form'
+import { CreateInternalForm, emptyInternalForm } from '@/components/bookings/create-internal-form'
+import { CreateFleetForm } from '@/components/bookings/create-fleet-form'
 
 type InvoiceLink = {
   booking_id: string
@@ -24,89 +19,179 @@ type InvoiceLink = {
   status: string
 }
 
-type Enquiry = {
-  id: string
-  name: string
-  email: string
-  tour_type?: string
-  message?: string
-  created_at: string
-  amount?: number
+const TAB_CREATE_LABEL: Partial<Record<BookingTab, string>> = {
+  tours: '+ New Tour Booking',
+  internal: '+ New Internal Booking',
+  fleet: '+ New Fleet Booking',
 }
 
-const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  PAID: { bg: 'rgba(76,175,132,0.2)', color: '#4caf84' },
-  AUTHORISED: { bg: 'rgba(100,149,237,0.2)', color: '#6495ed' },
-  OVERDUE: { bg: 'rgba(239,83,80,0.2)', color: '#ef5350' },
-  DRAFT: { bg: 'rgba(240,236,228,0.1)', color: 'rgba(240,236,228,0.55)' },
+function parseTab(value: string | null): BookingTab {
+  if (value === 'tours' || value === 'internal' || value === 'fleet' || value === 'private' || value === 'all') {
+    return value
+  }
+  return 'all'
 }
 
-export function BookingsPanel() {
-  const [bookings, setBookings] = useState<Booking[]>([])
-  const [enquiries, setEnquiries] = useState<Enquiry[]>([])
+export function BookingsPanel({
+  initialTab,
+  initialAction,
+}: {
+  initialTab?: BookingTab
+  initialAction?: string | null
+}) {
+  const [activeTab, setActiveTab] = useState<BookingTab>(initialTab || 'all')
+  const [bookings, setBookings] = useState<UnifiedBooking[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [showCreate, setShowCreate] = useState(initialAction === 'create')
+  const [tourForm, setTourForm] = useState(emptyTourForm)
+  const [internalForm, setInternalForm] = useState(emptyInternalForm)
   const [invoiceLinks, setInvoiceLinks] = useState<Record<string, InvoiceLink>>({})
   const [xeroConnected, setXeroConnected] = useState(false)
-  const [activeTab, setActiveTab] = useState<'tagalong' | 'private'>('tagalong')
-  const [loading, setLoading] = useState(true)
   const [raising, setRaising] = useState<string | null>(null)
 
   useEffect(() => {
-    loadAll()
-  }, [])
+    if (initialTab) setActiveTab(initialTab)
+    if (initialAction === 'create') setShowCreate(true)
+  }, [initialTab, initialAction])
 
-  async function loadAll() {
+  const loadBookings = useCallback(async () => {
     setLoading(true)
     try {
-      const [bookRes, enqRes, xeroRes] = await Promise.all([
-        supabase.from('tag_along_bookings').select('*').order('created_at', { ascending: false }).limit(50),
-        supabase.from('enquiries').select('*').order('created_at', { ascending: false }).limit(50),
+      const [bookingsRes, xeroRes] = await Promise.all([
+        fetch('/api/bookings?type=all', { cache: 'no-store' }),
         fetch('/api/xero/status').then((res) => res.json()),
       ])
+      const data = await bookingsRes.json()
+      if (!bookingsRes.ok) throw new Error(data.error || 'Failed to load bookings')
 
-      setBookings((bookRes.data || []) as Booking[])
-      setEnquiries((enqRes.data || []) as Enquiry[])
+      setBookings(data.bookings || [])
       setXeroConnected(!!xeroRes.connected)
 
       if (xeroRes.connected) {
-        // Load invoice links for all bookings
-        const ids = (bookRes.data || []).map((b: Booking) => b.id)
-        if (ids.length > 0) {
-          const { data: links } = await supabase.from('xero_invoice_links').select('*').in('booking_id', ids)
+        const tourIds = (data.bookings || [])
+          .filter((b: UnifiedBooking) => b.kind === 'tour' || b.kind === 'private')
+          .map((b: UnifiedBooking) => b.raw_id)
+        if (tourIds.length > 0) {
+          const { data: links } = await supabase.from('xero_invoice_links').select('*').in('booking_id', tourIds)
           const linkMap: Record<string, InvoiceLink> = {}
-          for (const l of (links || [])) {
-            linkMap[l.booking_id] = l
-          }
+          for (const l of links || []) linkMap[l.booking_id] = l
           setInvoiceLinks(linkMap)
         }
       }
-    } catch {
-      toast.error('Failed to load bookings')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to load bookings')
     } finally {
       setLoading(false)
     }
+  }, [])
+
+  useEffect(() => {
+    loadBookings()
+  }, [loadBookings])
+
+  const visibleBookings = useMemo(
+    () => filterBookingsByTab(bookings, activeTab),
+    [bookings, activeTab],
+  )
+
+  async function createTour() {
+    if (!tourForm.customerName || !tourForm.customerEmail || !tourForm.tourName || !tourForm.tourDate) {
+      toast.error('Fill all required fields')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/bookings?type=tour', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tourForm),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create')
+      toast.success('Tour booking created')
+      setShowCreate(false)
+      setTourForm(emptyTourForm)
+      loadBookings()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create booking')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  async function raiseInvoice(booking: Booking | Enquiry, type: 'tagalong' | 'private') {
-    setRaising(booking.id)
+  async function createInternal() {
+    if (!internalForm.customerName || !internalForm.customerEmail || !internalForm.tourName || !internalForm.tourDate) {
+      toast.error('Fill all required fields')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/bookings?type=internal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(internalForm),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create')
+      toast.success('Internal booking created')
+      setShowCreate(false)
+      setInternalForm(emptyInternalForm)
+      loadBookings()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create booking')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function cancelBooking(booking: UnifiedBooking) {
+    if (!confirm('Cancel this booking?')) return
+    try {
+      if (booking.kind === 'fleet') {
+        const res = await fetch('/api/fleet/bookings', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: booking.raw_id }),
+        })
+        if (!res.ok) throw new Error('Failed to cancel')
+      } else {
+        const res = await fetch('/api/bookings', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: booking.raw_id, kind: booking.kind, status: 'cancelled' }),
+        })
+        if (!res.ok) throw new Error('Failed to cancel')
+      }
+      toast.success('Booking cancelled')
+      loadBookings()
+    } catch {
+      toast.error('Failed to cancel booking')
+    }
+  }
+
+  async function raiseInvoice(booking: UnifiedBooking) {
+    setRaising(booking.raw_id)
     try {
       const res = await fetch('/api/xero/create-invoice', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contactName: booking.name,
-          contactEmail: booking.email,
-          description: type === 'tagalong'
-            ? `Tag-Along Tour${(booking as Booking).tour_name ? ' — ' + (booking as Booking).tour_name : ''}${(booking as Booking).tour_date ? ' (' + format(new Date((booking as Booking).tour_date!), 'd MMM yyyy') + ')' : ''}`
-            : `Private Enquiry — ${(booking as Enquiry).tour_type || 'Custom Tour'}`,
+          contactName: booking.customer_name,
+          contactEmail: booking.customer_email,
+          description:
+            booking.kind === 'private'
+              ? `Private Enquiry — ${booking.tour_or_vehicle}`
+              : `Tag-Along Tour — ${booking.tour_or_vehicle}${booking.date ? ` (${format(new Date(booking.date), 'd MMM yyyy')})` : ''}`,
           amount: booking.amount || 0,
           dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-          bookingId: booking.id,
-          bookingType: type,
+          bookingId: booking.raw_id,
+          bookingType: booking.kind === 'private' ? 'private' : 'tagalong',
         }),
       })
       if (!res.ok) throw new Error()
       toast.success('Invoice raised in Xero')
-      loadAll()
+      loadBookings()
     } catch {
       toast.error('Failed to raise invoice')
     } finally {
@@ -114,129 +199,63 @@ export function BookingsPanel() {
     }
   }
 
-  const cardStyle = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px' }
+  const createLabel = TAB_CREATE_LABEL[activeTab]
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Bookings</h1>
-        {!xeroConnected && (
-          <a href="/api/xero/connect" style={{ fontSize: 12, color: '#b8956a', textDecoration: 'none', border: '1px solid rgba(184,149,106,0.3)', padding: '5px 12px', borderRadius: 4 }}>
-            Connect Xero for Invoicing
-          </a>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'rgba(240,236,228,0.04)', borderRadius: 8, padding: 4 }}>
-        {[{ id: 'tagalong', l: 'Tag-Along Bookings' }, { id: 'private', l: 'Private Enquiries' }].map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id as 'tagalong' | 'private')} style={{
-            flex: 1, padding: '9px 16px', borderRadius: 6, border: 'none', cursor: 'pointer',
-            background: activeTab === t.id ? '#1a1815' : 'transparent',
-            color: activeTab === t.id ? '#b8956a' : 'rgba(240,236,228,0.55)',
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: activeTab === t.id ? 800 : 400,
-            fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase' as const,
-          }}>
-            {t.l}
-          </button>
-        ))}
-      </div>
-
-      {/* Tag-Along Bookings */}
-      {activeTab === 'tagalong' && (
-        <div style={cardStyle}>
-          {loading ? <div style={{ color: 'rgba(240,236,228,0.4)', padding: 12 }}>Loading...</div> : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(240,236,228,0.1)' }}>
-                  {['Name', 'Email', 'Passengers', 'Tour', 'Date', 'Invoice'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.4)', fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {bookings.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'rgba(240,236,228,0.4)' }}>No bookings yet</td></tr>}
-                {bookings.map(b => {
-                  const link = invoiceLinks[b.id]
-                  const sc = link ? (STATUS_COLORS[link.status] || STATUS_COLORS.DRAFT) : null
-                  return (
-                    <tr key={b.id} style={{ borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
-                      <td style={{ padding: '10px 12px', fontSize: 13 }}>{b.name}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 13, color: 'rgba(240,236,228,0.6)' }}>{b.email}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 13 }}>{b.passengers || '—'}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 13, color: 'rgba(240,236,228,0.6)' }}>{b.tour_name || '—'}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 13, color: 'rgba(240,236,228,0.6)' }}>{b.tour_date ? format(new Date(b.tour_date), 'd MMM yyyy') : '—'}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        {link && sc ? (
-                          <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', ...sc }}>
-                            {link.status}
-                          </span>
-                        ) : xeroConnected ? (
-                          <button
-                            disabled={raising === b.id}
-                            onClick={() => raiseInvoice(b, 'tagalong')}
-                            style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(184,149,106,0.3)', background: 'transparent', color: '#b8956a', cursor: 'pointer', fontFamily: "'Barlow', sans-serif" }}>
-                            {raising === b.id ? '...' : 'Raise Invoice'}
-                          </button>
-                        ) : <span style={{ color: 'rgba(240,236,228,0.3)', fontSize: 12 }}>—</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          Bookings
+        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {!xeroConnected && (
+            <a href="/api/xero/connect" style={{ fontSize: 12, color: '#b8956a', textDecoration: 'none', border: '1px solid rgba(184,149,106,0.3)', padding: '5px 12px', borderRadius: 4 }}>
+              Connect Xero
+            </a>
+          )}
+          {createLabel && (
+            <button
+              onClick={() => setShowCreate((v) => !v)}
+              style={{ padding: '8px 18px', borderRadius: 5, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Barlow', sans-serif" }}
+            >
+              {createLabel}
+            </button>
           )}
         </div>
+      </div>
+
+      <BookingsTabBar active={activeTab} onChange={(tab) => { setActiveTab(tab); setShowCreate(false) }} />
+
+      {showCreate && activeTab === 'tours' && (
+        <CreateTourForm form={tourForm} setForm={setTourForm} saving={saving} onSubmit={createTour} onCancel={() => setShowCreate(false)} />
+      )}
+      {showCreate && activeTab === 'internal' && (
+        <CreateInternalForm form={internalForm} setForm={setInternalForm} saving={saving} onSubmit={createInternal} onCancel={() => setShowCreate(false)} />
+      )}
+      {showCreate && activeTab === 'fleet' && (
+        <CreateFleetForm saving={saving} onSaved={() => { setShowCreate(false); loadBookings() }} onCancel={() => setShowCreate(false)} />
       )}
 
-      {/* Private Enquiries */}
-      {activeTab === 'private' && (
-        <div style={cardStyle}>
-          {loading ? <div style={{ color: 'rgba(240,236,228,0.4)', padding: 12 }}>Loading...</div> : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid rgba(240,236,228,0.1)' }}>
-                  {['Name', 'Email', 'Tour Type', 'Message', 'Received', 'Invoice'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.4)', fontWeight: 500 }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {enquiries.length === 0 && <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: 'rgba(240,236,228,0.4)' }}>No enquiries yet</td></tr>}
-                {enquiries.map(e => {
-                  const link = invoiceLinks[e.id]
-                  const sc = link ? (STATUS_COLORS[link.status] || STATUS_COLORS.DRAFT) : null
-                  return (
-                    <tr key={e.id} style={{ borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
-                      <td style={{ padding: '10px 12px', fontSize: 13 }}>{e.name}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 13, color: 'rgba(240,236,228,0.6)' }}>{e.email}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 13 }}>{e.tour_type || '—'}</td>
-                      <td style={{ padding: '10px 12px', fontSize: 12, color: 'rgba(240,236,228,0.55)', maxWidth: 200 }}>
-                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.message || '—'}</div>
-                      </td>
-                      <td style={{ padding: '10px 12px', fontSize: 13, color: 'rgba(240,236,228,0.6)' }}>{format(new Date(e.created_at), 'd MMM')}</td>
-                      <td style={{ padding: '10px 12px' }}>
-                        {link && sc ? (
-                          <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', ...sc }}>
-                            {link.status}
-                          </span>
-                        ) : xeroConnected ? (
-                          <button
-                            disabled={raising === e.id}
-                            onClick={() => raiseInvoice(e, 'private')}
-                            style={{ padding: '4px 10px', fontSize: 12, borderRadius: 4, border: '1px solid rgba(184,149,106,0.3)', background: 'transparent', color: '#b8956a', cursor: 'pointer', fontFamily: "'Barlow', sans-serif" }}>
-                            {raising === e.id ? '...' : 'Raise Invoice'}
-                          </button>
-                        ) : <span style={{ color: 'rgba(240,236,228,0.3)', fontSize: 12 }}>—</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
+      <div style={cardStyle}>
+        <BookingsTable
+          bookings={visibleBookings}
+          loading={loading}
+          xeroConnected={xeroConnected}
+          invoiceLinks={invoiceLinks}
+          onCancel={cancelBooking}
+          onRaiseInvoice={raiseInvoice}
+          raisingId={raising}
+          emptyMessage={
+            activeTab === 'private'
+              ? 'No private enquiries yet'
+              : activeTab === 'fleet'
+                ? 'No fleet bookings yet'
+                : 'No bookings in this view yet'
+          }
+        />
+      </div>
     </div>
   )
 }
+
+export { parseTab as parseBookingsTab }

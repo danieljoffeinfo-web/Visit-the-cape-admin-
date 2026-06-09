@@ -6,7 +6,7 @@ import { UserColorDot } from '@/components/user-badge'
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
   | 'tours' | 'fleet' | 'accounting' | 'socials' | 'crm' | 'settings'
-  | 'activity-logs' | 'internal-bookings' | 'tour-bookings'
+  | 'activity-logs'
 
 interface SidebarProps {
   active: Panel
@@ -20,8 +20,6 @@ const navItems = [
     section: 'Main',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <GridIcon />, badge: null },
-      { id: 'tour-bookings', label: 'Tour Bookings', icon: <BookIcon />, badge: null },
-      { id: 'internal-bookings', label: 'Internal Bookings', icon: <BookIcon />, badge: null },
       { id: 'bookings', label: 'Bookings', icon: <BookIcon />, badge: 'Live' },
       { id: 'calendar', label: 'Calendar', icon: <CalIcon />, badge: null },
       { id: 'enquiries', label: 'Enquiries', icon: <MailIcon />, badge: null },

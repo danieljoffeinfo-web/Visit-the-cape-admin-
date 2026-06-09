@@ -98,9 +98,6 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     notes: '',
   })
   const [savingVehicleEdit, setSavingVehicleEdit] = useState(false)
-  const [editingBookingId, setEditingBookingId] = useState<string | null>(null)
-  const [editingBookingAmount, setEditingBookingAmount] = useState('')
-  const [savingBookingEdit, setSavingBookingEdit] = useState(false)
 
   useEffect(() => {
     loadFleet()
@@ -341,72 +338,6 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     } finally {
       setSavingVehicleEdit(false)
     }
-  }
-
-  function startBookingEdit(item: (typeof bookingDetails)[number]) {
-    setEditingBookingId(item.booking.id)
-    setEditingBookingAmount(String(item.totalAmount))
-  }
-
-  function cancelBookingEdit() {
-    setEditingBookingId(null)
-    setEditingBookingAmount('')
-  }
-
-  async function saveBookingEdit() {
-    if (!editingBookingId) return
-
-    setSavingBookingEdit(true)
-    try {
-      const response = await fetch('/api/fleet/bookings', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editingBookingId,
-          amount: Number(editingBookingAmount),
-        }),
-      })
-
-      const result = await response.json()
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to update booking amount')
-      }
-
-      toast.success(result.invoiceLinked ? 'Rental amount updated on the dashboard. Xero invoice reference kept linked.' : 'Rental amount updated')
-      cancelBookingEdit()
-      loadFleet()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to update booking amount')
-    } finally {
-      setSavingBookingEdit(false)
-    }
-  }
-
-
-  async function deleteBooking(bookingId: string) {
-    const confirmed = window.confirm('Delete this booking from the fleet dashboard?')
-    if (!confirmed) return
-
-    try {
-      const response = await fetch('/api/fleet/bookings', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: bookingId }),
-      })
-      const result = await response.json()
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to delete booking')
-      }
-      toast.success('Booking deleted')
-      cancelBookingEdit()
-      loadFleet()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to delete booking')
-    }
-  }
-
-  function downloadInvoice(bookingId: string) {
-    window.open(`/api/xero/invoice-pdf?booking_id=${encodeURIComponent(bookingId)}`, '_blank', 'noopener,noreferrer')
   }
 
   async function saveVehicle() {
@@ -702,97 +633,31 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Vehicles On The Road</div>
-              <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>Every booked vehicle and its current invoice state.</div>
+              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Fleet Bookings</div>
+              <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>{bookingDetails.length} active rentals tracked in Bookings.</div>
             </div>
-            <div style={{ fontSize: 12, color: 'rgba(240,236,228,0.4)' }}>{bookingDetails.length} rentals</div>
+            <button type="button" onClick={() => onNavigate('bookings')} style={secondaryButton}>
+              View in Bookings →
+            </button>
           </div>
-
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(240,236,228,0.1)' }}>
-                {['Vehicle', 'Customer', 'Dates', 'Revenue', 'Invoice', 'Payment received', 'Actions'].map((header) => (
-                  <th key={header} style={tableHead}>{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={7} style={emptyCell}>Loading fleet bookings…</td></tr>
-              ) : bookingDetails.length === 0 ? (
-                <tr><td colSpan={7} style={emptyCell}>No fleet rentals saved yet</td></tr>
-              ) : bookingDetails.flatMap((item) => {
-                const isEditingAmount = editingBookingId === item.booking.id
-                return [
-                  <tr key={item.booking.id} style={{ borderBottom: isEditingAmount ? 'none' : '1px solid rgba(240,236,228,0.06)' }}>
-                    <td style={tableCell}>
-                      <div style={{ fontWeight: 700 }}>{item.vehicleName}</div>
-                      <div style={mutedSmall}>{item.registrationNumber || 'No registration saved'}</div>
-                    </td>
-                    <td style={tableCell}>
-                      <div>{item.customerName}</div>
-                      <div style={mutedSmall}>{usageTypeLabel(item.usageType)} · {item.notes.customer.email}</div>
-                    </td>
-                    <td style={tableCell}>
-                      <div>{format(parseISO(item.startDate), 'd MMM yyyy')} → {format(parseISO(item.endDate), 'd MMM yyyy')}</div>
-                      <div style={mutedSmall}>{item.days} day{item.days === 1 ? '' : 's'} · {item.seatsBooked} seat{item.seatsBooked === 1 ? '' : 's'}</div>
-                    </td>
-                    <td style={tableCell}>{money(item.totalAmount)}</td>
-                    <td style={tableCell}>
-                      {item.invoice ? (
-                        <div>
-                          <div style={{ fontWeight: 700 }}>{item.invoice.xero_invoice_number || 'Xero invoice'}</div>
-                          <div style={mutedSmall}>{item.invoice.status || 'Created'}</div>
-                        </div>
-                      ) : (
-                        <span style={mutedSmall}>Pending Xero</span>
-                      )}
-                    </td>
-                    <td style={tableCell}>
-                      <span style={{ color: item.paymentReceived ? '#4caf84' : 'rgba(240,236,228,0.55)', fontWeight: 700, fontSize: 13 }}>
-                        {item.paymentReceived ? 'Yes' : 'No'}
-                      </span>
-                    </td>
-                    <td style={tableCell}>
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button type="button" onClick={() => isEditingAmount ? cancelBookingEdit() : startBookingEdit(item)} style={secondaryButton}>
-                          {isEditingAmount ? 'Close' : 'Edit amount'}
-                        </button>
-                        {item.invoice ? (
-                          <button type="button" onClick={() => downloadInvoice(item.booking.id)} style={secondaryButton}>
-                            Invoice PDF
-                          </button>
-                        ) : null}
-                        <button type="button" onClick={() => deleteBooking(item.booking.id)} style={dangerButton}>
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>,
-                  ...(isEditingAmount
-                    ? [
-                        <tr key={`${item.booking.id}-editor`} style={{ borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
-                          <td colSpan={7} style={{ ...tableCell, paddingTop: 0 }}>
-                            <div style={{ ...pickerCard, marginBottom: 12 }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) auto auto', gap: 12, alignItems: 'end' }}>
-                                <Input label="Amount rented out for" type="number" value={editingBookingAmount} onChange={setEditingBookingAmount} placeholder="4500" />
-                                <button type="button" onClick={saveBookingEdit} disabled={savingBookingEdit} style={primaryButton}>
-                                  {savingBookingEdit ? 'Saving…' : 'Save amount'}
-                                </button>
-                                <button type="button" onClick={cancelBookingEdit} style={secondaryButton}>
-                                  Cancel
-                                </button>
-                              </div>
-                              <div style={mutedSmall}>This updates the fleet dashboard amount for this booking.</div>
-                            </div>
-                          </td>
-                        </tr>,
-                      ]
-                    : []),
-                ]
-              })}
-            </tbody>
-          </table>
+          {loading ? (
+            <div style={emptyCell}>Loading fleet bookings…</div>
+          ) : bookingDetails.length === 0 ? (
+            <div style={emptyCell}>No fleet rentals saved yet. Create one from Bookings → Fleet.</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {bookingDetails.slice(0, 5).map((item) => (
+                <div key={item.booking.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', background: 'rgba(240,236,228,0.02)' }}>
+                  <div style={{ fontWeight: 700 }}>{item.vehicleName}</div>
+                  <div style={mutedSmall}>{item.customerName} · {format(parseISO(item.startDate), 'd MMM')} → {format(parseISO(item.endDate), 'd MMM yyyy')}</div>
+                  <div style={{ ...mutedSmall, marginTop: 4 }}>{money(item.totalAmount)} · {item.invoice?.status || 'Pending invoice'}</div>
+                </div>
+              ))}
+              {bookingDetails.length > 5 && (
+                <div style={{ fontSize: 12, color: 'rgba(240,236,228,0.45)' }}>+ {bookingDetails.length - 5} more in Bookings → Fleet</div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ ...card, minHeight: 420 }}>

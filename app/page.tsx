@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/sidebar'
 import { AuthProvider, useAuth } from '@/components/auth-provider'
 import { UserColorBadge } from '@/components/user-badge'
 import { DashboardPanel } from '@/components/panels/dashboard-panel'
-import { BookingsPanel } from '@/components/panels/bookings-panel'
+import { BookingsPanel, parseBookingsTab } from '@/components/panels/bookings-panel'
 import { EnquiriesPanel } from '@/components/panels/enquiries-panel'
 import { ToursPanel } from '@/components/panels/tours-panel'
 import { AccountingPanel } from '@/components/panels/accounting-panel'
@@ -15,14 +15,13 @@ import { FleetPanel } from '@/components/panels/fleet-panel'
 import { CalendarPanel } from '@/components/panels/calendar-panel'
 import { SocialsPanel } from '@/components/panels/socials-panel'
 import { ActivityLogsPanel } from '@/components/panels/activity-logs-panel'
-import { InternalBookingsPanel } from '@/components/panels/internal-bookings-panel'
-import { TourBookingsPanel } from '@/components/panels/tour-bookings-panel'
 import { useSearchParams } from 'next/navigation'
+import type { BookingTab } from '@/lib/bookings'
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
   | 'tours' | 'fleet' | 'accounting' | 'socials' | 'crm' | 'settings'
-  | 'activity-logs' | 'internal-bookings' | 'tour-bookings'
+  | 'activity-logs'
 
 const PANEL_TITLES: Record<Panel, string> = {
   dashboard: 'Dashboard',
@@ -36,8 +35,12 @@ const PANEL_TITLES: Record<Panel, string> = {
   crm: 'CRM',
   settings: 'Settings',
   'activity-logs': 'Activity Logs',
-  'internal-bookings': 'Internal Bookings',
-  'tour-bookings': 'Tour Bookings',
+}
+
+function resolveInitialPanel(raw: string | null): Panel {
+  if (raw === 'tour-bookings' || raw === 'internal-bookings') return 'bookings'
+  if (raw && raw in PANEL_TITLES) return raw as Panel
+  return 'dashboard'
 }
 
 function NotApprovedScreen() {
@@ -65,12 +68,30 @@ function NotApprovedScreen() {
 function AdminApp() {
   const searchParams = useSearchParams()
   const { admin, loading, notApproved, signOut } = useAuth()
+
+  const legacyPanel = searchParams?.get('panel')
   const [panel, setPanel] = useState<Panel>(() => {
-    const p = searchParams?.get('panel') as Panel
-    if (p && PANEL_TITLES[p]) return p
     if (searchParams?.get('xero')) return 'settings'
-    return 'dashboard'
+    return resolveInitialPanel(legacyPanel)
   })
+  const [bookingsTab, setBookingsTab] = useState<BookingTab>(() => {
+    if (legacyPanel === 'tour-bookings') return 'tours'
+    if (legacyPanel === 'internal-bookings') return 'internal'
+    return parseBookingsTab(searchParams?.get('tab') || null)
+  })
+  const [bookingsAction, setBookingsAction] = useState<string | null>(
+    () => searchParams?.get('action') || null,
+  )
+
+  function navigate(target: string, opts?: { tab?: BookingTab; action?: string }) {
+    const nextPanel = resolveInitialPanel(target)
+    setPanel(nextPanel)
+    if (opts?.tab) setBookingsTab(opts.tab)
+    if (opts?.action) setBookingsAction(opts.action)
+    if (nextPanel !== 'bookings') {
+      setBookingsAction(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -104,19 +125,19 @@ function AdminApp() {
         </div>
 
         <div style={{ padding: 28, flex: 1 }}>
-          {panel === 'dashboard' && <DashboardPanel onNavigate={(p) => setPanel(p as Panel)} />}
-          {panel === 'bookings' && <BookingsPanel />}
+          {panel === 'dashboard' && <DashboardPanel onNavigate={navigate} />}
+          {panel === 'bookings' && (
+            <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />
+          )}
           {panel === 'calendar' && <CalendarPanel />}
           {panel === 'enquiries' && <EnquiriesPanel />}
           {panel === 'tours' && <ToursPanel />}
-          {panel === 'fleet' && <FleetPanel onNavigate={(p) => setPanel(p as Panel)} />}
+          {panel === 'fleet' && <FleetPanel onNavigate={navigate} />}
           {panel === 'accounting' && <AccountingPanel />}
           {panel === 'socials' && <SocialsPanel />}
           {panel === 'crm' && <CrmPanel />}
           {panel === 'settings' && <SettingsPanel />}
           {panel === 'activity-logs' && <ActivityLogsPanel />}
-          {panel === 'internal-bookings' && <InternalBookingsPanel />}
-          {panel === 'tour-bookings' && <TourBookingsPanel />}
         </div>
       </div>
     </div>
