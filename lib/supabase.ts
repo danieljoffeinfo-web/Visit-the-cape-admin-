@@ -1,6 +1,21 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+export function createSupabaseBrowserClient() {
+  return createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
+}
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Singleton for client components
+let browserClient: ReturnType<typeof createSupabaseBrowserClient> | null = null
+
+export function getSupabaseBrowserClient() {
+  if (!browserClient) {
+    browserClient = createSupabaseBrowserClient()
+  }
+  return browserClient
+}
+
+// Backward-compatible export used across existing panels
+export const supabase = getSupabaseBrowserClient()
