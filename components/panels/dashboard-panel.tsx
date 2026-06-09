@@ -121,7 +121,13 @@ function PulseSkeleton() {
   )
 }
 
-export function DashboardPanel({ onNavigate }: { onNavigate: (p: string) => void }) {
+import type { BookingTab } from '@/lib/bookings'
+
+export function DashboardPanel({
+  onNavigate,
+}: {
+  onNavigate: (p: string, opts?: { tab?: BookingTab; action?: string }) => void
+}) {
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
   const [seatsRemaining, setSeatsRemaining] = useState(0)
@@ -209,13 +215,13 @@ export function DashboardPanel({ onNavigate }: { onNavigate: (p: string) => void
   ]
 
   const quickActions = [
-    { icon: '＋', label: 'Schedule a Tag-Along Tour', desc: 'Add a new departure date with seats', to: 'tours' },
-    { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' },
-    { icon: '📋', label: 'New Internal Booking', desc: 'Create a booking from the admin dashboard', to: 'internal-bookings' },
-    { icon: '🎫', label: 'New Tour Booking', desc: 'Create a manual tour booking on request', to: 'tour-bookings' },
-    { icon: '🚐', label: 'New Fleet Booking', desc: 'Book a vehicle for a tour or rental', to: 'fleet' },
-    { icon: '📜', label: 'View Activity Logs', desc: 'See who changed what and when', to: 'activity-logs' },
-    { icon: '₤', label: 'Accounting', desc: 'Invoices, payments and reports', to: 'accounting' },
+    { icon: '＋', label: 'Schedule a Tag-Along Tour', desc: 'Add a new departure date with seats', to: 'tours' as const },
+    { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' as const },
+    { icon: '📋', label: 'New Internal Booking', desc: 'Create a booking from the admin dashboard', to: 'bookings' as const, tab: 'internal' as BookingTab, action: 'create' },
+    { icon: '🎫', label: 'New Tour Booking', desc: 'Create a manual tour booking on request', to: 'bookings' as const, tab: 'tours' as BookingTab, action: 'create' },
+    { icon: '🚐', label: 'New Fleet Booking', desc: 'Book a vehicle for a tour or rental', to: 'bookings' as const, tab: 'fleet' as BookingTab, action: 'create' },
+    { icon: '📜', label: 'View Activity Logs', desc: 'See who changed what and when', to: 'activity-logs' as const },
+    { icon: '₤', label: 'Accounting', desc: 'Invoices, payments and reports', to: 'accounting' as const },
   ]
 
   return (
@@ -513,7 +519,7 @@ export function DashboardPanel({ onNavigate }: { onNavigate: (p: string) => void
         {quickActions.map((a) => (
           <div
             key={a.label}
-            onClick={() => onNavigate(a.to)}
+            onClick={() => onNavigate(a.to, 'tab' in a ? { tab: a.tab, action: a.action } : undefined)}
             style={{
               display: 'flex',
               alignItems: 'center',
