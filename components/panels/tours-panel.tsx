@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { logActivity } from '@/lib/activity-log'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
@@ -33,15 +34,23 @@ export function ToursPanel() {
   async function addTour() {
     if (!form.name || !form.date || !form.price_per_person) { toast.error('Fill all fields'); return }
     setSaving(true)
-    const { error } = await supabase.from('tag_along_tours').insert({
+    const tourRow = {
       name: form.name,
       date: form.date,
       seats_total: parseInt(form.seats_total),
       booked_seats: 0,
       price_per_person: parseFloat(form.price_per_person),
-    })
+    }
+    const { data: created, error } = await supabase.from('tag_along_tours').insert(tourRow).select('*').single()
     setSaving(false)
     if (error) { toast.error('Failed to add tour'); return }
+    await logActivity({
+      action: 'Created tour',
+      entityType: 'tour',
+      entityId: created?.id,
+      entityLabel: `${form.name} — ${form.date}`,
+      newValue: tourRow,
+    })
     toast.success('Tour scheduled')
     setShowModal(false)
     setForm({ name: '', date: '', seats_total: '8', price_per_person: '' })
@@ -50,7 +59,15 @@ export function ToursPanel() {
 
   async function deleteTour(id: string) {
     if (!confirm('Delete this tour?')) return
+    const tour = tours.find((t) => t.id === id)
     await supabase.from('tag_along_tours').delete().eq('id', id)
+    await logActivity({
+      action: 'Deleted tour',
+      entityType: 'tour',
+      entityId: id,
+      entityLabel: tour ? `${tour.name} — ${tour.date}` : id,
+      oldValue: tour ? { ...tour } : null,
+    })
     toast.success('Tour deleted')
     loadTours()
   }

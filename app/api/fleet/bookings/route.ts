@@ -5,6 +5,8 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import { buildSeatsLabel, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { getAuthedXeroClient } from '@/lib/xero'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
+import { getApprovedAdminUser } from '@/lib/auth-server'
+import { logActivityServer } from '@/lib/activity-log-server'
 
 type TourProductRow = {
   id: string
@@ -83,6 +85,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const admin = await getApprovedAdminUser()
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const {
       vehicleId,
@@ -235,6 +242,15 @@ export async function POST(request: NextRequest) {
       }, { onConflict: 'email' })
     }
 
+    await logActivityServer({
+      admin,
+      action: 'Created booking',
+      entityType: 'fleet_booking',
+      entityId: insertedBooking.id,
+      entityLabel: `${vehicle.title} — ${firstName} ${surname}`,
+      newValue: { vehicleId: vehicle.id, startDate, endDate, totalAmount },
+    })
+
     return NextResponse.json({
       booking: {
         id: insertedBooking.id,
@@ -259,6 +275,11 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const admin = await getApprovedAdminUser()
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const bookingId = String(body?.id || '').trim()
     const amountRaw = body?.amount
@@ -327,6 +348,16 @@ export async function PATCH(request: NextRequest) {
       .eq('booking_id', bookingId)
       .maybeSingle()
 
+    await logActivityServer({
+      admin,
+      action: updatingPaymentReceived ? 'Changed booking payment status' : 'Updated booking',
+      entityType: 'fleet_booking',
+      entityId: bookingId,
+      entityLabel: bookingRow.email || bookingId,
+      oldValue: { amount: parsedNotes?.rental.totalAmount, paymentReceived: parsedNotes?.rental.paymentReceived },
+      newValue: { amount: updatingAmount ? nextAmount : undefined, paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : undefined },
+    })
+
     return NextResponse.json({
       booking: updatedBooking,
       invoiceLinked: Boolean(invoiceLink),
@@ -343,6 +374,11 @@ export async function PATCH(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const admin = await getApprovedAdminUser()
+    if (!admin) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const bookingId = String(body?.id || '').trim()
 
@@ -398,6 +434,16 @@ export async function DELETE(request: NextRequest) {
       console.error('Fleet booking cancel error:', cancelError)
       return NextResponse.json({ error: 'Failed to delete booking' }, { status: 500 })
     }
+
+    await logActivityServer({
+      admin,
+      action: 'Cancelled booking',
+      entityType: 'fleet_booking',
+      entityId: bookingId,
+      entityLabel: bookingId,
+      oldValue: { status: bookingRow.status },
+      newValue: { status: 'cancelled' },
+    })
 
     return NextResponse.json({ ok: true })
   } catch (error) {

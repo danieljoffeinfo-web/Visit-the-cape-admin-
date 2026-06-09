@@ -1,14 +1,18 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+import type { AdminUser } from '@/lib/auth-types'
+import { UserColorDot } from '@/components/user-badge'
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
   | 'tours' | 'fleet' | 'accounting' | 'socials' | 'crm' | 'settings'
+  | 'activity-logs' | 'internal-bookings' | 'tour-bookings'
 
 interface SidebarProps {
   active: Panel
   onChange: (p: Panel) => void
+  admin?: AdminUser | null
+  onSignOut?: () => void
 }
 
 const navItems = [
@@ -16,6 +20,8 @@ const navItems = [
     section: 'Main',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <GridIcon />, badge: null },
+      { id: 'tour-bookings', label: 'Tour Bookings', icon: <BookIcon />, badge: null },
+      { id: 'internal-bookings', label: 'Internal Bookings', icon: <BookIcon />, badge: null },
       { id: 'bookings', label: 'Bookings', icon: <BookIcon />, badge: 'Live' },
       { id: 'calendar', label: 'Calendar', icon: <CalIcon />, badge: null },
       { id: 'enquiries', label: 'Enquiries', icon: <MailIcon />, badge: null },
@@ -34,6 +40,7 @@ const navItems = [
     items: [
       { id: 'socials', label: 'Socials', icon: <ShareIcon />, badge: null },
       { id: 'crm', label: 'CRM', icon: <UsersIcon />, badge: null },
+      { id: 'activity-logs', label: 'Activity Logs', icon: <LogIcon />, badge: null },
     ],
   },
   {
@@ -44,7 +51,7 @@ const navItems = [
   },
 ] as const
 
-export function Sidebar({ active, onChange }: SidebarProps) {
+export function Sidebar({ active, onChange, admin, onSignOut }: SidebarProps) {
   return (
     <aside style={{
       width: 240,
@@ -57,17 +64,15 @@ export function Sidebar({ active, onChange }: SidebarProps) {
       top: 0, left: 0, bottom: 0,
       zIndex: 100,
     }}>
-      {/* Logo */}
       <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(240,236,228,0.12)' }}>
         <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#b8956a', lineHeight: 1 }}>
-          DFT Admin
+          Visit The Cape
         </div>
         <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.35)', marginTop: 4 }}>
-          DF Travel Console
+          Admin Console
         </div>
       </div>
 
-      {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
         {navItems.map((group, gi) => (
           <div key={gi}>
@@ -120,9 +125,25 @@ export function Sidebar({ active, onChange }: SidebarProps) {
         ))}
       </nav>
 
-      {/* Footer */}
-      <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(240,236,228,0.12)', fontSize: 12, color: 'rgba(240,236,228,0.35)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(240,236,228,0.12)' }}>
+        {admin && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <UserColorDot color={admin.color} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{admin.full_name}</div>
+              <div style={{ fontSize: 10, color: 'rgba(240,236,228,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{admin.role}</div>
+            </div>
+          </div>
+        )}
+        {onSignOut && (
+          <button
+            onClick={onSignOut}
+            style={{ width: '100%', padding: '6px 0', background: 'none', border: 'none', color: 'rgba(240,236,228,0.35)', cursor: 'pointer', fontSize: 11, fontFamily: "'Barlow', sans-serif", textAlign: 'left' }}
+          >
+            Sign out
+          </button>
+        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(240,236,228,0.35)', marginTop: 8 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4caf84', boxShadow: '0 0 6px rgba(76,175,132,0.7)', flexShrink: 0 }} />
           System Online
         </div>
@@ -140,4 +161,5 @@ function CarIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="current
 function ChartIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="2" y1="14" x2="14" y2="14"/><rect x="3" y="8" width="3" height="6"/><rect x="7" y="5" width="3" height="9"/><rect x="11" y="2" width="3" height="12"/></svg> }
 function ShareIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="3" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="13" r="2"/><line x1="6" y1="7" x2="10" y2="4"/><line x1="6" y1="9" x2="10" y2="12"/></svg> }
 function UsersIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="5" r="2.5"/><path d="M1 14c0-3 2.2-5 5-5s5 2 5 5"/><circle cx="12" cy="5" r="2"/><path d="M10 14c0-2 1-3.5 3-4"/></svg> }
+function LogIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 2h7l3 3v9H3V2z"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="10" x2="10" y2="10"/></svg> }
 function GearIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"/></svg> }

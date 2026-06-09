@@ -211,8 +211,10 @@ export function DashboardPanel({ onNavigate }: { onNavigate: (p: string) => void
   const quickActions = [
     { icon: '＋', label: 'Schedule a Tag-Along Tour', desc: 'Add a new departure date with seats', to: 'tours' },
     { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' },
-    { icon: '✓', label: 'Manage Bookings', desc: 'View tag-along booking details', to: 'bookings' },
+    { icon: '📋', label: 'New Internal Booking', desc: 'Create a booking from the admin dashboard', to: 'internal-bookings' },
+    { icon: '🎫', label: 'New Tour Booking', desc: 'Create a manual tour booking on request', to: 'tour-bookings' },
     { icon: '🚐', label: 'New Fleet Booking', desc: 'Book a vehicle for a tour or rental', to: 'fleet' },
+    { icon: '📜', label: 'View Activity Logs', desc: 'See who changed what and when', to: 'activity-logs' },
     { icon: '₤', label: 'Accounting', desc: 'Invoices, payments and reports', to: 'accounting' },
   ]
 
