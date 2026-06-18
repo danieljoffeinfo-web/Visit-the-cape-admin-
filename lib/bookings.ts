@@ -1,7 +1,7 @@
 import { parseFleetBookingNotes } from '@/lib/fleet'
 
 export type BookingKind = 'tour' | 'internal' | 'fleet' | 'private'
-export type BookingTab = 'all' | 'tours' | 'internal' | 'fleet' | 'private'
+export type BookingTab = 'all' | 'tours'
 
 export type UnifiedBooking = {
   id: string
@@ -144,21 +144,24 @@ export function sortBookings(rows: UnifiedBooking[]) {
   )
 }
 
+export function isWebsiteTourBooking(row: UnifiedBooking) {
+  return row.kind === 'tour' && row.source === 'website'
+}
+
+export function isInternalTourBooking(row: UnifiedBooking) {
+  return row.kind === 'internal' || (row.kind === 'tour' && row.source !== 'website')
+}
+
 export function filterBookingsByTab(rows: UnifiedBooking[], tab: BookingTab) {
-  if (tab === 'all') return rows
-  if (tab === 'tours') return rows.filter((r) => r.kind === 'tour')
-  if (tab === 'internal') return rows.filter((r) => r.kind === 'internal')
-  if (tab === 'fleet') return rows.filter((r) => r.kind === 'fleet')
-  if (tab === 'private') return rows.filter((r) => r.kind === 'private')
-  return rows
+  if (tab === 'tours') {
+    return rows.filter((r) => r.kind === 'tour' || r.kind === 'internal')
+  }
+  return rows.filter((r) => r.kind === 'tour' || r.kind === 'internal')
 }
 
 export const BOOKING_TABS: { id: BookingTab; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'tours', label: 'Tours' },
-  { id: 'internal', label: 'Internal' },
-  { id: 'fleet', label: 'Fleet' },
-  { id: 'private', label: 'Private' },
 ]
 
 export const inputStyle = {

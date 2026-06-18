@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { buildSeatsLabel } from '@/lib/fleet'
+import {
+  buildSeatsLabel,
+  enrichFleetVehicle,
+  parseFleetVehicleMeta,
+  serializeFleetVehicleMeta,
+  type FleetServiceBlock,
+} from '@/lib/fleet'
 
 function slugifyRegistrationNumber(value: string) {
   return `fleet-${value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 }
 
-function parseVehiclePayload(body: any) {
+function parseVehiclePayload(body: Record<string, unknown>) {
   const title = String(body?.title || '').trim()
   const registrationNumber = String(body?.registrationNumber || '').trim()
   const seats = Math.max(1, Number.parseInt(String(body?.seats || '1'), 10) || 1)
@@ -14,8 +21,12 @@ function parseVehiclePayload(body: any) {
     ? null
     : Number(body.defaultRate)
   const notes = String(body?.notes || '').trim()
+  const imageUrl = String(body?.imageUrl || '').trim()
+  const calendarLabel = String(body?.calendarLabel || '').trim()
+  const calendarColor = String(body?.calendarColor || '').trim()
+  const serviceBlocks = Array.isArray(body?.serviceBlocks) ? (body.serviceBlocks as FleetServiceBlock[]) : undefined
 
-  return { title, registrationNumber, seats, defaultRate, notes }
+  return { title, registrationNumber, seats, defaultRate, notes, imageUrl, calendarLabel, calendarColor, serviceBlocks }
 }
 
 function validateVehiclePayload(vehicle: ReturnType<typeof parseVehiclePayload>) {
@@ -34,6 +45,20 @@ function validateVehiclePayload(vehicle: ReturnType<typeof parseVehiclePayload>)
   return null
 }
 
+function buildPickupNotes(vehicle: ReturnType<typeof parseVehiclePayload>, existingBlocks?: FleetServiceBlock[]) {
+  return serializeFleetVehicleMeta({
+    notes: vehicle.notes || null,
+    imageUrl: vehicle.imageUrl || null,
+    calendarLabel: vehicle.calendarLabel || null,
+    calendarColor: vehicle.calendarColor || null,
+    serviceBlocks: vehicle.serviceBlocks ?? existingBlocks ?? [],
+  })
+}
+
+function mapVehicle(row: Record<string, unknown>) {
+  return enrichFleetVehicle(row as Parameters<typeof enrichFleetVehicle>[0])
+}
+
 export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
@@ -47,7 +72,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Failed to load vehicles' }, { status: 500 })
     }
 
-    return NextResponse.json({ vehicles: data || [] })
+    return NextResponse.json({ vehicles: (data || []).map(mapVehicle) })
   } catch (error) {
     console.error('Fleet vehicles route error:', error)
     return NextResponse.json({ error: 'Failed to load vehicles' }, { status: 500 })
@@ -76,7 +101,7 @@ export async function POST(request: NextRequest) {
         pricing_model: 'daily-rental',
         summary: vehicle.registrationNumber,
         duration_label: buildSeatsLabel(vehicle.seats),
-        pickup_notes: vehicle.notes || null,
+        pickup_notes: buildPickupNotes(vehicle),
         base_price: vehicle.defaultRate,
         active: true,
       })
@@ -92,7 +117,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ vehicle: createdVehicle })
+    return NextResponse.json({ vehicle: mapVehicle(createdVehicle) })
   } catch (error) {
     console.error('Fleet vehicle route error:', error)
     return NextResponse.json({ error: 'Failed to save vehicle' }, { status: 500 })
@@ -114,6 +139,16 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: validationError }, { status: 400 })
     }
 
+    const { data: existing } = await supabaseAdmin
+      .from('tour_products')
+      .select('pickup_notes')
+      .eq('id', vehicleId)
+      .eq('family', 'fleet')
+      .maybeSingle()
+
+    const existingMeta = parseFleetVehicleMeta(existing?.pickup_notes)
+    const existingBlocks = existingMeta?.serviceBlocks || []
+
     const { data: updatedVehicle, error } = await supabaseAdmin
       .from('tour_products')
       .update({
@@ -121,7 +156,7 @@ export async function PATCH(request: NextRequest) {
         title: vehicle.title,
         summary: vehicle.registrationNumber,
         duration_label: buildSeatsLabel(vehicle.seats),
-        pickup_notes: vehicle.notes || null,
+        pickup_notes: buildPickupNotes(vehicle, existingBlocks),
         base_price: vehicle.defaultRate,
         updated_at: new Date().toISOString(),
       })
@@ -139,9 +174,90 @@ export async function PATCH(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ vehicle: updatedVehicle })
+    return NextResponse.json({ vehicle: mapVehicle(updatedVehicle) })
   } catch (error) {
     console.error('Fleet vehicle patch route error:', error)
     return NextResponse.json({ error: 'Failed to update vehicle' }, { status: 500 })
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const vehicleId = String(body?.id || '').trim()
+    const action = String(body?.action || '').trim()
+
+    if (!vehicleId) {
+      return NextResponse.json({ error: 'Vehicle ID is required' }, { status: 400 })
+    }
+
+    const { data: existing } = await supabaseAdmin
+      .from('tour_products')
+      .select('id,title,summary,duration_label,pickup_notes,base_price,active')
+      .eq('id', vehicleId)
+      .eq('family', 'fleet')
+      .maybeSingle()
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+    }
+
+    const meta = parseFleetVehicleMeta(existing.pickup_notes)
+    const serviceBlocks = [...(meta?.serviceBlocks || [])]
+
+    if (action === 'add-service') {
+      const startDate = String(body?.startDate || '').trim()
+      const endDate = String(body?.endDate || '').trim()
+      const notes = String(body?.notes || '').trim()
+
+      if (!startDate || !endDate) {
+        return NextResponse.json({ error: 'Service start and end dates are required' }, { status: 400 })
+      }
+
+      serviceBlocks.push({
+        id: randomUUID(),
+        startDate,
+        endDate,
+        notes: notes || null,
+      })
+    } else if (action === 'remove-service') {
+      const blockId = String(body?.blockId || '').trim()
+      if (!blockId) {
+        return NextResponse.json({ error: 'Service block ID is required' }, { status: 400 })
+      }
+      const nextBlocks = serviceBlocks.filter((block) => block.id !== blockId)
+      if (nextBlocks.length === serviceBlocks.length) {
+        return NextResponse.json({ error: 'Service block not found' }, { status: 404 })
+      }
+      serviceBlocks.splice(0, serviceBlocks.length, ...nextBlocks)
+    } else {
+      return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    }
+
+    const pickupNotes = serializeFleetVehicleMeta({
+      notes: meta?.notes || null,
+      imageUrl: meta?.imageUrl || null,
+      calendarLabel: meta?.calendarLabel || null,
+      calendarColor: meta?.calendarColor || null,
+      serviceBlocks,
+    })
+
+    const { data: updatedVehicle, error } = await supabaseAdmin
+      .from('tour_products')
+      .update({ pickup_notes: pickupNotes, updated_at: new Date().toISOString() })
+      .eq('id', vehicleId)
+      .eq('family', 'fleet')
+      .select('id,title,summary,duration_label,pickup_notes,base_price,active')
+      .single()
+
+    if (error || !updatedVehicle) {
+      console.error('Fleet service update error:', error)
+      return NextResponse.json({ error: 'Failed to update service schedule' }, { status: 500 })
+    }
+
+    return NextResponse.json({ vehicle: mapVehicle(updatedVehicle) })
+  } catch (error) {
+    console.error('Fleet service route error:', error)
+    return NextResponse.json({ error: 'Failed to update service schedule' }, { status: 500 })
   }
 }

@@ -76,21 +76,29 @@ function AdminApp() {
     return resolveInitialPanel(legacyPanel)
   })
   const [bookingsTab, setBookingsTab] = useState<BookingTab>(() => {
-    if (legacyPanel === 'tour-bookings') return 'tours'
-    if (legacyPanel === 'internal-bookings') return 'internal'
+    if (legacyPanel === 'tour-bookings' || legacyPanel === 'internal-bookings') return 'tours'
     return parseBookingsTab(searchParams?.get('tab') || null)
   })
   const [bookingsAction, setBookingsAction] = useState<string | null>(
     () => searchParams?.get('action') || null,
   )
+  const [bookingsCreateMode, setBookingsCreateMode] = useState<'tour' | 'internal' | null>(() => {
+    if (legacyPanel === 'internal-bookings') return 'internal'
+    const tab = searchParams?.get('tab')
+    if (tab === 'internal') return 'internal'
+    if (tab === 'tours' && searchParams?.get('action') === 'create') return 'tour'
+    return null
+  })
 
-  function navigate(target: string, opts?: { tab?: BookingTab; action?: string }) {
+  function navigate(target: string, opts?: { tab?: BookingTab; action?: string; createMode?: 'tour' | 'internal' }) {
     const nextPanel = resolveInitialPanel(target)
     setPanel(nextPanel)
     if (opts?.tab) setBookingsTab(opts.tab)
     if (opts?.action) setBookingsAction(opts.action)
+    if (opts?.createMode) setBookingsCreateMode(opts.createMode)
     if (nextPanel !== 'bookings') {
       setBookingsAction(null)
+      setBookingsCreateMode(null)
     }
   }
 
@@ -128,7 +136,7 @@ function AdminApp() {
         <div style={{ padding: 28, flex: 1 }}>
           {panel === 'dashboard' && <DashboardPanel onNavigate={navigate} />}
           {panel === 'bookings' && (
-            <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />
+            <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} initialCreateMode={bookingsCreateMode} />
           )}
           {panel === 'calendar' && <CalendarPanel />}
           {panel === 'enquiries' && <EnquiriesPanel />}
