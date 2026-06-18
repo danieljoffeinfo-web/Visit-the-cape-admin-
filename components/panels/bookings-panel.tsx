@@ -5,7 +5,8 @@ import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import type { BookingTab, UnifiedBooking } from '@/lib/bookings'
-import { cardStyle, filterBookingsByTab } from '@/lib/bookings'
+import { filterBookingsByTab } from '@/lib/bookings'
+import { cardStyle, pageTitle, primaryButton, secondaryButton } from '@/lib/theme'
 import { BookingsTabBar } from '@/components/bookings/bookings-tab-bar'
 import { BookingsTable } from '@/components/bookings/bookings-table'
 import { CreateTourForm, emptyTourForm } from '@/components/bookings/create-tour-form'
@@ -204,20 +205,15 @@ export function BookingsPanel({
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          Bookings
-        </h1>
+        <h1 style={pageTitle}>Bookings</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {!xeroConnected && (
-            <a href="/api/xero/connect" style={{ fontSize: 12, color: '#b8956a', textDecoration: 'none', border: '1px solid rgba(184,149,106,0.3)', padding: '5px 12px', borderRadius: 4 }}>
+            <a href="/api/xero/connect" style={{ ...secondaryButton, textDecoration: 'none', fontSize: 12, display: 'inline-block' }}>
               Connect Xero
             </a>
           )}
           {createLabel && (
-            <button
-              onClick={() => setShowCreate((v) => !v)}
-              style={{ padding: '8px 18px', borderRadius: 5, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Barlow', sans-serif" }}
-            >
+            <button onClick={() => setShowCreate((v) => !v)} style={primaryButton}>
               {createLabel}
             </button>
           )}

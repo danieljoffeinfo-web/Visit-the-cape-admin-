@@ -1,6 +1,6 @@
 'use client'
 
-import { cardStyle, inputStyle, muted } from '@/lib/bookings'
+import { cardStyle, fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle } from '@/lib/theme'
 
 export type InternalFormState = {
   customerName: string
@@ -49,13 +49,13 @@ export function CreateInternalForm({
 
   return (
     <div style={{ ...cardStyle, marginBottom: 20 }}>
-      <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 16 }}>
+      <h3 style={{ ...sectionTitle, marginBottom: 16 }}>
         New Internal Booking
       </h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
         {fields.map((f) => (
           <div key={f.key}>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{f.label}</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>{f.label}</label>
             <input
               type={f.type}
               value={form[f.key]}
@@ -66,14 +66,14 @@ export function CreateInternalForm({
         ))}
       </div>
       <div style={{ marginBottom: 16 }}>
-        <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Notes</label>
+        <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Notes</label>
         <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} style={{ ...inputStyle, resize: 'vertical' }} />
       </div>
       <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={onSubmit} disabled={saving} style={{ padding: '8px 18px', borderRadius: 5, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+        <button onClick={onSubmit} disabled={saving} style={primaryButton}>
           {saving ? 'Saving…' : 'Create Booking'}
         </button>
-        <button onClick={onCancel} style={{ padding: '8px 18px', borderRadius: 5, background: 'transparent', color: muted, border: '1px solid rgba(240,236,228,0.12)', cursor: 'pointer', fontSize: 13 }}>
+        <button onClick={onCancel} style={secondaryButton}>
           Cancel
         </button>
       </div>

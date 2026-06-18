@@ -1,4 +1,5 @@
 import { colorStyles } from '@/lib/user-colors'
+import { theme } from '@/lib/theme'
 
 export function UserColorDot({ color, size = 8 }: { color?: string | null; size?: number }) {
   const styles = colorStyles(color)
@@ -74,7 +75,8 @@ export function StatusBadge({ status }: { status?: string | null }) {
   const colors: Record<string, { bg: string; color: string }> = {
     confirmed: { bg: 'rgba(76,175,132,0.15)', color: '#4caf84' },
     paid: { bg: 'rgba(76,175,132,0.15)', color: '#4caf84' },
-    pending: { bg: 'rgba(240,236,228,0.08)', color: 'rgba(240,236,228,0.55)' },
+    pending: { bg: 'rgba(44, 38, 32, 0.08)', color: theme.textMuted },
+    enquiry: { bg: 'rgba(184, 149, 106, 0.12)', color: theme.bronzeDark },
     cancelled: { bg: 'rgba(239,83,80,0.15)', color: '#ef5350' },
     authorised: { bg: 'rgba(100,149,237,0.15)', color: '#6495ed' },
   }
