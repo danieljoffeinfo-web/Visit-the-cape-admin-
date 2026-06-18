@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { getSupabaseAnonKey, getSupabaseUrl } from '@/lib/supabase-env'
 
 const PUBLIC_PATHS = ['/login', '/api/xero/callback', '/api/xero/connect']
 
@@ -8,11 +9,19 @@ function isPublicPath(pathname: string) {
 }
 
 export async function middleware(request: NextRequest) {
+  const supabaseUrl = getSupabaseUrl()
+  const supabaseAnonKey = getSupabaseAnonKey()
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Middleware: missing Supabase env (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_URL)')
+    return new NextResponse('Server configuration error: Supabase env vars missing', { status: 500 })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -50,7 +59,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Block unapproved users from API routes; page shell handles UI messaging.
   const { data: adminRow } = await supabase
     .from('admin_users')
     .select('is_approved')

@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
+import { getSupabaseUrl } from '@/lib/supabase-env'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()
+const supabaseUrl = getSupabaseUrl()
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
 
 if (!supabaseUrl) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL is not configured for server routes')
+  throw new Error('Supabase URL is not configured for server routes')
 }
 
 if (!serviceRoleKey) {

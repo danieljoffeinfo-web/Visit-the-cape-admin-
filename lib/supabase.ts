@@ -1,13 +1,15 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseAnonKey, getSupabaseUrl } from '@/lib/supabase-env'
 
 export function createSupabaseBrowserClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  )
+  const url = getSupabaseUrl()
+  const anonKey = getSupabaseAnonKey()
+  if (!url || !anonKey) {
+    throw new Error('Supabase browser client is not configured')
+  }
+  return createBrowserClient(url, anonKey)
 }
 
-// Singleton for client components
 let browserClient: ReturnType<typeof createSupabaseBrowserClient> | null = null
 
 export function getSupabaseBrowserClient() {
@@ -17,5 +19,4 @@ export function getSupabaseBrowserClient() {
   return browserClient
 }
 
-// Backward-compatible export used across existing panels
 export const supabase = getSupabaseBrowserClient()
