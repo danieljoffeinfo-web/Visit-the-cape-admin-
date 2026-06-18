@@ -1,13 +1,20 @@
+import { getContentSupabaseAdmin } from '@/lib/content-supabase-admin'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import type { Enquiry } from '@/lib/enquiries'
 
+function enquiriesClient() {
+  return getContentSupabaseAdmin() ?? supabaseAdmin
+}
+
 function normalizeEnquiry(row: Record<string, unknown>): Enquiry {
+  const tourType = row.tour_type || row.experience
+
   return {
     id: String(row.id),
     name: String(row.name || ''),
     email: String(row.email || ''),
     phone: row.phone ? String(row.phone) : null,
-    tour_type: row.tour_type ? String(row.tour_type) : null,
+    tour_type: tourType ? String(tourType) : null,
     message: row.message ? String(row.message) : null,
     date: row.date ? String(row.date) : null,
     passengers: row.passengers != null ? Number(row.passengers) : null,
@@ -35,7 +42,8 @@ export async function fetchEnquiriesFromSource(): Promise<Enquiry[]> {
     return rows.map((row: Record<string, unknown>) => normalizeEnquiry(row))
   }
 
-  const { data, error } = await supabaseAdmin
+  const client = enquiriesClient()
+  const { data, error } = await client
     .from('enquiries')
     .select('*')
     .order('created_at', { ascending: false })
@@ -46,14 +54,36 @@ export async function fetchEnquiriesFromSource(): Promise<Enquiry[]> {
 }
 
 export async function updateEnquiryStatus(id: string, status: string, extra?: Record<string, unknown>) {
-  const { data, error } = await supabaseAdmin
+  const client = enquiriesClient()
+  const patch: Record<string, unknown> = {
+    status,
+    ...extra,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await client
     .from('enquiries')
-    .update({ status, ...extra, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('id', id)
     .select('*')
     .maybeSingle()
 
-  if (error) throw error
+  if (error) {
+    if (getContentSupabaseAdmin() && error.message.toLowerCase().includes('updated_at')) {
+      const { updated_at: _drop, ...withoutUpdatedAt } = patch
+      const retry = await client
+        .from('enquiries')
+        .update(withoutUpdatedAt)
+        .eq('id', id)
+        .select('*')
+        .maybeSingle()
+      if (retry.error) throw retry.error
+      if (!retry.data) return null
+      return normalizeEnquiry(retry.data as Record<string, unknown>)
+    }
+    throw error
+  }
+
   if (!data) return null
   return normalizeEnquiry(data as Record<string, unknown>)
 }
@@ -95,4 +125,19 @@ export async function fetchEnquiryReplies(enquiryId: string) {
   }
 
   return data || []
+}
+
+export async function deleteEnquiry(id: string): Promise<boolean> {
+  const client = enquiriesClient()
+  const { data, error } = await client.from('enquiries').delete().eq('id', id).select('id').maybeSingle()
+
+  if (error) throw error
+  if (!data) return false
+
+  const { error: repliesError } = await supabaseAdmin.from('enquiry_replies').delete().eq('enquiry_id', id)
+  if (repliesError && !repliesError.message.toLowerCase().includes('enquiry_replies')) {
+    console.error('Failed to delete enquiry replies:', repliesError)
+  }
+
+  return true
 }
