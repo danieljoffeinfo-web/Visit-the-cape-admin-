@@ -2,6 +2,7 @@
 
 import type { BookingTab } from '@/lib/bookings'
 import { BOOKING_TABS } from '@/lib/bookings'
+import { theme } from '@/lib/theme'
 
 export function BookingsTabBar({
   active,
@@ -11,7 +12,18 @@ export function BookingsTabBar({
   onChange: (tab: BookingTab) => void
 }) {
   return (
-    <div style={{ display: 'flex', gap: 4, marginBottom: 20, background: 'rgba(240,236,228,0.04)', borderRadius: 8, padding: 4, flexWrap: 'wrap' }}>
+    <div
+      style={{
+        display: 'flex',
+        gap: 4,
+        marginBottom: 20,
+        background: theme.surfaceMuted,
+        borderRadius: 8,
+        padding: 4,
+        flexWrap: 'wrap',
+        border: `1px solid ${theme.border}`,
+      }}
+    >
       {BOOKING_TABS.map((tab) => (
         <button
           key={tab.id}
@@ -21,12 +33,12 @@ export function BookingsTabBar({
             minWidth: 90,
             padding: '9px 16px',
             borderRadius: 6,
-            border: 'none',
+            border: active === tab.id ? `1px solid ${theme.bronzeBorder}` : '1px solid transparent',
             cursor: 'pointer',
-            background: active === tab.id ? '#1a1815' : 'transparent',
-            color: active === tab.id ? '#b8956a' : 'rgba(240,236,228,0.55)',
-            fontFamily: "'Barlow Condensed', sans-serif",
-            fontWeight: active === tab.id ? 800 : 400,
+            background: active === tab.id ? theme.bronzeBg : 'transparent',
+            color: active === tab.id ? theme.bronzeDark : theme.textMuted,
+            fontFamily: theme.headingFont,
+            fontWeight: active === tab.id ? 800 : 500,
             fontSize: 15,
             letterSpacing: '0.04em',
             textTransform: 'uppercase' as const,

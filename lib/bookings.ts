@@ -161,23 +161,6 @@ export const BOOKING_TABS: { id: BookingTab; label: string }[] = [
   { id: 'private', label: 'Private' },
 ]
 
-export const inputStyle = {
-  width: '100%',
-  padding: '8px 12px',
-  borderRadius: 5,
-  border: '1px solid rgba(44, 38, 32, 0.12)',
-  background: '#ffffff',
-  color: '#2c2620',
-  fontSize: 13,
-  fontFamily: "'Barlow', sans-serif",
-  boxSizing: 'border-box' as const,
-}
-
-export const cardStyle = {
-  background: '#ffffff',
-  border: '1px solid rgba(44, 38, 32, 0.10)',
-  borderRadius: 8,
-  padding: '20px 24px',
-}
+export { cardStyle, inputStyle } from '@/lib/theme'
 
 export const muted = 'rgba(44, 38, 32, 0.55)'

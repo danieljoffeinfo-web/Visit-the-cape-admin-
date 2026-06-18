@@ -73,3 +73,19 @@ export const pageTitle = {
   color: theme.text,
   margin: 0,
 }
+
+export const sectionTitle = {
+  fontFamily: theme.headingFont,
+  fontWeight: 800,
+  fontSize: 18,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase' as const,
+  color: theme.text,
+}
+
+export const fieldLabel = {
+  fontSize: 11,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: theme.textMuted,
+}

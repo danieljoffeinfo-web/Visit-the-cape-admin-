@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { addDays, format } from 'date-fns'
 import { toast } from 'sonner'
 import { isFleetVehicle, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
-import { cardStyle, inputStyle, muted } from '@/lib/bookings'
+import { cardStyle, fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
 type VehicleRow = {
   id: string
@@ -81,15 +81,15 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
 
   return (
     <div style={{ ...cardStyle, marginBottom: 20 }}>
-      <h3 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 16 }}>
+      <h3 style={{ ...sectionTitle, marginBottom: 16 }}>
         New Fleet Booking
       </h3>
       {vehicles.length === 0 ? (
-        <div style={{ color: muted, fontSize: 13, marginBottom: 12 }}>No fleet vehicles yet. Add vehicles in Fleet Manager first.</div>
+        <div style={{ color: theme.textMuted, fontSize: 13, marginBottom: 12 }}>No fleet vehicles yet. Add vehicles in Fleet Manager first.</div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Vehicle *</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Vehicle *</label>
             <select value={form.vehicleId} onChange={(e) => setForm({ ...form, vehicleId: e.target.value })} style={inputStyle}>
               {vehicles.map((v) => (
                 <option key={v.id} value={v.id}>
@@ -99,40 +99,40 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
             </select>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Start date *</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Start date *</label>
             <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>End date *</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>End date *</label>
             <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Amount (ZAR) *</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Amount (ZAR) *</label>
             <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>First name *</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>First name *</label>
             <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Surname *</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Surname *</label>
             <input value={form.surname} onChange={(e) => setForm({ ...form, surname: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Email *</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Email *</label>
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 11, color: muted, marginBottom: 4, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Phone</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Phone</label>
             <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} style={inputStyle} />
           </div>
         </div>
       )}
       <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={submit} disabled={busy || vehicles.length === 0} style={{ padding: '8px 18px', borderRadius: 5, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>
+        <button onClick={submit} disabled={busy || vehicles.length === 0} style={primaryButton}>
           {busy ? 'Saving…' : 'Create Fleet Booking'}
         </button>
-        <button onClick={onCancel} style={{ padding: '8px 18px', borderRadius: 5, background: 'transparent', color: muted, border: '1px solid rgba(240,236,228,0.12)', cursor: 'pointer', fontSize: 13 }}>
+        <button onClick={onCancel} style={secondaryButton}>
           Cancel
         </button>
       </div>
