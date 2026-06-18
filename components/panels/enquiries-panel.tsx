@@ -16,6 +16,7 @@ export function EnquiriesPanel() {
   const [filter, setFilter] = useState<Filter>('all')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [replyText, setReplyText] = useState('')
 
   const loadEnquiries = useCallback(async () => {
@@ -96,6 +97,28 @@ export function EnquiriesPanel() {
       toast.error(error instanceof Error ? error.message : 'Failed to send reply')
     } finally {
       setSending(false)
+    }
+  }
+
+  async function deleteSelectedEnquiry() {
+    if (!selected) return
+    if (!confirm(`Delete enquiry from ${selected.name}? This cannot be undone.`)) return
+
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/enquiries/${selected.id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to delete')
+
+      setEnquiries((rows) => rows.filter((row) => row.id !== selected.id))
+      setSelectedId(null)
+      setReplies([])
+      setReplyText('')
+      toast.success('Enquiry deleted')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete enquiry')
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -188,9 +211,30 @@ export function EnquiriesPanel() {
                     <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 22, color: theme.text }}>{selected.name}</div>
                     <div style={{ fontSize: 13, color: theme.textMuted, marginTop: 4 }}>{selected.email}{selected.phone ? ` · ${selected.phone}` : ''}</div>
                   </div>
-                  <span style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 999, background: theme.bronzeBg, color: theme.bronzeDark, border: `1px solid ${theme.bronzeBorder}`, height: 'fit-content' }}>
-                    {enquiryStatusLabel(selected.status)}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '4px 10px', borderRadius: 999, background: theme.bronzeBg, color: theme.bronzeDark, border: `1px solid ${theme.bronzeBorder}`, height: 'fit-content' }}>
+                      {enquiryStatusLabel(selected.status)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={deleteSelectedEnquiry}
+                      disabled={deleting}
+                      style={{
+                        padding: '4px 12px',
+                        borderRadius: 999,
+                        border: `1px solid rgba(196, 92, 74, 0.35)`,
+                        background: 'transparent',
+                        color: theme.danger,
+                        cursor: deleting ? 'not-allowed' : 'pointer',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        fontFamily: theme.bodyFont,
+                        opacity: deleting ? 0.6 : 1,
+                      }}
+                    >
+                      {deleting ? 'Deleting…' : 'Delete'}
+                    </button>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 12, color: theme.textMuted, flexWrap: 'wrap' }}>
                   {selected.tour_type && <span>Tour: {selected.tour_type}</span>}

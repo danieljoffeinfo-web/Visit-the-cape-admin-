@@ -126,3 +126,18 @@ export async function fetchEnquiryReplies(enquiryId: string) {
 
   return data || []
 }
+
+export async function deleteEnquiry(id: string): Promise<boolean> {
+  const client = enquiriesClient()
+  const { data, error } = await client.from('enquiries').delete().eq('id', id).select('id').maybeSingle()
+
+  if (error) throw error
+  if (!data) return false
+
+  const { error: repliesError } = await supabaseAdmin.from('enquiry_replies').delete().eq('enquiry_id', id)
+  if (repliesError && !repliesError.message.toLowerCase().includes('enquiry_replies')) {
+    console.error('Failed to delete enquiry replies:', repliesError)
+  }
+
+  return true
+}
