@@ -2,6 +2,7 @@
 
 import type { AdminUser } from '@/lib/auth-types'
 import { UserColorDot } from '@/components/user-badge'
+import { theme } from '@/lib/theme'
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
@@ -20,7 +21,7 @@ const navItems = [
     section: 'Main',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <GridIcon />, badge: null },
-      { id: 'bookings', label: 'Bookings', icon: <BookIcon />, badge: 'Live' },
+      { id: 'bookings', label: 'Bookings', icon: <BookIcon />, badge: null },
       { id: 'calendar', label: 'Calendar', icon: <CalIcon />, badge: null },
       { id: 'enquiries', label: 'Enquiries', icon: <MailIcon />, badge: null },
     ],
@@ -54,19 +55,20 @@ export function Sidebar({ active, onChange, admin, onSignOut }: SidebarProps) {
     <aside style={{
       width: 240,
       minHeight: '100vh',
-      background: '#1a1815',
-      borderRight: '1px solid rgba(240,236,228,0.12)',
+      background: theme.surface,
+      borderRight: `1px solid ${theme.border}`,
       display: 'flex',
       flexDirection: 'column',
       position: 'fixed',
       top: 0, left: 0, bottom: 0,
       zIndex: 100,
+      boxShadow: '2px 0 12px rgba(44, 38, 32, 0.04)',
     }}>
-      <div style={{ padding: '24px 20px 20px', borderBottom: '1px solid rgba(240,236,228,0.12)' }}>
-        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#b8956a', lineHeight: 1 }}>
+      <div style={{ padding: '24px 20px 20px', borderBottom: `1px solid ${theme.border}` }}>
+        <div style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 22, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.bronze, lineHeight: 1 }}>
           Visit The Cape
         </div>
-        <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.35)', marginTop: 4 }}>
+        <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: theme.textFaint, marginTop: 4 }}>
           Admin Console
         </div>
       </div>
@@ -75,7 +77,7 @@ export function Sidebar({ active, onChange, admin, onSignOut }: SidebarProps) {
         {navItems.map((group, gi) => (
           <div key={gi}>
             {group.section && (
-              <div style={{ padding: '8px 16px 4px', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.3)', fontWeight: 500 }}>
+              <div style={{ padding: '8px 16px 4px', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: theme.textFaint, fontWeight: 500 }}>
                 {group.section}
               </div>
             )}
@@ -92,30 +94,21 @@ export function Sidebar({ active, onChange, admin, onSignOut }: SidebarProps) {
                     padding: '10px 20px',
                     width: '100%',
                     cursor: 'pointer',
-                    color: isActive ? '#b8956a' : 'rgba(240,236,228,0.55)',
-                    background: isActive ? 'rgba(184,149,106,0.1)' : 'transparent',
-                    borderLeft: `3px solid ${isActive ? '#b8956a' : 'transparent'}`,
+                    color: isActive ? theme.bronzeDark : theme.textMuted,
+                    background: isActive ? theme.bronzeBg : 'transparent',
                     border: 'none',
-                    borderRight: 'none',
-                    borderTop: 'none',
-                    borderBottom: 'none',
                     borderLeftWidth: 3,
                     borderLeftStyle: 'solid',
-                    borderLeftColor: isActive ? '#b8956a' : 'transparent',
+                    borderLeftColor: isActive ? theme.bronze : 'transparent',
                     fontSize: 13.5,
-                    fontWeight: 400,
-                    fontFamily: "'Barlow', sans-serif",
+                    fontWeight: isActive ? 600 : 400,
+                    fontFamily: theme.bodyFont,
                     transition: 'background 0.15s, color 0.15s',
                     textAlign: 'left',
                   }}
                 >
-                  <span style={{ width: 16, height: 16, opacity: isActive ? 1 : 0.7, flexShrink: 0 }}>{item.icon}</span>
+                  <span style={{ width: 16, height: 16, opacity: isActive ? 1 : 0.75, flexShrink: 0 }}>{item.icon}</span>
                   <span style={{ flex: 1 }}>{item.label}</span>
-                  {item.badge && (
-                    <span style={{ fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', background: 'rgba(184,149,106,0.2)', color: '#b8956a', padding: '2px 6px', borderRadius: 20, fontWeight: 500 }}>
-                      {item.badge}
-                    </span>
-                  )}
                 </button>
               )
             })}
@@ -123,28 +116,24 @@ export function Sidebar({ active, onChange, admin, onSignOut }: SidebarProps) {
         ))}
       </nav>
 
-      <div style={{ padding: '16px 20px', borderTop: '1px solid rgba(240,236,228,0.12)' }}>
+      <div style={{ padding: '16px 20px', borderTop: `1px solid ${theme.border}` }}>
         {admin && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
             <UserColorDot color={admin.color} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{admin.full_name}</div>
-              <div style={{ fontSize: 10, color: 'rgba(240,236,228,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{admin.role}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: theme.text }}>{admin.full_name}</div>
+              <div style={{ fontSize: 10, color: theme.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{admin.role}</div>
             </div>
           </div>
         )}
         {onSignOut && (
           <button
             onClick={onSignOut}
-            style={{ width: '100%', padding: '6px 0', background: 'none', border: 'none', color: 'rgba(240,236,228,0.35)', cursor: 'pointer', fontSize: 11, fontFamily: "'Barlow', sans-serif", textAlign: 'left' }}
+            style={{ width: '100%', padding: '6px 0', background: 'none', border: 'none', color: theme.textFaint, cursor: 'pointer', fontSize: 11, fontFamily: theme.bodyFont, textAlign: 'left' }}
           >
             Sign out
           </button>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'rgba(240,236,228,0.35)', marginTop: 8 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4caf84', boxShadow: '0 0 6px rgba(76,175,132,0.7)', flexShrink: 0 }} />
-          System Online
-        </div>
       </div>
     </aside>
   )

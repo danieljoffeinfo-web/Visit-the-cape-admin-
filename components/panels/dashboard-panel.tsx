@@ -18,24 +18,21 @@ import {
   type OutstandingInvoices,
   type RevenueDay,
 } from '@/lib/dashboard'
+import { cardStyle, theme } from '@/lib/theme'
 
-const card = {
-  background: '#1a1815',
-  border: '1px solid rgba(240,236,228,0.12)',
-  borderRadius: 8,
-  padding: '20px 24px',
-} as const
+const card = cardStyle
 
 const sectionTitle = {
-  fontFamily: "'Barlow Condensed', sans-serif",
+  fontFamily: theme.headingFont,
   fontWeight: 800,
   fontSize: 17,
   letterSpacing: '0.04em',
   textTransform: 'uppercase' as const,
+  color: theme.text,
 }
 
-const muted = 'rgba(240,236,228,0.45)'
-const mutedLight = 'rgba(240,236,228,0.35)'
+const muted = theme.textMuted
+const mutedLight = theme.textFaint
 
 function formatZAR(amount: number) {
   return `R ${amount.toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
@@ -235,7 +232,7 @@ export function DashboardPanel({
         .pulse-card { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
         .pulse-card:hover { border-color: rgba(184,149,106,0.35) !important; background: rgba(184,149,106,0.04) !important; }
         .enquiry-row { cursor: pointer; transition: background 0.12s; border-radius: 4px; margin: 0 -8px; padding: 10px 8px !important; }
-        .enquiry-row:hover { background: rgba(240,236,228,0.04); }
+        .enquiry-row:hover { background: rgba(184,149,106,0.06); }
         @media (min-width: 900px) {
           .dashboard-operations { grid-template-columns: 1.65fr 1fr; }
         }

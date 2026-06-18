@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { getSupabaseBrowserClient } from '@/lib/supabase'
+import { inputStyle, primaryButton, theme } from '@/lib/theme'
 
 function LoginForm() {
   const router = useRouter()
@@ -54,170 +55,36 @@ function LoginForm() {
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 24,
-        background: 'radial-gradient(ellipse at 50% 0%, rgba(184,149,106,0.08) 0%, #0c0b09 60%)',
-      }}
-    >
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 420,
-          background: '#1a1815',
-          border: '1px solid rgba(240,236,228,0.12)',
-          borderRadius: 12,
-          padding: '40px 36px',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-        }}
-      >
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: theme.bg }}>
+      <div style={{ width: '100%', maxWidth: 420, background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '40px 36px', boxShadow: '0 12px 40px rgba(44,38,32,0.08)' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div
-            style={{
-              fontFamily: "'Barlow Condensed', sans-serif",
-              fontWeight: 900,
-              fontSize: 28,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: '#b8956a',
-              lineHeight: 1,
-            }}
-          >
+          <div style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 28, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.bronze, lineHeight: 1 }}>
             Visit The Cape
           </div>
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: '0.18em',
-              textTransform: 'uppercase',
-              color: 'rgba(240,236,228,0.35)',
-              marginTop: 6,
-            }}
-          >
+          <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: theme.textFaint, marginTop: 6 }}>
             Admin Console
           </div>
         </div>
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: 16 }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 11,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: 'rgba(240,236,228,0.45)',
-                marginBottom: 6,
-              }}
-            >
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: 6,
-                border: '1px solid rgba(240,236,228,0.12)',
-                background: 'rgba(240,236,228,0.04)',
-                color: '#f0ece4',
-                fontSize: 14,
-                fontFamily: "'Barlow', sans-serif",
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
+            <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 6 }}>Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" style={inputStyle} />
           </div>
-
           <div style={{ marginBottom: 24 }}>
-            <label
-              style={{
-                display: 'block',
-                fontSize: 11,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: 'rgba(240,236,228,0.45)',
-                marginBottom: 6,
-              }}
-            >
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              style={{
-                width: '100%',
-                padding: '10px 14px',
-                borderRadius: 6,
-                border: '1px solid rgba(240,236,228,0.12)',
-                background: 'rgba(240,236,228,0.04)',
-                color: '#f0ece4',
-                fontSize: 14,
-                fontFamily: "'Barlow', sans-serif",
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
+            <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: theme.textMuted, marginBottom: 6 }}>Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" style={inputStyle} />
           </div>
-
           {error && (
-            <div
-              style={{
-                padding: '10px 14px',
-                borderRadius: 6,
-                background: 'rgba(239,83,80,0.12)',
-                border: '1px solid rgba(239,83,80,0.25)',
-                color: '#ef5350',
-                fontSize: 13,
-                marginBottom: 16,
-                lineHeight: 1.5,
-              }}
-            >
+            <div style={{ padding: '10px 14px', borderRadius: 6, background: 'rgba(196,92,74,0.1)', border: '1px solid rgba(196,92,74,0.25)', color: theme.danger, fontSize: 13, marginBottom: 16, lineHeight: 1.5 }}>
               {error}
             </div>
           )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '12px 20px',
-              borderRadius: 6,
-              border: 'none',
-              background: loading ? 'rgba(184,149,106,0.5)' : '#b8956a',
-              color: '#0c0b09',
-              fontWeight: 700,
-              fontSize: 14,
-              fontFamily: "'Barlow', sans-serif",
-              cursor: loading ? 'not-allowed' : 'pointer',
-              letterSpacing: '0.04em',
-            }}
-          >
+          <button type="submit" disabled={loading} style={{ ...primaryButton, width: '100%', opacity: loading ? 0.7 : 1, cursor: loading ? 'not-allowed' : 'pointer' }}>
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-
-        <p
-          style={{
-            textAlign: 'center',
-            fontSize: 12,
-            color: 'rgba(240,236,228,0.3)',
-            marginTop: 24,
-            lineHeight: 1.5,
-          }}
-        >
+        <p style={{ textAlign: 'center', fontSize: 12, color: theme.textFaint, marginTop: 24, lineHeight: 1.5 }}>
           Approved staff only. Contact your administrator for access.
         </p>
       </div>
