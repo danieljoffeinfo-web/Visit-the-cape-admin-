@@ -46,11 +46,11 @@ export function BookingsTable({
   emptyMessage = 'No bookings yet',
 }: BookingsTableProps) {
   if (loading) {
-    return <div style={{ color: theme.textFaint, padding: 12 }}>Loading bookings…</div>
+    return <div style={{ color: theme.textMuted, padding: 12 }}>Loading bookings…</div>
   }
 
   if (bookings.length === 0) {
-    return <div style={{ color: theme.textFaint, padding: 24, textAlign: 'center' }}>{emptyMessage}</div>
+    return <div style={{ color: theme.textMuted, padding: 24, textAlign: 'center' }}>{emptyMessage}</div>
   }
 
   return (
@@ -67,8 +67,8 @@ export function BookingsTable({
                   fontSize: 11,
                   letterSpacing: '0.1em',
                   textTransform: 'uppercase',
-                  color: theme.textFaint,
-                  fontWeight: 600,
+                  color: theme.textMuted,
+                  fontWeight: 700,
                 }}
               >
                 {h}
@@ -94,8 +94,8 @@ export function BookingsTable({
                   <SourceBadge source={b.kind === 'private' ? 'website' : b.source} />
                 </td>
                 <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{b.customer_name}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: theme.textMuted }}>{b.tour_or_vehicle}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: theme.textMuted }}>
+                <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{b.tour_or_vehicle}</td>
+                <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>
                   {b.date ? format(new Date(b.date), 'd MMM yyyy') : format(new Date(b.created_at), 'd MMM yyyy')}
                 </td>
                 <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{b.guests || '—'}</td>
@@ -105,7 +105,7 @@ export function BookingsTable({
                   ) : b.kind === 'private' || b.source === 'website' ? (
                     <span style={{ fontSize: 11, color: theme.textMuted }}>Website</span>
                   ) : (
-                    '—'
+                    <span style={{ color: theme.textMuted, fontSize: 12 }}>—</span>
                   )}
                 </td>
                 <td style={{ padding: '10px 12px' }}>
@@ -136,7 +136,7 @@ export function BookingsTable({
                   ) : b.invoice_status ? (
                     <StatusBadge status={b.invoice_status} />
                   ) : (
-                    <span style={{ color: theme.textFaint, fontSize: 12 }}>—</span>
+                    <span style={{ color: theme.textMuted, fontSize: 12 }}>—</span>
                   )}
                 </td>
                 <td style={{ padding: '10px 12px' }}>
