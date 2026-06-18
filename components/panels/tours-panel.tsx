@@ -1,159 +1,248 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { logActivity } from '@/lib/activity-log'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import type { WebsiteTour } from '@/lib/content-supabase-admin'
+import { cardStyle, fieldLabel, inputStyle, pageTitle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
-type Tour = {
-  id: string
-  name: string
-  date: string
-  seats_total: number
-  booked_seats: number
-  price_per_person: number
-  description?: string
+function linesToArray(text: string): string[] {
+  return text.split('\n').map((l) => l.trim()).filter(Boolean)
+}
+
+function arrayToLines(value?: string[] | null): string {
+  return (value || []).join('\n')
+}
+
+function formatPrice(amount?: number | null) {
+  return `R ${(amount || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
 export function ToursPanel() {
-  const [tours, setTours] = useState<Tour[]>([])
+  const [tours, setTours] = useState<WebsiteTour[]>([])
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [form, setForm] = useState<Partial<WebsiteTour> & { itineraryText?: string; highlightsText?: string }>({})
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ name: '', date: '', seats_total: '8', price_per_person: '' })
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { loadTours() }, [])
-
-  async function loadTours() {
-    const { data } = await supabase.from('tag_along_tours').select('*').order('date', { ascending: true })
-    setTours((data || []) as Tour[])
-    setLoading(false)
-  }
-
-  async function addTour() {
-    if (!form.name || !form.date || !form.price_per_person) { toast.error('Fill all fields'); return }
-    setSaving(true)
-    const tourRow = {
-      name: form.name,
-      date: form.date,
-      seats_total: parseInt(form.seats_total),
-      booked_seats: 0,
-      price_per_person: parseFloat(form.price_per_person),
+  const loadTours = useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/tours', { cache: 'no-store' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load tours')
+      const list = (data.tours || []) as WebsiteTour[]
+      setTours(list)
+      if (list.length > 0 && !selectedId) {
+        selectTour(list[0])
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to load tours')
+    } finally {
+      setLoading(false)
     }
-    const { data: created, error } = await supabase.from('tag_along_tours').insert(tourRow).select('*').single()
-    setSaving(false)
-    if (error) { toast.error('Failed to add tour'); return }
-    await logActivity({
-      action: 'Created tour',
-      entityType: 'tour',
-      entityId: created?.id,
-      entityLabel: `${form.name} — ${form.date}`,
-      newValue: tourRow,
-    })
-    toast.success('Tour scheduled')
-    setShowModal(false)
-    setForm({ name: '', date: '', seats_total: '8', price_per_person: '' })
+  }, [selectedId])
+
+  useEffect(() => {
     loadTours()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function selectTour(tour: WebsiteTour) {
+    setSelectedId(tour.id)
+    setForm({
+      ...tour,
+      itineraryText: arrayToLines(tour.itinerary),
+      highlightsText: arrayToLines(tour.highlights),
+    })
   }
 
-  async function deleteTour(id: string) {
-    if (!confirm('Delete this tour?')) return
-    const tour = tours.find((t) => t.id === id)
-    await supabase.from('tag_along_tours').delete().eq('id', id)
-    await logActivity({
-      action: 'Deleted tour',
-      entityType: 'tour',
-      entityId: id,
-      entityLabel: tour ? `${tour.name} — ${tour.date}` : id,
-      oldValue: tour ? { ...tour } : null,
-    })
-    toast.success('Tour deleted')
-    loadTours()
+  async function saveTour() {
+    if (!selectedId) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/tours', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedId,
+          name: form.name,
+          tagline: form.tagline,
+          category: form.category,
+          duration: form.duration,
+          price_pax: Number(form.price_pax),
+          price_note: form.price_note,
+          price_private: form.price_private ? Number(form.price_private) : null,
+          summary: form.summary,
+          experience_intro: form.experience_intro,
+          included: form.included,
+          excluded: form.excluded,
+          what_to_wear: form.what_to_wear,
+          region: form.region,
+          is_published: form.is_published,
+          is_featured: form.is_featured,
+          itinerary: linesToArray(form.itineraryText || ''),
+          highlights: linesToArray(form.highlightsText || ''),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save')
+      toast.success('Tour updated on website')
+      setTours((prev) => prev.map((t) => (t.id === selectedId ? data.tour : t)))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save tour')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const card = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px' }
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const selected = tours.find((t) => t.id === selectedId)
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Tours & Pricing</h1>
-        <button onClick={() => setShowModal(true)} style={{ padding: '8px 18px', borderRadius: 5, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Barlow', sans-serif" }}>
-          + Schedule Tour
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={pageTitle}>Tours & Pricing</h1>
+          <p style={{ color: theme.textMuted, fontSize: 13, marginTop: 6, maxWidth: 560 }}>
+            Edit tours live on visitthecape.co.za — description, itinerary, and price per person. Bookings are managed in the Bookings tab.
+          </p>
+        </div>
+        <a
+          href="https://visitthecape.co.za/tours"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ ...secondaryButton, textDecoration: 'none', fontSize: 13 }}
+        >
+          View live site ↗
+        </a>
       </div>
 
-      <div style={card}>
-        {loading ? <div style={{ color: 'rgba(240,236,228,0.4)' }}>Loading...</div> : (
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid rgba(240,236,228,0.1)' }}>
-                {['Tour Name', 'Date', 'Seats', 'Booked', 'Price / Pax', 'Status', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.4)', fontWeight: 500 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {tours.length === 0 && <tr><td colSpan={7} style={{ padding: 24, textAlign: 'center', color: 'rgba(240,236,228,0.4)' }}>No tours scheduled</td></tr>}
-              {tours.map(t => {
-                const isPast = t.date < today
-                const isFull = t.booked_seats >= t.seats_total
+      {loading ? (
+        <div style={{ color: theme.textMuted, padding: 24 }}>Loading website tours…</div>
+      ) : tours.length === 0 ? (
+        <div style={{ ...cardStyle, color: theme.textMuted }}>No tours found on the website database.</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 320px) 1fr', gap: 20, alignItems: 'start' }}>
+          <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
+            <div style={{ padding: '14px 16px', borderBottom: `1px solid ${theme.border}`, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: theme.textMuted, fontWeight: 700 }}>
+              Website tours ({tours.length})
+            </div>
+            <div style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              {tours.map((tour) => {
+                const active = tour.id === selectedId
                 return (
-                  <tr key={t.id} style={{ borderBottom: '1px solid rgba(240,236,228,0.06)', opacity: isPast ? 0.5 : 1 }}>
-                    <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 500 }}>{t.name}</td>
-                    <td style={{ padding: '10px 12px', fontSize: 13 }}>{format(new Date(t.date), 'EEE, d MMM yyyy')}</td>
-                    <td style={{ padding: '10px 12px', fontSize: 13 }}>{t.seats_total}</td>
-                    <td style={{ padding: '10px 12px', fontSize: 13 }}>
-                      <span style={{ color: isFull ? '#ef5350' : '#4caf84', fontWeight: 600 }}>{t.booked_seats}</span>
-                    </td>
-                    <td style={{ padding: '10px 12px', fontSize: 13 }}>R {(t.price_per_person || 0).toLocaleString('en-ZA')}</td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span style={{ padding: '3px 8px', borderRadius: 10, fontSize: 11, background: isPast ? 'rgba(240,236,228,0.06)' : isFull ? 'rgba(239,83,80,0.15)' : 'rgba(76,175,132,0.15)', color: isPast ? 'rgba(240,236,228,0.35)' : isFull ? '#ef5350' : '#4caf84' }}>
-                        {isPast ? 'Past' : isFull ? 'Full' : 'Open'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <button onClick={() => deleteTour(t.id)} style={{ padding: '3px 8px', fontSize: 11, borderRadius: 4, border: '1px solid rgba(239,83,80,0.3)', background: 'transparent', color: 'rgba(239,83,80,0.7)', cursor: 'pointer', fontFamily: "'Barlow', sans-serif" }}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
+                  <button
+                    key={tour.id}
+                    onClick={() => selectTour(tour)}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '12px 16px',
+                      border: 'none',
+                      borderBottom: `1px solid ${theme.border}`,
+                      cursor: 'pointer',
+                      background: active ? theme.bronzeBg : theme.surface,
+                      borderLeft: active ? `3px solid ${theme.bronze}` : '3px solid transparent',
+                    }}
+                  >
+                    <div style={{ fontSize: 13, fontWeight: 600, color: theme.text }}>{tour.name}</div>
+                    <div style={{ fontSize: 12, color: theme.bronzeDark, marginTop: 4, fontWeight: 600 }}>{formatPrice(tour.price_pax)} / pax</div>
+                    {!tour.is_published && (
+                      <div style={{ fontSize: 10, color: theme.danger, marginTop: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Unpublished</div>
+                    )}
+                  </button>
                 )
               })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#1a1815', border: '1px solid rgba(240,236,228,0.15)', borderRadius: 10, padding: 32, width: 400 }}>
-            <h2 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 20 }}>Schedule Tour</h2>
-            {[
-              { label: 'Tour Name', key: 'name', type: 'text', placeholder: 'Table Mountain Tag-Along' },
-              { label: 'Date', key: 'date', type: 'date', placeholder: '' },
-              { label: 'Total Seats', key: 'seats_total', type: 'number', placeholder: '8' },
-              { label: 'Price per Person (ZAR)', key: 'price_per_person', type: 'number', placeholder: '1500' },
-            ].map(f => (
-              <div key={f.key} style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.5)', marginBottom: 5 }}>{f.label}</label>
-                <input
-                  type={f.type}
-                  placeholder={f.placeholder}
-                  value={form[f.key as keyof typeof form]}
-                  onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 12px', background: 'rgba(240,236,228,0.05)', border: '1px solid rgba(240,236,228,0.15)', borderRadius: 5, color: '#f0ece4', fontSize: 14, fontFamily: "'Barlow', sans-serif", colorScheme: 'dark' }}
-                />
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-              <button onClick={() => setShowModal(false)} style={{ flex: 1, padding: '9px 0', borderRadius: 5, border: '1px solid rgba(240,236,228,0.15)', background: 'transparent', color: 'rgba(240,236,228,0.6)', cursor: 'pointer', fontFamily: "'Barlow', sans-serif" }}>Cancel</button>
-              <button onClick={addTour} disabled={saving} style={{ flex: 1, padding: '9px 0', borderRadius: 5, border: 'none', background: '#b8956a', color: '#0c0b09', cursor: 'pointer', fontWeight: 700, fontFamily: "'Barlow', sans-serif" }}>
-                {saving ? 'Saving...' : 'Schedule'}
-              </button>
             </div>
           </div>
+
+          {selected && (
+            <div style={cardStyle}>
+              <h2 style={{ ...sectionTitle, marginBottom: 4 }}>{selected.name}</h2>
+              <div style={{ fontSize: 12, color: theme.textFaint, marginBottom: 20 }}>/{selected.slug}</div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 16 }}>
+                <div>
+                  <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Tour name</label>
+                  <input value={form.name || ''} onChange={(e) => setForm({ ...form, name: e.target.value })} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Price per person (ZAR)</label>
+                  <input type="number" value={form.price_pax ?? ''} onChange={(e) => setForm({ ...form, price_pax: Number(e.target.value) })} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Duration</label>
+                  <input value={form.duration || ''} onChange={(e) => setForm({ ...form, duration: e.target.value })} style={inputStyle} placeholder="Full day" />
+                </div>
+                <div>
+                  <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Price note</label>
+                  <input value={form.price_note || ''} onChange={(e) => setForm({ ...form, price_note: e.target.value })} style={inputStyle} placeholder="Per person, min 2" />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Description (summary)</label>
+                <textarea
+                  value={form.summary || ''}
+                  onChange={(e) => setForm({ ...form, summary: e.target.value })}
+                  rows={4}
+                  style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Itinerary (one stop per line)</label>
+                <textarea
+                  value={form.itineraryText || ''}
+                  onChange={(e) => setForm({ ...form, itineraryText: e.target.value })}
+                  rows={8}
+                  style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5, fontFamily: theme.bodyFont }}
+                  placeholder={'Bo-Kaap cultural walk\nTable Mountain cable car\n...'}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Highlights (one per line)</label>
+                <textarea
+                  value={form.highlightsText || ''}
+                  onChange={(e) => setForm({ ...form, highlightsText: e.target.value })}
+                  rows={4}
+                  style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: theme.text, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!form.is_published}
+                    onChange={(e) => setForm({ ...form, is_published: e.target.checked })}
+                  />
+                  Published on website
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: theme.text, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!form.is_featured}
+                    onChange={(e) => setForm({ ...form, is_featured: e.target.checked })}
+                  />
+                  Featured
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={saveTour} disabled={saving} style={primaryButton}>
+                  {saving ? 'Saving…' : 'Save to website'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selected && selectTour(selected)}
+                  style={secondaryButton}
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

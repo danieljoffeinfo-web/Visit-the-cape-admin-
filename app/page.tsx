@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, Suspense, useEffect, useCallback } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { AuthProvider, useAuth } from '@/components/auth-provider'
 import { UserColorBadge } from '@/components/user-badge'
@@ -13,7 +13,6 @@ import { CrmPanel } from '@/components/panels/crm-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
 import { FleetPanel } from '@/components/panels/fleet-panel'
 import { CalendarPanel } from '@/components/panels/calendar-panel'
-import { SocialsPanel } from '@/components/panels/socials-panel'
 import { ActivityLogsPanel } from '@/components/panels/activity-logs-panel'
 import { useSearchParams } from 'next/navigation'
 import type { BookingTab } from '@/lib/bookings'
@@ -21,8 +20,10 @@ import { theme } from '@/lib/theme'
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
-  | 'tours' | 'fleet' | 'accounting' | 'socials' | 'crm' | 'settings'
+  | 'tours' | 'fleet' | 'accounting' | 'crm' | 'settings'
   | 'activity-logs'
+
+const PANEL_STORAGE_KEY = 'vtc_active_panel'
 
 const PANEL_TITLES: Record<Panel, string> = {
   dashboard: 'Dashboard',
@@ -32,7 +33,6 @@ const PANEL_TITLES: Record<Panel, string> = {
   tours: 'Tours & Pricing',
   fleet: 'Fleet Manager',
   accounting: 'Accounting',
-  socials: 'Socials',
   crm: 'CRM',
   settings: 'Settings',
   'activity-logs': 'Activity Logs',
@@ -42,6 +42,13 @@ function resolveInitialPanel(raw: string | null): Panel {
   if (raw === 'tour-bookings' || raw === 'internal-bookings') return 'bookings'
   if (raw && raw in PANEL_TITLES) return raw as Panel
   return 'dashboard'
+}
+
+function readStoredPanel(): Panel | null {
+  if (typeof window === 'undefined') return null
+  const saved = sessionStorage.getItem(PANEL_STORAGE_KEY)
+  if (saved && saved in PANEL_TITLES) return saved as Panel
+  return null
 }
 
 function NotApprovedScreen() {
@@ -66,6 +73,14 @@ function NotApprovedScreen() {
   )
 }
 
+function PanelSlot({ active, name, children }: { active: boolean; name: Panel; children: React.ReactNode }) {
+  return (
+    <div hidden={!active} aria-hidden={!active} style={{ display: active ? 'block' : 'none' }}>
+      {children}
+    </div>
+  )
+}
+
 function AdminApp() {
   const searchParams = useSearchParams()
   const { admin, loading, notApproved, signOut } = useAuth()
@@ -73,8 +88,9 @@ function AdminApp() {
   const legacyPanel = searchParams?.get('panel')
   const [panel, setPanel] = useState<Panel>(() => {
     if (searchParams?.get('xero')) return 'settings'
-    return resolveInitialPanel(legacyPanel)
+    return readStoredPanel() || resolveInitialPanel(legacyPanel)
   })
+  const [visited, setVisited] = useState<Set<Panel>>(() => new Set([panel]))
   const [bookingsTab, setBookingsTab] = useState<BookingTab>(() => {
     if (legacyPanel === 'tour-bookings') return 'tours'
     if (legacyPanel === 'internal-bookings') return 'internal'
@@ -83,6 +99,15 @@ function AdminApp() {
   const [bookingsAction, setBookingsAction] = useState<string | null>(
     () => searchParams?.get('action') || null,
   )
+
+  useEffect(() => {
+    setVisited((prev) => new Set(prev).add(panel))
+    sessionStorage.setItem(PANEL_STORAGE_KEY, panel)
+  }, [panel])
+
+  const changePanel = useCallback((next: Panel) => {
+    setPanel(next)
+  }, [])
 
   function navigate(target: string, opts?: { tab?: BookingTab; action?: string }) {
     const nextPanel = resolveInitialPanel(target)
@@ -94,7 +119,7 @@ function AdminApp() {
     }
   }
 
-  if (loading) {
+  if (loading && !admin) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textFaint, background: theme.bg }}>
         Loading…
@@ -107,7 +132,7 @@ function AdminApp() {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: theme.bg }}>
-      <Sidebar active={panel} onChange={setPanel} admin={admin} onSignOut={signOut} />
+      <Sidebar active={panel} onChange={changePanel} admin={admin} onSignOut={signOut} />
       <div style={{ marginLeft: 240, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <div style={{ height: 60, background: theme.surface, borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', padding: '0 28px', gap: 16, position: 'sticky', top: 0, zIndex: 50 }}>
           <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 20, letterSpacing: '0.05em', textTransform: 'uppercase', flex: 1, color: theme.text }}>
@@ -126,19 +151,56 @@ function AdminApp() {
         </div>
 
         <div style={{ padding: 28, flex: 1 }}>
-          {panel === 'dashboard' && <DashboardPanel onNavigate={navigate} />}
-          {panel === 'bookings' && (
-            <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />
+          {visited.has('dashboard') && (
+            <PanelSlot active={panel === 'dashboard'} name="dashboard">
+              <DashboardPanel onNavigate={navigate} />
+            </PanelSlot>
           )}
-          {panel === 'calendar' && <CalendarPanel />}
-          {panel === 'enquiries' && <EnquiriesPanel />}
-          {panel === 'tours' && <ToursPanel />}
-          {panel === 'fleet' && <FleetPanel onNavigate={navigate} />}
-          {panel === 'accounting' && <AccountingPanel />}
-          {panel === 'socials' && <SocialsPanel />}
-          {panel === 'crm' && <CrmPanel />}
-          {panel === 'settings' && <SettingsPanel />}
-          {panel === 'activity-logs' && <ActivityLogsPanel />}
+          {visited.has('bookings') && (
+            <PanelSlot active={panel === 'bookings'} name="bookings">
+              <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />
+            </PanelSlot>
+          )}
+          {visited.has('calendar') && (
+            <PanelSlot active={panel === 'calendar'} name="calendar">
+              <CalendarPanel />
+            </PanelSlot>
+          )}
+          {visited.has('enquiries') && (
+            <PanelSlot active={panel === 'enquiries'} name="enquiries">
+              <EnquiriesPanel />
+            </PanelSlot>
+          )}
+          {visited.has('tours') && (
+            <PanelSlot active={panel === 'tours'} name="tours">
+              <ToursPanel />
+            </PanelSlot>
+          )}
+          {visited.has('fleet') && (
+            <PanelSlot active={panel === 'fleet'} name="fleet">
+              <FleetPanel onNavigate={navigate} />
+            </PanelSlot>
+          )}
+          {visited.has('accounting') && (
+            <PanelSlot active={panel === 'accounting'} name="accounting">
+              <AccountingPanel />
+            </PanelSlot>
+          )}
+          {visited.has('crm') && (
+            <PanelSlot active={panel === 'crm'} name="crm">
+              <CrmPanel />
+            </PanelSlot>
+          )}
+          {visited.has('settings') && (
+            <PanelSlot active={panel === 'settings'} name="settings">
+              <SettingsPanel />
+            </PanelSlot>
+          )}
+          {visited.has('activity-logs') && (
+            <PanelSlot active={panel === 'activity-logs'} name="activity-logs">
+              <ActivityLogsPanel />
+            </PanelSlot>
+          )}
         </div>
       </div>
     </div>

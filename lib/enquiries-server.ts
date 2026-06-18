@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getContentSupabaseAdmin } from '@/lib/content-supabase-admin'
 import type { Enquiry } from '@/lib/enquiries'
 
 function normalizeEnquiry(row: Record<string, unknown>): Enquiry {
@@ -17,6 +18,11 @@ function normalizeEnquiry(row: Record<string, unknown>): Enquiry {
   }
 }
 
+function mapExperienceToTourType(experience?: string | null) {
+  if (!experience) return null
+  return experience
+}
+
 export async function fetchEnquiriesFromSource(): Promise<Enquiry[]> {
   const apiUrl = process.env.INQUIRIES_API_URL?.trim()
   const apiKey = process.env.INQUIRIES_API_KEY?.trim()
@@ -33,6 +39,28 @@ export async function fetchEnquiriesFromSource(): Promise<Enquiry[]> {
     const payload = await response.json()
     const rows = Array.isArray(payload) ? payload : payload.enquiries || payload.data || []
     return rows.map((row: Record<string, unknown>) => normalizeEnquiry(row))
+  }
+
+  if (process.env.CONTENT_SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+    try {
+      const content = getContentSupabaseAdmin()
+      const { data, error } = await content
+        .from('enquiries')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200)
+
+      if (!error && data) {
+        return data.map((row) =>
+          normalizeEnquiry({
+            ...row,
+            tour_type: (row as Record<string, unknown>).tour_type || mapExperienceToTourType((row as Record<string, unknown>).experience as string),
+          } as Record<string, unknown>),
+        )
+      }
+    } catch (err) {
+      console.warn('Content enquiries fetch failed, falling back to admin DB:', err)
+    }
   }
 
   const { data, error } = await supabaseAdmin
