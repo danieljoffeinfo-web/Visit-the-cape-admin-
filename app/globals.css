@@ -123,8 +123,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    background: #0c0b09 !important;
-    color: #f0ece4 !important;
+    background: var(--vtc-bg) !important;
+    color: var(--vtc-text) !important;
   }
   html {
     @apply font-sans;
@@ -135,13 +135,19 @@
   --bronze: #b8956a;
   --bronze-lt: #d4b896;
   --bronze-dk: #8a6e4a;
-  --ink: #0c0b09;
-  --ink2: #1a1815;
-  --ink3: #252220;
-  --parchment: #f0ece4;
-  --dft-muted: rgba(240,236,228,0.55);
-  --dft-muted2: rgba(240,236,228,0.12);
-  --dft-muted3: rgba(240,236,228,0.06);
+  --vtc-bg: #f7f4ef;
+  --vtc-surface: #ffffff;
+  --vtc-surface-muted: #f0ebe3;
+  --vtc-text: #2c2620;
+  --vtc-text-muted: rgba(44, 38, 32, 0.55);
+  --vtc-border: rgba(44, 38, 32, 0.10);
+  --ink: #2c2620;
+  --ink2: #ffffff;
+  --ink3: #f0ebe3;
+  --parchment: #f7f4ef;
+  --dft-muted: rgba(44, 38, 32, 0.55);
+  --dft-muted2: rgba(44, 38, 32, 0.10);
+  --dft-muted3: rgba(44, 38, 32, 0.05);
 }
 
 .socials-document-editor p {

@@ -17,6 +17,7 @@ import { SocialsPanel } from '@/components/panels/socials-panel'
 import { ActivityLogsPanel } from '@/components/panels/activity-logs-panel'
 import { useSearchParams } from 'next/navigation'
 import type { BookingTab } from '@/lib/bookings'
+import { theme } from '@/lib/theme'
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
@@ -46,17 +47,17 @@ function resolveInitialPanel(raw: string | null): Panel {
 function NotApprovedScreen() {
   const { signOut } = useAuth()
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div style={{ maxWidth: 420, textAlign: 'center', background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 12, padding: '40px 36px' }}>
-        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 24, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#ef5350', marginBottom: 12 }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: theme.bg }}>
+      <div style={{ maxWidth: 420, textAlign: 'center', background: theme.surface, border: `1px solid ${theme.border}`, borderRadius: 12, padding: '40px 36px', boxShadow: '0 8px 32px rgba(44,38,32,0.08)' }}>
+        <h1 style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 24, letterSpacing: '0.04em', textTransform: 'uppercase', color: theme.danger, marginBottom: 12 }}>
           Access Denied
         </h1>
-        <p style={{ color: 'rgba(240,236,228,0.65)', fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
+        <p style={{ color: theme.textMuted, fontSize: 14, lineHeight: 1.6, marginBottom: 24 }}>
           Your account has not been approved for admin access.
         </p>
         <button
           onClick={signOut}
-          style={{ padding: '10px 20px', borderRadius: 6, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Barlow', sans-serif" }}
+          style={{ padding: '10px 20px', borderRadius: 6, background: theme.bronze, color: '#ffffff', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: theme.bodyFont }}
         >
           Sign Out
         </button>
@@ -95,7 +96,7 @@ function AdminApp() {
 
   if (loading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(240,236,228,0.4)' }}>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textFaint, background: theme.bg }}>
         Loading…
       </div>
     )
@@ -105,20 +106,20 @@ function AdminApp() {
   if (!admin) return null
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: theme.bg }}>
       <Sidebar active={panel} onChange={setPanel} admin={admin} onSignOut={signOut} />
       <div style={{ marginLeft: 240, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <div style={{ height: 60, background: '#1a1815', borderBottom: '1px solid rgba(240,236,228,0.12)', display: 'flex', alignItems: 'center', padding: '0 28px', gap: 16, position: 'sticky', top: 0, zIndex: 50 }}>
-          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20, letterSpacing: '0.05em', textTransform: 'uppercase', flex: 1 }}>
+        <div style={{ height: 60, background: theme.surface, borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', padding: '0 28px', gap: 16, position: 'sticky', top: 0, zIndex: 50 }}>
+          <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 20, letterSpacing: '0.05em', textTransform: 'uppercase', flex: 1, color: theme.text }}>
             {PANEL_TITLES[panel]}
           </div>
           <UserColorBadge name={admin.full_name} color={admin.color} />
-          <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', background: 'rgba(184,149,106,0.15)', color: '#d4b896', padding: '4px 10px', borderRadius: 20, border: '1px solid rgba(184,149,106,0.3)' }}>
+          <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', background: theme.bronzeBg, color: theme.bronzeDark, padding: '4px 10px', borderRadius: 20, border: `1px solid ${theme.bronzeBorder}` }}>
             Cape Town
           </div>
           <button
             onClick={signOut}
-            style={{ padding: '5px 12px', borderRadius: 4, border: '1px solid rgba(240,236,228,0.12)', background: 'transparent', color: 'rgba(240,236,228,0.55)', cursor: 'pointer', fontSize: 12, fontFamily: "'Barlow', sans-serif" }}
+            style={{ padding: '5px 12px', borderRadius: 4, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.textMuted, cursor: 'pointer', fontSize: 12, fontFamily: theme.bodyFont }}
           >
             Logout
           </button>

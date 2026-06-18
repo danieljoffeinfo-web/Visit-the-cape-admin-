@@ -165,19 +165,19 @@ export const inputStyle = {
   width: '100%',
   padding: '8px 12px',
   borderRadius: 5,
-  border: '1px solid rgba(240,236,228,0.12)',
-  background: 'rgba(240,236,228,0.04)',
-  color: '#f0ece4',
+  border: '1px solid rgba(44, 38, 32, 0.12)',
+  background: '#ffffff',
+  color: '#2c2620',
   fontSize: 13,
   fontFamily: "'Barlow', sans-serif",
   boxSizing: 'border-box' as const,
 }
 
 export const cardStyle = {
-  background: '#1a1815',
-  border: '1px solid rgba(240,236,228,0.12)',
+  background: '#ffffff',
+  border: '1px solid rgba(44, 38, 32, 0.10)',
   borderRadius: 8,
   padding: '20px 24px',
 }
 
-export const muted = 'rgba(240,236,228,0.45)'
+export const muted = 'rgba(44, 38, 32, 0.55)'
