@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+import { cardStyle, dangerButton, pageTitle, sectionTitle, theme } from '@/lib/theme'
 
 type XeroToken = { tenant_id: string; org_name: string; expires_at: string; updated_at: string } | null
 
 export function SettingsPanel() {
   const [xeroToken, setXeroToken] = useState<XeroToken>(null)
   const [loadingXero, setLoadingXero] = useState(true)
-  const [disconnecting, setDisconnecting] = useState(false)
+  const [wiping, setWiping] = useState(false)
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -53,17 +54,30 @@ export function SettingsPanel() {
     }
   }
 
-  const cardStyle = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px', marginBottom: 20 }
-  const sectionHead = { fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' as const, marginBottom: 16 }
+  async function clearRevenueData() {
+    if (!confirm('Clear all bookings, customers, invoice links, and revenue stats? Fleet vehicles will be kept.')) return
+    setWiping(true)
+    try {
+      const res = await fetch('/api/admin/wipe-revenue', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Wipe failed')
+      toast.success(`Revenue data cleared. ${data.fleetPreserved ?? 0} fleet vehicles kept.`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to clear data')
+    } finally {
+      setWiping(false)
+    }
+  }
+
+  const card = cardStyle
 
   return (
     <div>
-      <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 24 }}>Settings</h1>
+      <h1 style={pageTitle}>Settings</h1>
 
-      {/* Xero Integration */}
-      <div style={cardStyle}>
-        <h2 style={sectionHead}>Xero Integration</h2>
-        <p style={{ color: 'rgba(240,236,228,0.55)', fontSize: 13, marginBottom: 20 }}>
+      <div style={{ ...card, marginBottom: 20 }}>
+        <h2 style={{ ...sectionTitle, marginBottom: 16 }}>Xero Integration</h2>
+        <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 20 }}>
           Connect your Xero account to sync invoices, payments, and reports with the Accounting tab.
         </p>
 
@@ -108,21 +122,29 @@ export function SettingsPanel() {
         )}
       </div>
 
-      {/* Supabase Connection Info */}
-      <div style={cardStyle}>
-        <h2 style={sectionHead}>Supabase Database</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(240,236,228,0.55)', fontSize: 13 }}>
+      <div style={{ ...card, marginBottom: 20 }}>
+        <h2 style={{ ...sectionTitle, marginBottom: 16 }}>Data</h2>
+        <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16 }}>
+          Remove all bookings, customers, invoice links, and dashboard revenue stats. Fleet vehicles are not deleted.
+        </p>
+        <button onClick={clearRevenueData} disabled={wiping} style={dangerButton}>
+          {wiping ? 'Clearing…' : 'Clear revenue & booking data'}
+        </button>
+      </div>
+
+      <div style={{ ...card, marginBottom: 20 }}>
+        <h2 style={{ ...sectionTitle, marginBottom: 16 }}>Supabase Database</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: theme.textMuted, fontSize: 13 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4caf84' }} />
           Connected — ufcawaywfgzrhfbzxtgz.supabase.co
         </div>
       </div>
 
-      {/* About */}
-      <div style={cardStyle}>
-        <h2 style={sectionHead}>About</h2>
-        <div style={{ color: 'rgba(240,236,228,0.55)', fontSize: 13, lineHeight: 1.8 }}>
-          <div>DF Travel Admin Console</div>
-          <div style={{ color: 'rgba(240,236,228,0.3)', marginTop: 4, fontSize: 12 }}>Cape Town Tour Operator Management System</div>
+      <div style={card}>
+        <h2 style={{ ...sectionTitle, marginBottom: 16 }}>About</h2>
+        <div style={{ color: theme.textMuted, fontSize: 13, lineHeight: 1.8 }}>
+          <div>Visit The Cape Admin Console</div>
+          <div style={{ color: theme.textFaint, marginTop: 4, fontSize: 12 }}>Cape Town Tour Operator Management System</div>
         </div>
       </div>
     </div>
