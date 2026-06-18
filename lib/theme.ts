@@ -73,3 +73,38 @@ export const pageTitle = {
   color: theme.text,
   margin: 0,
 }
+
+export const sectionTitle = {
+  fontFamily: theme.headingFont,
+  fontWeight: 800,
+  fontSize: 18,
+  letterSpacing: '0.04em',
+  textTransform: 'uppercase' as const,
+  color: theme.text,
+}
+
+export const statLabel = {
+  fontSize: 11,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: theme.textFaint,
+}
+
+export const fieldLabel = {
+  fontSize: 11,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: theme.textMuted,
+}
+
+export const dangerButton = {
+  padding: '9px 14px',
+  borderRadius: 6,
+  background: 'rgba(196, 92, 74, 0.08)',
+  color: theme.danger,
+  border: `1px solid rgba(196, 92, 74, 0.25)`,
+  cursor: 'pointer',
+  fontWeight: 700,
+  fontSize: 13,
+  fontFamily: theme.bodyFont,
+} as const
