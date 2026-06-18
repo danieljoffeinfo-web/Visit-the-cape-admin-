@@ -212,7 +212,7 @@ export function DashboardPanel({
   ]
 
   const quickActions = [
-    { icon: '＋', label: 'Schedule a Tag-Along Tour', desc: 'Add a new departure date with seats', to: 'tours' as const },
+    { icon: '✏', label: 'Edit Website Tours', desc: 'Update descriptions, itinerary and pricing on visitthecape.co.za', to: 'tours' as const },
     { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' as const },
     { icon: '📋', label: 'New Internal Booking', desc: 'Create a booking from the admin dashboard', to: 'bookings' as const, tab: 'internal' as BookingTab, action: 'create' },
     { icon: '🎫', label: 'New Tour Booking', desc: 'Create a manual tour booking on request', to: 'bookings' as const, tab: 'tours' as BookingTab, action: 'create' },

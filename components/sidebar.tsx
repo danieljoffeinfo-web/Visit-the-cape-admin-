@@ -6,7 +6,7 @@ import { theme } from '@/lib/theme'
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
-  | 'tours' | 'fleet' | 'accounting' | 'socials' | 'crm' | 'settings'
+  | 'tours' | 'fleet' | 'accounting' | 'crm' | 'settings'
   | 'activity-logs'
 
 interface SidebarProps {
@@ -37,7 +37,6 @@ const navItems = [
   {
     section: null,
     items: [
-      { id: 'socials', label: 'Socials', icon: <ShareIcon />, badge: null },
       { id: 'crm', label: 'CRM', icon: <UsersIcon />, badge: null },
       { id: 'activity-logs', label: 'Activity Logs', icon: <LogIcon />, badge: null },
     ],
@@ -146,7 +145,6 @@ function MailIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="curren
 function MapIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="2,2 6,4 10,2 14,4 14,14 10,12 6,14 2,12"/><line x1="6" y1="4" x2="6" y2="14"/><line x1="10" y1="2" x2="10" y2="12"/></svg> }
 function CarIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 9l1.5-4h9L14 9"/><rect x="1" y="9" width="14" height="4" rx="1.5"/><circle cx="4.5" cy="13" r="1.5"/><circle cx="11.5" cy="13" r="1.5"/></svg> }
 function ChartIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="2" y1="14" x2="14" y2="14"/><rect x="3" y="8" width="3" height="6"/><rect x="7" y="5" width="3" height="9"/><rect x="11" y="2" width="3" height="12"/></svg> }
-function ShareIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="3" r="2"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="13" r="2"/><line x1="6" y1="7" x2="10" y2="4"/><line x1="6" y1="9" x2="10" y2="12"/></svg> }
 function UsersIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="5" r="2.5"/><path d="M1 14c0-3 2.2-5 5-5s5 2 5 5"/><circle cx="12" cy="5" r="2"/><path d="M10 14c0-2 1-3.5 3-4"/></svg> }
 function LogIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 2h7l3 3v9H3V2z"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="10" x2="10" y2="10"/></svg> }
 function GearIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"/></svg> }
