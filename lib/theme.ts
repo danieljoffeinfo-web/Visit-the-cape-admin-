@@ -89,3 +89,15 @@ export const fieldLabel = {
   textTransform: 'uppercase' as const,
   color: theme.textMuted,
 }
+
+export const dangerButton = {
+  padding: '9px 14px',
+  borderRadius: 6,
+  background: 'rgba(196, 92, 74, 0.08)',
+  color: theme.danger,
+  border: `1px solid rgba(196, 92, 74, 0.25)`,
+  cursor: 'pointer',
+  fontWeight: 700,
+  fontSize: 13,
+  fontFamily: theme.bodyFont,
+} as const

@@ -11,6 +11,7 @@ export function SettingsPanel() {
   const [xeroToken, setXeroToken] = useState<XeroToken>(null)
   const [loadingXero, setLoadingXero] = useState(true)
   const [wiping, setWiping] = useState(false)
+  const [disconnecting, setDisconnecting] = useState(false)
   const searchParams = useSearchParams()
 
   useEffect(() => {
