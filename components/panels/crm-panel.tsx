@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { cardStyle, pageTitle, secondaryButton, theme } from '@/lib/theme'
 
 type Customer = {
   id: string
@@ -61,47 +62,49 @@ export function CrmPanel() {
     }
   }
 
-  const card = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px' }
+  const thStyle = { padding: '8px 12px', textAlign: 'left' as const, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: theme.textMuted, fontWeight: 500 }
+  const tdStyle = { padding: '10px 12px', fontSize: 13, color: theme.text }
+  const tdMuted = { ...tdStyle, color: theme.textMuted }
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase' }}>CRM</h1>
-        <div style={{ fontSize: 13, color: 'rgba(240,236,228,0.5)' }}>{customers.length} contacts</div>
+        <h1 style={pageTitle}>CRM</h1>
+        <div style={{ fontSize: 13, color: theme.textMuted }}>{customers.length} contacts</div>
       </div>
 
-      <div style={card}>
-        {loading ? <div style={{ color: 'rgba(240,236,228,0.4)', padding: 12 }}>Loading...</div> : (
+      <div style={cardStyle}>
+        {loading ? <div style={{ color: theme.textFaint, padding: 12 }}>Loading...</div> : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(240,236,228,0.1)' }}>
+              <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
                 {['Name', 'Email', 'Phone', 'Bookings', 'First Seen', xeroConnected ? 'Xero Invoiced' : null, xeroConnected ? 'Xero Status' : null, xeroConnected ? 'Xero' : null].filter(Boolean).map(h => (
-                  <th key={h!} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.4)', fontWeight: 500 }}>{h}</th>
+                  <th key={h!} style={thStyle}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {customers.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: 'rgba(240,236,228,0.4)' }}>No customers yet</td></tr>}
+              {customers.length === 0 && <tr><td colSpan={8} style={{ padding: 24, textAlign: 'center', color: theme.textFaint }}>No customers yet</td></tr>}
               {customers.map(c => (
-                <tr key={c.id} style={{ borderBottom: '1px solid rgba(240,236,228,0.06)' }}>
-                  <td style={{ padding: '10px 12px', fontSize: 13, fontWeight: 500 }}>{c.name}</td>
-                  <td style={{ padding: '10px 12px', fontSize: 13, color: 'rgba(240,236,228,0.6)' }}>{c.email}</td>
-                  <td style={{ padding: '10px 12px', fontSize: 13, color: 'rgba(240,236,228,0.6)' }}>{c.phone || '—'}</td>
-                  <td style={{ padding: '10px 12px', fontSize: 13 }}>{c.total_bookings || 0}</td>
-                  <td style={{ padding: '10px 12px', fontSize: 13, color: 'rgba(240,236,228,0.6)' }}>{format(new Date(c.created_at), 'd MMM yyyy')}</td>
+                <tr key={c.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                  <td style={{ ...tdStyle, fontWeight: 500 }}>{c.name}</td>
+                  <td style={tdMuted}>{c.email}</td>
+                  <td style={tdMuted}>{c.phone || '—'}</td>
+                  <td style={tdStyle}>{c.total_bookings || 0}</td>
+                  <td style={tdMuted}>{format(new Date(c.created_at), 'd MMM yyyy')}</td>
                   {xeroConnected && (
                     <>
-                      <td style={{ padding: '10px 12px', fontSize: 13 }}>
+                      <td style={tdStyle}>
                         {typeof c.xero_total_invoiced === 'number' ? `R ${c.xero_total_invoiced.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
                       </td>
-                      <td style={{ padding: '10px 12px', fontSize: 13, color: c.xero_contact_id ? '#4caf84' : 'rgba(240,236,228,0.5)' }}>
+                      <td style={{ ...tdStyle, color: c.xero_contact_id ? theme.success : theme.textMuted }}>
                         {c.xero_last_status || (c.xero_contact_id ? 'In Xero' : '—')}
                       </td>
                       <td style={{ padding: '10px 12px' }}>
                         {c.xero_contact_id ? (
-                          <span style={{ fontSize: 12, color: '#4caf84' }}>✓ In Xero</span>
+                          <span style={{ fontSize: 12, color: theme.success }}>✓ In Xero</span>
                         ) : (
-                          <button onClick={() => createXeroContact(c)} style={{ padding: '4px 10px', fontSize: 11, borderRadius: 4, border: '1px solid rgba(184,149,106,0.3)', background: 'transparent', color: '#b8956a', cursor: 'pointer', fontFamily: "'Barlow', sans-serif" }}>
+                          <button onClick={() => createXeroContact(c)} style={{ ...secondaryButton, padding: '4px 10px', fontSize: 11 }}>
                             Add to Xero
                           </button>
                         )}

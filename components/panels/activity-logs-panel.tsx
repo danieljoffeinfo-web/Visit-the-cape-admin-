@@ -5,9 +5,9 @@ import { format } from 'date-fns'
 import { toast } from 'sonner'
 import type { ActivityLogEntry } from '@/lib/auth-types'
 import { UserColorBadge } from '@/components/user-badge'
+import { cardStyle, inputStyle, pageTitle, theme } from '@/lib/theme'
 
-const card = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px' }
-const muted = 'rgba(240,236,228,0.45)'
+const muted = theme.textMuted
 
 export function ActivityLogsPanel() {
   const [logs, setLogs] = useState<ActivityLogEntry[]>([])
@@ -52,43 +52,33 @@ export function ActivityLogsPanel() {
   const entityTypes = useMemo(() => [...new Set(logs.map((l) => l.entity_type))].sort(), [logs])
   const actions = useMemo(() => [...new Set(logs.map((l) => l.action))].sort(), [logs])
 
-  const inputStyle = {
-    padding: '7px 10px',
-    borderRadius: 5,
-    border: '1px solid rgba(240,236,228,0.12)',
-    background: 'rgba(240,236,228,0.04)',
-    color: '#f0ece4',
-    fontSize: 12,
-    fontFamily: "'Barlow', sans-serif",
-  } as const
+  const filterInput = { ...inputStyle, padding: '7px 10px', fontSize: 12 }
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          Activity Logs
-        </h1>
+        <h1 style={pageTitle}>Activity Logs</h1>
         <div style={{ fontSize: 13, color: muted }}>{logs.length} entries</div>
       </div>
 
-      <div style={{ ...card, marginBottom: 20, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-        <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)} style={inputStyle}>
+      <div style={{ ...cardStyle, marginBottom: 20, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+        <select value={userFilter} onChange={(e) => setUserFilter(e.target.value)} style={filterInput}>
           <option value="">All users</option>
           {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
-        <select value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)} style={inputStyle}>
+        <select value={entityFilter} onChange={(e) => setEntityFilter(e.target.value)} style={filterInput}>
           <option value="">All entity types</option>
           {entityTypes.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={inputStyle}>
+        <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={filterInput}>
           <option value="">All actions</option>
           {actions.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={inputStyle} />
-        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} style={inputStyle} />
+        <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={filterInput} />
+        <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} style={filterInput} />
       </div>
 
-      <div style={card}>
+      <div style={cardStyle}>
         {loading ? (
           <div style={{ color: muted, padding: 12 }}>Loading activity logs...</div>
         ) : logs.length === 0 ? (
@@ -102,24 +92,24 @@ export function ActivityLogsPanel() {
                   display: 'flex',
                   gap: 14,
                   padding: '14px 0',
-                  borderBottom: '1px solid rgba(240,236,228,0.06)',
+                  borderBottom: `1px solid ${theme.border}`,
                   flexWrap: 'wrap',
                 }}
               >
                 <div style={{ minWidth: 140, flexShrink: 0 }}>
                   <UserColorBadge name={log.user_name} color={log.user_color} />
-                  <div style={{ fontSize: 11, color: 'rgba(240,236,228,0.35)', marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: theme.textFaint, marginTop: 4 }}>
                     {format(new Date(log.created_at), 'd MMM yyyy · HH:mm')}
                   </div>
                 </div>
                 <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{log.action}</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: theme.text }}>{log.action}</div>
                   <div style={{ fontSize: 12, color: muted, marginTop: 3 }}>
                     {log.entity_type}
                     {log.entity_label ? ` · ${log.entity_label}` : ''}
                   </div>
                   {(log.old_value || log.new_value) && (
-                    <div style={{ fontSize: 11, color: 'rgba(240,236,228,0.35)', marginTop: 6, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 11, color: theme.textFaint, marginTop: 6, lineHeight: 1.5 }}>
                       {log.old_value && log.new_value ? 'Updated record' : log.new_value ? 'New record' : 'Previous record removed'}
                     </div>
                   )}
