@@ -15,6 +15,8 @@ export const theme = {
   bronzeBorder: 'rgba(184, 149, 106, 0.28)',
   success: '#3d8b63',
   danger: '#c45c4a',
+  modalOverlay: 'rgba(44, 38, 32, 0.18)',
+  modalShadow: '0 16px 48px rgba(44, 38, 32, 0.12)',
   headingFont: "'Barlow Condensed', sans-serif",
   bodyFont: "'Barlow', sans-serif",
 } as const

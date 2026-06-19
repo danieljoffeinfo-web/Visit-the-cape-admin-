@@ -112,7 +112,7 @@ export function VehicleEditorDialog({
         position: 'fixed',
         inset: 0,
         zIndex: 200,
-        background: 'rgba(44, 38, 32, 0.45)',
+        background: theme.modalOverlay,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -131,7 +131,7 @@ export function VehicleEditorDialog({
           background: theme.surface,
           borderRadius: 12,
           border: `1px solid ${theme.border}`,
-          boxShadow: '0 20px 60px rgba(44, 38, 32, 0.18)',
+          boxShadow: theme.modalShadow,
           padding: 24,
         }}
         onClick={(event) => event.stopPropagation()}

@@ -1,22 +1,56 @@
 'use client'
 
 import { useState, Suspense, useEffect, useCallback } from 'react'
+import dynamic from 'next/dynamic'
 import { Sidebar } from '@/components/sidebar'
 import { AuthProvider, useAuth } from '@/components/auth-provider'
 import { UserColorBadge } from '@/components/user-badge'
-import { DashboardPanel } from '@/components/panels/dashboard-panel'
-import { BookingsPanel, parseBookingsTab } from '@/components/panels/bookings-panel'
-import { EnquiriesPanel } from '@/components/panels/enquiries-panel'
-import { ToursPanel } from '@/components/panels/tours-panel'
-import { AccountingPanel } from '@/components/panels/accounting-panel'
-import { CrmPanel } from '@/components/panels/crm-panel'
-import { SettingsPanel } from '@/components/panels/settings-panel'
-import { FleetPanel } from '@/components/panels/fleet-panel'
-import { CalendarPanel } from '@/components/panels/calendar-panel'
-import { ActivityLogsPanel } from '@/components/panels/activity-logs-panel'
+import { PanelLoader } from '@/components/panel-loader'
+import { parseBookingsTab } from '@/components/panels/bookings-panel'
 import { useSearchParams, useRouter } from 'next/navigation'
 import type { BookingTab } from '@/lib/bookings'
 import { theme } from '@/lib/theme'
+
+const DashboardPanel = dynamic(
+  () => import('@/components/panels/dashboard-panel').then((m) => ({ default: m.DashboardPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const BookingsPanel = dynamic(
+  () => import('@/components/panels/bookings-panel').then((m) => ({ default: m.BookingsPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const CalendarPanel = dynamic(
+  () => import('@/components/panels/calendar-panel').then((m) => ({ default: m.CalendarPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const EnquiriesPanel = dynamic(
+  () => import('@/components/panels/enquiries-panel').then((m) => ({ default: m.EnquiriesPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const ToursPanel = dynamic(
+  () => import('@/components/panels/tours-panel').then((m) => ({ default: m.ToursPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const FleetPanel = dynamic(
+  () => import('@/components/panels/fleet-panel').then((m) => ({ default: m.FleetPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const AccountingPanel = dynamic(
+  () => import('@/components/panels/accounting-panel').then((m) => ({ default: m.AccountingPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const CrmPanel = dynamic(
+  () => import('@/components/panels/crm-panel').then((m) => ({ default: m.CrmPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const SettingsPanel = dynamic(
+  () => import('@/components/panels/settings-panel').then((m) => ({ default: m.SettingsPanel })),
+  { loading: () => <PanelLoader /> },
+)
+const ActivityLogsPanel = dynamic(
+  () => import('@/components/panels/activity-logs-panel').then((m) => ({ default: m.ActivityLogsPanel })),
+  { loading: () => <PanelLoader /> },
+)
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
@@ -73,14 +107,6 @@ function NotApprovedScreen() {
   )
 }
 
-function PanelSlot({ active, name, children }: { active: boolean; name: Panel; children: React.ReactNode }) {
-  return (
-    <div hidden={!active} aria-hidden={!active} style={{ display: active ? 'block' : 'none' }}>
-      {children}
-    </div>
-  )
-}
-
 function AdminApp() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -91,7 +117,6 @@ function AdminApp() {
     if (searchParams?.get('xero')) return 'settings'
     return readStoredPanel() || resolveInitialPanel(legacyPanel)
   })
-  const [visited, setVisited] = useState<Set<Panel>>(() => new Set([panel]))
   const [bookingsTab, setBookingsTab] = useState<BookingTab>(() => {
     if (legacyPanel === 'tour-bookings') return 'tours'
     if (legacyPanel === 'internal-bookings') return 'internal'
@@ -102,7 +127,6 @@ function AdminApp() {
   )
 
   useEffect(() => {
-    setVisited((prev) => new Set(prev).add(panel))
     sessionStorage.setItem(PANEL_STORAGE_KEY, panel)
   }, [panel])
 
@@ -164,56 +188,16 @@ function AdminApp() {
         </div>
 
         <div style={{ padding: 28, flex: 1 }}>
-          {visited.has('dashboard') && (
-            <PanelSlot active={panel === 'dashboard'} name="dashboard">
-              <DashboardPanel onNavigate={navigate} />
-            </PanelSlot>
-          )}
-          {visited.has('bookings') && (
-            <PanelSlot active={panel === 'bookings'} name="bookings">
-              <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />
-            </PanelSlot>
-          )}
-          {visited.has('calendar') && (
-            <PanelSlot active={panel === 'calendar'} name="calendar">
-              <CalendarPanel />
-            </PanelSlot>
-          )}
-          {visited.has('enquiries') && (
-            <PanelSlot active={panel === 'enquiries'} name="enquiries">
-              <EnquiriesPanel />
-            </PanelSlot>
-          )}
-          {visited.has('tours') && (
-            <PanelSlot active={panel === 'tours'} name="tours">
-              <ToursPanel />
-            </PanelSlot>
-          )}
-          {visited.has('fleet') && (
-            <PanelSlot active={panel === 'fleet'} name="fleet">
-              <FleetPanel onNavigate={navigate} />
-            </PanelSlot>
-          )}
-          {visited.has('accounting') && (
-            <PanelSlot active={panel === 'accounting'} name="accounting">
-              <AccountingPanel />
-            </PanelSlot>
-          )}
-          {visited.has('crm') && (
-            <PanelSlot active={panel === 'crm'} name="crm">
-              <CrmPanel />
-            </PanelSlot>
-          )}
-          {visited.has('settings') && (
-            <PanelSlot active={panel === 'settings'} name="settings">
-              <SettingsPanel />
-            </PanelSlot>
-          )}
-          {visited.has('activity-logs') && (
-            <PanelSlot active={panel === 'activity-logs'} name="activity-logs">
-              <ActivityLogsPanel />
-            </PanelSlot>
-          )}
+          {panel === 'dashboard' && <DashboardPanel onNavigate={navigate} />}
+          {panel === 'bookings' && <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />}
+          {panel === 'calendar' && <CalendarPanel />}
+          {panel === 'enquiries' && <EnquiriesPanel />}
+          {panel === 'tours' && <ToursPanel />}
+          {panel === 'fleet' && <FleetPanel onNavigate={navigate} />}
+          {panel === 'accounting' && <AccountingPanel />}
+          {panel === 'crm' && <CrmPanel />}
+          {panel === 'settings' && <SettingsPanel />}
+          {panel === 'activity-logs' && <ActivityLogsPanel />}
         </div>
       </div>
     </div>

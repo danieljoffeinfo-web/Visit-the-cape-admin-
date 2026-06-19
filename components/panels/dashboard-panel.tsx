@@ -3,14 +3,6 @@
 import { useEffect, useState } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
-  getCrmSnapshot,
-  getFleetStatus,
-  getOutstandingInvoices,
-  getRevenueLast7Days,
-  getSeatsRemainingNext30Days,
-  getUnreadEnquiries,
-  getUnreadEnquiriesCount,
-  getUpcomingDeparturesNext7Days,
   type CrmSnapshot,
   type DepartureRow,
   type EnquiryRow,
@@ -142,34 +134,20 @@ export function DashboardPanel({
   async function loadDashboard() {
     setLoading(true)
     try {
-      const [
-        unreadTotal,
-        seats,
-        invoiceData,
-        schedule,
-        unreadFeed,
-        revenue,
-        fleetStatus,
-        crmData,
-      ] = await Promise.all([
-        getUnreadEnquiriesCount(),
-        getSeatsRemainingNext30Days(),
-        getOutstandingInvoices(),
-        getUpcomingDeparturesNext7Days(),
-        getUnreadEnquiries(5),
-        getRevenueLast7Days(),
-        getFleetStatus(),
-        getCrmSnapshot(),
-      ])
+      const res = await fetch('/api/dashboard/snapshot', { cache: 'no-store' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load dashboard')
 
-      setUnreadCount(unreadTotal)
-      setSeatsRemaining(seats)
-      setInvoices(invoiceData)
-      setDepartures(schedule)
-      setEnquiries(unreadFeed)
-      setRevenueDays(revenue)
-      setFleet(fleetStatus)
-      setCrm(crmData)
+      setUnreadCount(data.unreadCount ?? 0)
+      setSeatsRemaining(data.seatsRemaining ?? 0)
+      setInvoices(data.invoices ?? { connected: false, total: null, fallback: 'no_data' })
+      setDepartures(data.departures ?? [])
+      setEnquiries(data.unreadEnquiries ?? [])
+      setRevenueDays(data.revenueDays ?? [])
+      setFleet(data.fleet ?? [])
+      setCrm(data.crm ?? { newThisWeek: 0, totalCustomers: 0, repeatBookerPercent: null })
+    } catch (error) {
+      console.error('Dashboard load error:', error)
     } finally {
       setLoading(false)
     }
