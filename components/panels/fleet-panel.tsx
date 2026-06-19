@@ -15,6 +15,16 @@ import {
   vehicleSeats,
 } from '@/lib/fleet'
 import { uploadFleetVehicleImage, VehicleImageThumb, VehicleImageUpload } from '@/components/fleet/vehicle-image-upload'
+import {
+  cardStyle,
+  fieldLabel,
+  inputStyle,
+  pageTitle,
+  primaryButton,
+  secondaryButton,
+  sectionTitle,
+  theme,
+} from '@/lib/theme'
 
 type VehicleRow = {
   id: string
@@ -454,7 +464,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     }
   }
 
-  const card = { background: '#1a1815', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, padding: '20px 24px' }
+  const card = cardStyle
   const hasVehicles = vehicles.length > 0
   const vehicleButtonLabel = selectedVehicle ? `${selectedVehicle.title} · ${vehicleRegistration(selectedVehicle) || 'No reg'}` : hasVehicles ? 'Select vehicle' : 'Add a vehicle first'
 
@@ -462,10 +472,10 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
         <div>
-          <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 900, fontSize: 28, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Fleet Manager</h1>
-          <p style={{ color: 'rgba(240,236,228,0.55)', fontSize: 13, marginTop: 2 }}>Manage vehicles, lock in rental dates, and push each booking into Xero.</p>
+          <h1 style={pageTitle}>Fleet Manager</h1>
+          <p style={{ color: theme.textMuted, fontSize: 13, marginTop: 2 }}>Manage vehicles, lock in rental dates, and push each booking into Xero.</p>
         </div>
-        <button onClick={() => onNavigate('calendar')} style={{ padding: '8px 16px', borderRadius: 6, background: 'transparent', color: '#b8956a', border: '1px solid rgba(184,149,106,0.35)', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Barlow', sans-serif" }}>
+        <button onClick={() => onNavigate('calendar')} style={secondaryButton}>
           Open Calendar
         </button>
       </div>
@@ -478,9 +488,9 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           { label: 'Fleet Revenue', value: money(stats.totalRevenue), sub: 'All saved rentals' },
         ].map((item) => (
           <div key={item.label} style={card}>
-            <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.45)', marginBottom: 8 }}>{item.label}</div>
-            <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 26, color: '#f0ece4' }}>{loading ? '—' : item.value}</div>
-            <div style={{ color: 'rgba(240,236,228,0.4)', fontSize: 12, marginTop: 6 }}>{item.sub}</div>
+            <div style={{ ...fieldLabel, marginBottom: 8 }}>{item.label}</div>
+            <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 26, color: theme.text }}>{loading ? '—' : item.value}</div>
+            <div style={{ color: theme.textFaint, fontSize: 12, marginTop: 6 }}>{item.sub}</div>
           </div>
         ))}
       </div>
@@ -489,8 +499,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
             <div>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Add Vehicle</div>
-              <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>Keep this hidden until you need it, then click the plus to open the full vehicle form.</div>
+              <div style={sectionTitle}>Add Vehicle</div>
+              <div style={{ color: theme.textMuted, fontSize: 13, marginTop: 4 }}>Keep this hidden until you need it, then click the plus to open the full vehicle form.</div>
             </div>
             <TogglePlusButton open={showVehicleForm} onClick={() => setShowVehicleForm((current) => !current)} />
           </div>
@@ -517,8 +527,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
             <div>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Book Out Vehicle</div>
-              <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>Create the rental, store the customer details, and raise the Xero invoice automatically.</div>
+              <div style={sectionTitle}>Book Out Vehicle</div>
+              <div style={{ color: theme.textMuted, fontSize: 13, marginTop: 4 }}>Create the rental, store the customer details, and raise the Xero invoice automatically.</div>
             </div>
             <TogglePlusButton open={showBookingForm} onClick={() => setShowBookingForm((current) => !current)} />
           </div>
@@ -529,7 +539,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                 <span style={fieldLabel}>Vehicle</span>
                 <button type="button" onClick={() => hasVehicles && setVehiclePickerOpen((current) => !current)} style={{ ...selectorButton, opacity: hasVehicles ? 1 : 0.65, cursor: hasVehicles ? 'pointer' : 'not-allowed' }}>
                   <span>{vehicleButtonLabel}</span>
-                  <span style={{ color: 'rgba(240,236,228,0.45)' }}>{hasVehicles ? (vehiclePickerOpen ? '▴' : '▾') : '+'}</span>
+                  <span style={{ color: theme.textMuted }}>{hasVehicles ? (vehiclePickerOpen ? '▴' : '▾') : '+'}</span>
                 </button>
               </label>
 
@@ -563,10 +573,10 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                           style={{
                             textAlign: 'left',
                             borderRadius: 8,
-                            border: `1px solid ${active ? 'rgba(184,149,106,0.35)' : 'rgba(240,236,228,0.10)'}`,
-                            background: active ? 'rgba(184,149,106,0.12)' : 'rgba(240,236,228,0.03)',
+                            border: `1px solid ${active ? theme.bronzeBorder : theme.border}`,
+                            background: active ? theme.bronzeBg : theme.surfaceMuted,
                             padding: '12px 14px',
-                            color: '#f0ece4',
+                            color: theme.text,
                             cursor: 'pointer',
                           }}
                         >
@@ -578,7 +588,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                                 <div style={mutedSmall}>{vehicleRegistration(vehicle) || 'No registration'} · {buildSeatsLabel(vehicleSeats(vehicle) || 0)}</div>
                               </div>
                             </div>
-                            <div style={{ fontWeight: 700, color: '#d7bc94' }}>{vehicle.base_price ? money(Number(vehicle.base_price)) : 'No rate'}</div>
+                            <div style={{ fontWeight: 700, color: theme.bronzeDark }}>{vehicle.base_price ? money(Number(vehicle.base_price)) : 'No rate'}</div>
                           </div>
                         </button>
                       )
@@ -608,7 +618,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
               </div>
 
               {selectedVehicle && (
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: 'rgba(240,236,228,0.03)', border: '1px solid rgba(240,236,228,0.08)' }}>
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: theme.surfaceMuted, border: `1px solid ${theme.border}` }}>
                   <VehicleImageThumb imageUrl={selectedVehicle.image_url} title={selectedVehicle.title} size={56} />
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, flex: 1 }}>
                     <MiniInfo label="Registration" value={vehicleRegistration(selectedVehicle) || '—'} />
@@ -620,13 +630,13 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
               )}
 
               {suggestedAmount > 0 && !bookingForm.amount && (
-                <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(100,149,237,0.10)', border: '1px solid rgba(100,149,237,0.18)', color: '#cfe0ff', fontSize: 13 }}>
+                <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(100,149,237,0.08)', border: '1px solid rgba(100,149,237,0.2)', color: '#3a5f9e', fontSize: 13 }}>
                   Suggested amount from the saved day rate: {money(suggestedAmount)}.
                 </div>
               )}
 
               {selectedVehicleConflicts.length > 0 && (
-                <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(239,83,80,0.08)', border: '1px solid rgba(239,83,80,0.22)', color: '#f2b5b3', fontSize: 13 }}>
+                <div style={{ padding: '12px 14px', borderRadius: 8, background: 'rgba(196,92,74,0.08)', border: '1px solid rgba(196,92,74,0.22)', color: theme.danger, fontSize: 13 }}>
                   That date range clashes with {selectedVehicleConflicts[0].customerName}'s booking from {format(parseISO(selectedVehicleConflicts[0].startDate), 'd MMM yyyy')} to {format(parseISO(selectedVehicleConflicts[0].endDate), 'd MMM yyyy')}.
                 </div>
               )}
@@ -657,8 +667,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>
-              <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Fleet Bookings</div>
-              <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginTop: 4 }}>{bookingDetails.length} active rentals tracked in Bookings.</div>
+              <div style={sectionTitle}>Fleet Bookings</div>
+              <div style={{ color: theme.textMuted, fontSize: 13, marginTop: 4 }}>{bookingDetails.length} active rentals tracked in Bookings.</div>
             </div>
             <button type="button" onClick={() => onNavigate('bookings')} style={secondaryButton}>
               View in Bookings →
@@ -671,7 +681,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {bookingDetails.slice(0, 5).map((item) => (
-                <div key={item.booking.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', background: 'rgba(240,236,228,0.02)', display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div key={item.booking.id} style={{ padding: '12px 14px', borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.surfaceMuted, display: 'flex', gap: 12, alignItems: 'center' }}>
                   <VehicleImageThumb imageUrl={item.vehicleImageUrl} title={item.vehicleName} size={48} />
                   <div>
                     <div style={{ fontWeight: 700 }}>{item.vehicleName}</div>
@@ -681,17 +691,17 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                 </div>
               ))}
               {bookingDetails.length > 5 && (
-                <div style={{ fontSize: 12, color: 'rgba(240,236,228,0.45)' }}>+ {bookingDetails.length - 5} more in Bookings → Fleet</div>
+                <div style={{ fontSize: 12, color: theme.textMuted }}>+ {bookingDetails.length - 5} more in Bookings → Fleet</div>
               )}
             </div>
           )}
         </div>
 
         <div style={{ ...card, minHeight: 420 }}>
-          <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>Revenue Per Vehicle</div>
-          <div style={{ color: 'rgba(240,236,228,0.45)', fontSize: 13, marginBottom: 18 }}>Pie chart based on every saved fleet booking amount.</div>
+          <div style={{ ...sectionTitle, marginBottom: 6 }}>Revenue Per Vehicle</div>
+          <div style={{ color: theme.textMuted, fontSize: 13, marginBottom: 18 }}>Pie chart based on every saved fleet booking amount.</div>
           {revenueByVehicle.length === 0 ? (
-            <div style={{ color: 'rgba(240,236,228,0.4)', paddingTop: 40 }}>Create your first fleet booking to start the revenue chart.</div>
+            <div style={{ color: theme.textFaint, paddingTop: 40 }}>Create your first fleet booking to start the revenue chart.</div>
           ) : (
             <>
               <div style={{ width: '100%', height: 260 }}>
@@ -724,25 +734,25 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       </div>
 
       <div style={card}>
-        <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 18, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 16 }}>Fleet Vehicles</div>
+        <div style={{ ...sectionTitle, marginBottom: 16 }}>Fleet Vehicles</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14 }}>
           {loading ? (
-            <div style={{ color: 'rgba(240,236,228,0.4)' }}>Loading vehicles…</div>
+            <div style={{ color: theme.textFaint }}>Loading vehicles…</div>
           ) : vehicles.length === 0 ? (
-            <div style={{ color: 'rgba(240,236,228,0.4)' }}>No vehicles added yet</div>
+            <div style={{ color: theme.textFaint }}>No vehicles added yet</div>
           ) : vehicles.map((vehicle) => {
             const vehicleBookings = bookingDetails.filter((item) => item.vehicleId === vehicle.id)
             const revenue = vehicleBookings.reduce((sum, item) => sum + item.totalAmount, 0)
             const isEditingVehicle = editingVehicleId === vehicle.id
             return (
-              <div key={vehicle.id} style={{ borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', background: 'rgba(240,236,228,0.02)', padding: 16, overflow: 'hidden' }}>
+              <div key={vehicle.id} style={vehicleCard}>
                 {vehicle.image_url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={vehicle.image_url} alt={vehicle.title} style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 6, marginBottom: 14 }} />
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                   <div>
-                    <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20 }}>{vehicle.title}</div>
+                    <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 20, color: theme.text }}>{vehicle.title}</div>
                     <div style={mutedSmall}>{vehicleRegistration(vehicle) || 'Registration pending'}</div>
                   </div>
                   <button type="button" onClick={() => isEditingVehicle ? cancelVehicleEdit() : startVehicleEdit(vehicle)} style={secondaryButton}>
@@ -820,30 +830,25 @@ function SelectField({ label, value, onChange, options }: { label: string; value
 
 function MiniInfo({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(240,236,228,0.04)' }}>
-      <div style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.38)', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontWeight: 700 }}>{value}</div>
+    <div style={{ padding: '10px 12px', borderRadius: 8, background: theme.surfaceMuted, border: `1px solid ${theme.border}` }}>
+      <div style={{ ...fieldLabel, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontWeight: 700, color: theme.text }}>{value}</div>
     </div>
   )
 }
 
 function TogglePlusButton({ open, onClick }: { open: boolean; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} style={{ width: 42, height: 42, borderRadius: 999, border: '1px solid rgba(184,149,106,0.28)', background: 'rgba(184,149,106,0.10)', color: '#d7bc94', cursor: 'pointer', fontSize: 24, lineHeight: 1, fontWeight: 700 }}>
+    <button type="button" onClick={onClick} style={{ width: 42, height: 42, borderRadius: 999, border: `1px solid ${theme.bronzeBorder}`, background: theme.bronzeBg, color: theme.bronzeDark, cursor: 'pointer', fontSize: 24, lineHeight: 1, fontWeight: 700 }}>
       {open ? '−' : '+'}
     </button>
   )
 }
 
-const fieldLabel = { fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'rgba(240,236,228,0.45)' }
-const fieldInput = { background: '#100f0d', border: '1px solid rgba(240,236,228,0.12)', borderRadius: 8, color: '#f0ece4', padding: '10px 12px', fontSize: 14, outline: 'none' }
-const primaryButton = { padding: '10px 16px', borderRadius: 6, background: '#b8956a', color: '#0c0b09', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 14, fontFamily: "'Barlow', sans-serif" }
-const secondaryButton = { padding: '9px 14px', borderRadius: 6, background: 'transparent', color: '#d7bc94', border: '1px solid rgba(184,149,106,0.30)', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Barlow', sans-serif" }
-const dangerButton = { padding: '9px 14px', borderRadius: 6, background: 'rgba(239,83,80,0.10)', color: '#f2b5b3', border: '1px solid rgba(239,83,80,0.25)', cursor: 'pointer', fontWeight: 700, fontSize: 13, fontFamily: "'Barlow', sans-serif" }
-const tableHead = { padding: '8px 12px', textAlign: 'left' as const, fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase' as const, color: 'rgba(240,236,228,0.4)', fontWeight: 500 }
-const tableCell = { padding: '12px', verticalAlign: 'top' as const }
-const emptyCell = { padding: 24, textAlign: 'center' as const, color: 'rgba(240,236,228,0.4)' }
-const mutedSmall = { fontSize: 12, color: 'rgba(240,236,228,0.45)', marginTop: 4 }
-const collapsedHint = { padding: '12px 14px', borderRadius: 8, background: 'rgba(240,236,228,0.03)', border: '1px dashed rgba(240,236,228,0.12)', color: 'rgba(240,236,228,0.45)', fontSize: 13 }
+const fieldInput = inputStyle
+const mutedSmall = { fontSize: 12, color: theme.textMuted, marginTop: 4 }
+const emptyCell = { padding: 24, textAlign: 'center' as const, color: theme.textFaint }
+const collapsedHint = { padding: '12px 14px', borderRadius: 8, background: theme.surfaceMuted, border: `1px dashed ${theme.borderStrong}`, color: theme.textMuted, fontSize: 13 }
 const selectorButton = { ...fieldInput, display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', textAlign: 'left' as const, cursor: 'pointer' }
-const pickerCard = { display: 'grid', gap: 10, borderRadius: 8, border: '1px solid rgba(240,236,228,0.10)', background: 'rgba(240,236,228,0.02)', padding: 12 }
+const pickerCard = { display: 'grid', gap: 10, borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.surfaceMuted, padding: 12 }
+const vehicleCard = { borderRadius: 8, border: `1px solid ${theme.border}`, background: theme.surface, padding: 16, overflow: 'hidden' as const, boxShadow: '0 1px 3px rgba(44, 38, 32, 0.04)' }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
+import { fieldLabel, secondaryButton, theme } from '@/lib/theme'
 
 type VehicleImageUploadProps = {
   vehicleId?: string | null
@@ -11,8 +12,6 @@ type VehicleImageUploadProps = {
   onFileSelect?: (file: File | null) => void
   compact?: boolean
 }
-
-const fieldLabel = { fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: 'rgba(240,236,228,0.45)' }
 
 export async function uploadFleetVehicleImage(vehicleId: string, file: File) {
   const formData = new FormData()
@@ -93,8 +92,8 @@ export function VehicleImageUpload({
             width: compact ? 72 : 120,
             height: compact ? 72 : 90,
             borderRadius: 8,
-            border: '1px solid rgba(240,236,228,0.12)',
-            background: 'rgba(240,236,228,0.03)',
+            border: `1px solid ${theme.border}`,
+            background: theme.surfaceMuted,
             overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
@@ -106,7 +105,7 @@ export function VehicleImageUpload({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={displayUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
-            <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(240,236,228,0.28)', textAlign: 'center', padding: 8 }}>
+            <span style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textFaint, textAlign: 'center', padding: 8 }}>
               No photo
             </span>
           )}
@@ -117,21 +116,11 @@ export function VehicleImageUpload({
             type="button"
             disabled={uploading}
             onClick={() => inputRef.current?.click()}
-            style={{
-              padding: '9px 14px',
-              borderRadius: 6,
-              background: 'transparent',
-              color: '#d7bc94',
-              border: '1px solid rgba(184,149,106,0.30)',
-              cursor: uploading ? 'not-allowed' : 'pointer',
-              fontWeight: 700,
-              fontSize: 13,
-              fontFamily: "'Barlow', sans-serif",
-            }}
+            style={{ ...secondaryButton, opacity: uploading ? 0.7 : 1, cursor: uploading ? 'not-allowed' : 'pointer' }}
           >
             {uploading ? 'Uploading…' : displayUrl ? 'Replace photo' : 'Choose photo'}
           </button>
-          <span style={{ fontSize: 12, color: 'rgba(240,236,228,0.42)', lineHeight: 1.45 }}>
+          <span style={{ fontSize: 12, color: theme.textMuted, lineHeight: 1.45 }}>
             {deferUpload ? 'Photo uploads when you save the vehicle · JPEG, PNG, or WebP · max 5 MB' : 'JPEG, PNG, or WebP · max 5 MB'}
           </span>
         </div>
@@ -152,7 +141,7 @@ export function VehicleImageThumb({ imageUrl, title, size = 44 }: { imageUrl?: s
         height: size,
         borderRadius: 6,
         objectFit: 'cover',
-        border: '1px solid rgba(240,236,228,0.10)',
+        border: `1px solid ${theme.border}`,
         flexShrink: 0,
       }}
     />

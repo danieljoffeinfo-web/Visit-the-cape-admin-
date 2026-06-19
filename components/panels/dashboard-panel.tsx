@@ -40,7 +40,7 @@ function formatZAR(amount: number) {
 
 function FleetStatusDot({ status }: { status: FleetVehicleStatus['status'] }) {
   const color =
-    status === 'available' ? '#4caf84' : status === 'on_tour' ? '#b8956a' : 'rgba(240,236,228,0.35)'
+    status === 'available' ? theme.success : status === 'on_tour' ? theme.bronze : theme.textFaint
   return (
     <span
       style={{
@@ -58,7 +58,7 @@ function FleetStatusDot({ status }: { status: FleetVehicleStatus['status'] }) {
 function ProgressBar({ filled, total }: { filled: number; total: number }) {
   const pct = total > 0 ? Math.min(100, (filled / total) * 100) : 0
   return (
-    <div style={{ height: 4, borderRadius: 2, background: 'rgba(240,236,228,0.08)', overflow: 'hidden', marginTop: 6 }}>
+    <div style={{ height: 4, borderRadius: 2, background: theme.surfaceMuted, overflow: 'hidden', marginTop: 6 }}>
       <div
         style={{
           height: '100%',
@@ -94,7 +94,7 @@ function RevenueSparkline({ days }: { days: RevenueDay[] }) {
               maxWidth: 36,
               height: `${Math.max(4, (d.amount / max) * 56)}px`,
               borderRadius: 3,
-              background: d.amount > 0 ? 'rgba(184,149,106,0.75)' : 'rgba(240,236,228,0.06)',
+              background: d.amount > 0 ? theme.bronze : theme.surfaceMuted,
             }}
             title={d.amount > 0 ? formatZAR(d.amount) : undefined}
           />
@@ -110,7 +110,7 @@ function PulseSkeleton() {
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
       {[0, 1, 2].map((i) => (
         <div key={i} style={{ ...card, minHeight: 100, opacity: 0.5 }}>
-          <div style={{ height: 10, width: '50%', background: 'rgba(240,236,228,0.08)', borderRadius: 4, marginBottom: 12 }} />
+          <div style={{ height: 10, width: '50%', background: theme.surfaceMuted, borderRadius: 4, marginBottom: 12 }} />
           <div style={{ height: 32, width: '30%', background: 'rgba(184,149,106,0.15)', borderRadius: 4 }} />
         </div>
       ))}
@@ -277,7 +277,7 @@ export function DashboardPanel({
                   fontFamily: "'Barlow Condensed', sans-serif",
                   fontWeight: 900,
                   fontSize: 36,
-                  color: p.urgent ? '#b8956a' : 'rgba(240,236,228,0.85)',
+                  color: p.urgent ? theme.bronze : theme.text,
                   lineHeight: 1,
                 }}
               >
@@ -338,7 +338,7 @@ export function DashboardPanel({
             departures.map((d) => (
               <div
                 key={d.id}
-                style={{ padding: '12px 0', borderBottom: '1px solid rgba(240,236,228,0.06)' }}
+                style={{ padding: '12px 0', borderBottom: `1px solid ${theme.border}` }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -394,7 +394,7 @@ export function DashboardPanel({
               <div
                 key={e.id}
                 className="enquiry-row"
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderBottom: '1px solid rgba(240,236,228,0.06)' }}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 0', borderBottom: `1px solid ${theme.border}` }}
                 onClick={() => onNavigate('enquiries')}
                 role="button"
                 tabIndex={0}
@@ -465,7 +465,7 @@ export function DashboardPanel({
                   alignItems: 'center',
                   gap: 10,
                   padding: '8px 0',
-                  borderBottom: '1px solid rgba(240,236,228,0.06)',
+                  borderBottom: `1px solid ${theme.border}`,
                 }}
               >
                 <FleetStatusDot status={v.status} />
@@ -493,14 +493,14 @@ export function DashboardPanel({
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                 <span style={{ fontSize: 12, color: muted }}>Total customers</span>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24, color: 'rgba(240,236,228,0.85)' }}>
+                <span style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 24, color: theme.text }}>
                   {crm.totalCustomers}
                 </span>
               </div>
               {crm.repeatBookerPercent !== null && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <span style={{ fontSize: 12, color: muted }}>Repeat bookers</span>
-                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24, color: 'rgba(240,236,228,0.85)' }}>
+                  <span style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 24, color: theme.text }}>
                     {crm.repeatBookerPercent}%
                   </span>
                 </div>
@@ -522,7 +522,7 @@ export function DashboardPanel({
               alignItems: 'center',
               gap: 12,
               padding: '10px 0',
-              borderBottom: '1px solid rgba(240,236,228,0.06)',
+              borderBottom: `1px solid ${theme.border}`,
               cursor: 'pointer',
             }}
           >
