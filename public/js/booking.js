@@ -1,13 +1,57 @@
   (function () {
 
+    /* Back nav: never patch pushState or redirect to /#tours — that breaks the site. */
+    var returningFromTour = false;
+
+    try { sessionStorage.removeItem('vtc_nav_from_tour'); } catch (_) {}
+
+    function resetBookingModal() {
+      var modal = document.getElementById('booking-modal');
+      if (modal) modal.classList.remove('open');
+      if (document.body.style.overflow === 'hidden') document.body.style.overflow = '';
+      document.querySelectorAll('.booking-step').forEach(function (el) { el.classList.remove('active'); });
+      var typeStep = document.getElementById('step-type');
+      if (typeStep) typeStep.classList.add('active');
+    }
+
+    function isHomepageContentMissing() {
+      if (location.pathname !== '/') return false;
+      var tours = document.getElementById('tours');
+      if (!tours) return true;
+      return !tours.querySelector('a[href^="/tours/"]');
+    }
+
+    function reloadCleanHomepage() {
+      returningFromTour = false;
+      resetBookingModal();
+      window.location.href = '/';
+    }
+
+    document.addEventListener('click', function (e) {
+      var link = e.target.closest && e.target.closest('a[href^="/tours/"]');
+      if (link) returningFromTour = true;
+    }, true);
+
+    window.addEventListener('popstate', function () {
+      resetBookingModal();
+      if (location.pathname !== '/') return;
+      window.setTimeout(function () {
+        if (returningFromTour || isHomepageContentMissing()) reloadCleanHomepage();
+      }, 50);
+    });
+
+    window.addEventListener('pageshow', function (e) {
+      resetBookingModal();
+      if (e.persisted && location.pathname === '/') reloadCleanHomepage();
+    });
+
+    window.addEventListener('pagehide', resetBookingModal);
+
     const bkState = {
       experience: '', date: null, passengers: 4,
       tagPassengers: 1, selectedTour: null,
       calYear: 0, calMonth: 0,
     };
-
-    var TOUR_CARDS_HOME = '/#tours';
-    var NAV_FROM_TOUR_KEY = 'vtc_nav_from_tour';
 
     function resetBookingUi() {
       bkState.experience = '';
@@ -15,84 +59,8 @@
       bkState.passengers = 4;
       bkState.tagPassengers = 1;
       bkState.selectedTour = null;
-      var modal = document.getElementById('booking-modal');
-      if (modal) modal.classList.remove('open');
-      document.body.style.overflow = '';
-      document.querySelectorAll('.booking-step').forEach(function (el) { el.classList.remove('active'); });
-      var typeStep = document.getElementById('step-type');
-      if (typeStep) typeStep.classList.add('active');
+      resetBookingModal();
     }
-
-    function isHomepageBroken() {
-      if (location.pathname !== '/') return false;
-      var tours = document.getElementById('tours');
-      if (!tours) return true;
-      return !tours.querySelector('a[href^="/tours/"]');
-    }
-
-    function cameFromTourPage() {
-      try { return sessionStorage.getItem(NAV_FROM_TOUR_KEY) === '1'; } catch (_) { return false; }
-    }
-
-    function markNavToTour() {
-      try { sessionStorage.setItem(NAV_FROM_TOUR_KEY, '1'); } catch (_) {}
-      resetBookingUi();
-    }
-
-    function goHomeToTourCards() {
-      resetBookingUi();
-      try { sessionStorage.removeItem(NAV_FROM_TOUR_KEY); } catch (_) {}
-      window.location.replace(TOUR_CARDS_HOME);
-    }
-
-    function shouldRestoreHomeTourCards() {
-      if (location.pathname !== '/') return false;
-      var modal = document.getElementById('booking-modal');
-      var modalOpen = modal && modal.classList.contains('open');
-      return cameFromTourPage() || modalOpen || isHomepageBroken();
-    }
-
-    function onPathMaybeTour() {
-      if (location.pathname.indexOf('/tours/') === 0) markNavToTour();
-    }
-
-    try {
-      var origPush = history.pushState;
-      history.pushState = function () {
-        origPush.apply(history, arguments);
-        onPathMaybeTour();
-      };
-      var origReplace = history.replaceState;
-      history.replaceState = function () {
-        origReplace.apply(history, arguments);
-        onPathMaybeTour();
-      };
-    } catch (_) {}
-
-    document.addEventListener('click', function (e) {
-      var link = e.target.closest && e.target.closest('a[href^="/tours/"]');
-      if (link) markNavToTour();
-    }, true);
-
-    window.addEventListener('popstate', function () {
-      resetBookingUi();
-      if (shouldRestoreHomeTourCards()) goHomeToTourCards();
-    });
-
-    window.addEventListener('pageshow', function (e) {
-      resetBookingUi();
-      if (e.persisted || shouldRestoreHomeTourCards()) goHomeToTourCards();
-    });
-
-    window.addEventListener('pagehide', resetBookingUi);
-
-    try {
-      var navEntry = performance.getEntriesByType('navigation')[0];
-      if (navEntry && navEntry.type === 'back_forward' && location.pathname === '/') {
-        goHomeToTourCards();
-        return;
-      }
-    } catch (_) {}
 
     /* Safe text setter — never interpolates into markup */
     function setText(el, str) { if (el) el.textContent = str; }
