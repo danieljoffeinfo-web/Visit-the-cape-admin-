@@ -61,6 +61,35 @@
       recoverBrokenHomepage();
     }
 
+    /* ── Mobile UI fixes (injected — public site CSS has form-row order bug) ── */
+    (function injectMobileStyles() {
+      if (document.getElementById('vtc-mobile-fixes')) return;
+      var style = document.createElement('style');
+      style.id = 'vtc-mobile-fixes';
+      style.textContent = [
+        '@media (max-width:900px){',
+        '.form-row{display:grid!important;grid-template-columns:1fr!important;gap:0!important;margin-bottom:0!important}',
+        '.form-group input,.form-group select,.form-group textarea{font-size:16px!important}',
+        '.modal{max-height:100dvh;overflow-y:auto;-webkit-overflow-scrolling:touch}',
+        '.tour-popular-tag{position:static!important;display:inline-block!important;margin-bottom:.65rem!important}',
+        '.tour-card-content{display:flex;flex-direction:column}',
+        'a.tour-cta,button.tour-cta{display:flex!important;width:100%!important;justify-content:center!important;',
+        'align-items:center!important;padding:1rem 1.25rem!important;font-size:.72rem!important;font-weight:700!important;',
+        'letter-spacing:.16em!important;margin-top:.75rem!important;min-height:48px!important;',
+        '-webkit-tap-highlight-color:transparent;touch-action:manipulation}',
+        'a.tour-cta{background:var(--bronze,#b8956a)!important;color:#1a1408!important;',
+        'border:2px solid var(--bronze,#b8956a)!important;text-decoration:none!important}',
+        'button.tour-cta--secondary,a.tour-cta--secondary{background:transparent!important;color:var(--bronze,#b8956a)!important;',
+        'border:2px solid var(--bronze,#b8956a)!important}',
+        '.btn-fill,.btn-outline,.form-submit,.tour-detail-cta-row .btn-fill{min-height:48px;touch-action:manipulation}',
+        '.tour-detail-cta-row{flex-direction:column;width:100%}',
+        '.tour-detail-cta-row .btn-fill,.tour-detail-cta-row .btn-outline{width:100%;justify-content:center}',
+        '.booking-type-card,.cal-day,.tagalong-tour-item{min-height:48px;touch-action:manipulation}',
+        '}'
+      ].join('');
+      document.head.appendChild(style);
+    })();
+
     const bkState = {
       experience: '', date: null, passengers: 4,
       tagPassengers: 1, selectedTour: null,
@@ -208,7 +237,21 @@
       });
     }
 
-    /* ── PAYGATE REDIRECT ── */
+    /* ── PAYGATE REDIRECT (document.write works on mobile Safari after async fetch) ── */
+    function submitPayGateRedirect(data) {
+      var fields = Object.keys(data.params).map(function (k) {
+        return '<input type="hidden" name="' + esc(k) + '" value="' + esc(data.params[k]) + '">';
+      }).join('');
+      var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+        '<title>Secure Payment</title><style>body{margin:0;font-family:system-ui,sans-serif;background:#0c0b09;color:#f5f0e6;' +
+        'display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center}</style></head><body>' +
+        '<p>Redirecting to secure payment&hellip;</p><form id="pg" method="POST" action="' + esc(data.url) + '">' + fields +
+        '</form><script>document.getElementById("pg").submit();<\/script></body></html>';
+      document.open();
+      document.write(html);
+      document.close();
+    }
+
     function redirectToPayFast(experience, name, email, phone, passengers, dateStr) {
       return fetch('/api/paygate', {
         method: 'POST',
@@ -218,19 +261,8 @@
         if (!resp.ok) return Promise.resolve(false);
         return resp.json();
       }).then(function (data) {
-        if (!data) return false;
-        var form = document.createElement('form');
-        form.method = 'POST';
-        form.action = data.url;
-        Object.keys(data.params).forEach(function (k) {
-          var input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = k;
-          input.value = data.params[k];
-          form.appendChild(input);
-        });
-        document.body.appendChild(form);
-        form.submit();
+        if (!data || !data.url || !data.params) return false;
+        submitPayGateRedirect(data);
         return true;
       }).catch(function () { return false; });
     }
@@ -259,7 +291,7 @@
       btn.disabled = true; setText(btn, 'Processing…'); statusEl.textContent = ''; statusEl.className = 'form-status';
       var dateStr = bkState.date ? bkState.date.toLocaleDateString('en-ZA', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : 'Date TBD';
       var payload = { name: name, email: email, phone: phone || null, experience: bkState.experience, message: '[Private Tour] ' + bkState.passengers + ' passengers · ' + dateStr };
-      await saveEnquiry(payload);
+      await Promise.race([saveEnquiry(payload), new Promise(function (r) { setTimeout(r, 2500); })]);
       setText(btn, 'Redirecting to payment…');
       var ok = await redirectToPayFast(bkState.experience, name, email, phone, bkState.passengers, dateStr);
       if (!ok) {
@@ -394,6 +426,17 @@
         }
       }
     };
+
+    document.addEventListener('click', function (e) {
+      var reserveBtn = e.target.closest('[data-book-tour]');
+      if (reserveBtn) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        var tourName = reserveBtn.getAttribute('data-book-tour');
+        if (tourName) window.openBooking(tourName);
+        return;
+      }
+    }, true);
 
     document.addEventListener('click', function (e) {
       var typeBtn = e.target.closest('[data-booking-type]');
