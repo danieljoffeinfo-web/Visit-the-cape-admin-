@@ -3,7 +3,7 @@
 import { addDays, differenceInCalendarDays, format, isBefore, parseISO } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
 import { buildSeatsLabel, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
-import { VehicleImageThumb } from '@/components/fleet/vehicle-image-upload'
+import { VehiclePreviewCard } from '@/components/fleet/vehicle-preview-card'
 import type { FleetVehicleCardData } from '@/components/fleet/vehicle-card'
 import { fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
@@ -244,23 +244,14 @@ export function BookVehicleDialog({
                 </select>
               </label>
 
-              {selectedVehicle && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: theme.surfaceMuted, borderRadius: 8, border: `1px solid ${theme.border}` }}>
-                  <VehicleImageThumb imageUrl={selectedVehicle.image_url} title={selectedVehicle.title} size={56} />
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedVehicle.title}</div>
-                    <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
-                      {buildSeatsLabel(vehicleSeats(selectedVehicle) || 0)}
-                      {selectedVehicle.base_price ? ` · ${money(Number(selectedVehicle.base_price))}/day` : ''}
-                    </div>
-                  </div>
-                </div>
-              )}
+              {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} />}
             </>
           )}
 
           {step === 1 && (
             <>
+              {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} compact />}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <SelectField label="Use type" value={usageType} onChange={setUsageType} options={[
                   { value: 'tour', label: 'Tour use' },
@@ -300,6 +291,8 @@ export function BookVehicleDialog({
 
           {step === 2 && (
             <>
+              {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} compact />}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <Field label="Customer first name" value={firstName} onChange={setFirstName} />
                 <Field label="Customer surname" value={surname} onChange={setSurname} />
