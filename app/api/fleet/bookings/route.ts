@@ -9,8 +9,10 @@ import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
 import { getApprovedAdminUser } from '@/lib/auth-server'
 import { logActivityServer } from '@/lib/activity-log-server'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const refreshXero = request.nextUrl.searchParams.get('refresh') === 'true'
+
     const [bookingsRes, invoicesRes] = await Promise.all([
       supabaseAdmin
         .from('tour_bookings')
@@ -33,6 +35,13 @@ export async function GET() {
     }
 
     const invoiceLinks = (invoicesRes.data || []) as Array<{ booking_id: string; xero_invoice_id?: string | null; xero_invoice_number?: string | null; status?: string | null }>
+
+    if (!refreshXero) {
+      return NextResponse.json({
+        bookings: bookingsRes.data || [],
+        invoiceLinks,
+      })
+    }
 
     let auth: Awaited<ReturnType<typeof getAuthedXeroClient>> = null
     try {

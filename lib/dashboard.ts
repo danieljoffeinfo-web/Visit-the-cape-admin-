@@ -54,7 +54,13 @@ function isUnreadEnquiry(enquiry: EnquiryRow): boolean {
   return UNREAD_STATUSES.includes(status)
 }
 
-async function fetchEnquiries() {
+let enquiriesCache: { data: EnquiryRow[]; fetchedAt: number } | null = null
+
+async function fetchEnquiries(): Promise<{ data: EnquiryRow[]; error: unknown }> {
+  if (enquiriesCache && Date.now() - enquiriesCache.fetchedAt < 30_000) {
+    return { data: enquiriesCache.data, error: null }
+  }
+
   const withStatus = await getSupabase()
     .from('enquiries')
     .select('id, name, tour_type, created_at, status')
@@ -68,10 +74,14 @@ async function fetchEnquiries() {
       .order('created_at', { ascending: false })
       .limit(100)
 
-    return { data: (fallback.data || []) as EnquiryRow[], error: fallback.error }
+    const data = (fallback.data || []) as EnquiryRow[]
+    enquiriesCache = { data, fetchedAt: Date.now() }
+    return { data, error: fallback.error }
   }
 
-  return { data: (withStatus.data || []) as EnquiryRow[], error: withStatus.error }
+  const data = (withStatus.data || []) as EnquiryRow[]
+  enquiriesCache = { data, fetchedAt: Date.now() }
+  return { data, error: withStatus.error }
 }
 
 export async function getUnreadEnquiriesCount(): Promise<number> {
