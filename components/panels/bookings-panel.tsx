@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import type { BookingTab, UnifiedBooking } from '@/lib/bookings'
 import { filterBookingsByTab } from '@/lib/bookings'
 import { cardStyle, pageTitle, primaryButton, secondaryButton } from '@/lib/theme'
@@ -74,7 +74,7 @@ export function BookingsPanel({
           .filter((b: UnifiedBooking) => b.kind === 'tour' || b.kind === 'private')
           .map((b: UnifiedBooking) => b.raw_id)
         if (tourIds.length > 0) {
-          const { data: links } = await supabase.from('xero_invoice_links').select('*').in('booking_id', tourIds)
+          const { data: links } = await getSupabase().from('xero_invoice_links').select('*').in('booking_id', tourIds)
           const linkMap: Record<string, InvoiceLink> = {}
           for (const l of links || []) linkMap[l.booking_id] = l
           setInvoiceLinks(linkMap)

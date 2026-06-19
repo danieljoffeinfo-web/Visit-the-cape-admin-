@@ -19,4 +19,7 @@ export function getSupabaseBrowserClient() {
   return browserClient
 }
 
-export const supabase = getSupabaseBrowserClient()
+/** Lazy accessor — never initialize at module load (avoids crashing the app shell). */
+export function getSupabase() {
+  return getSupabaseBrowserClient()
+}
