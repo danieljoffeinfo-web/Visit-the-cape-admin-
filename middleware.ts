@@ -2,7 +2,13 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { getSupabaseAnonKey, getSupabaseUrl } from '@/lib/supabase-env'
 
-const PUBLIC_PATHS = ['/login', '/api/xero/callback', '/api/xero/connect']
+const PUBLIC_PATHS = [
+  '/login',
+  '/api/xero/callback',
+  '/api/xero/connect',
+  '/api/website/enquiry',
+  '/js/',
+]
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
