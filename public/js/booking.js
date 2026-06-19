@@ -47,6 +47,20 @@
 
     window.addEventListener('pagehide', resetBookingModal);
 
+    function recoverBrokenHomepage() {
+      if (location.pathname !== '/' || !isHomepageContentMissing()) return;
+      if (location.hash) {
+        try { history.replaceState(null, '', '/'); } catch (_) {}
+      }
+      window.location.href = '/';
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', recoverBrokenHomepage);
+    } else {
+      recoverBrokenHomepage();
+    }
+
     const bkState = {
       experience: '', date: null, passengers: 4,
       tagPassengers: 1, selectedTour: null,
