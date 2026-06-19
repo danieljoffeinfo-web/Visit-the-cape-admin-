@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthedXeroClient } from '@/lib/xero'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 
 export async function GET() {
   const auth = await getAuthedXeroClient()
@@ -13,7 +13,7 @@ export async function GET() {
     const categories = response.body.trackingCategories || []
 
     // Also load saved mappings
-    const { data: mappings } = await supabase.from('xero_tracking_map').select('*')
+    const { data: mappings } = await getSupabase().from('xero_tracking_map').select('*')
 
     return NextResponse.json({ categories, mappings: mappings || [] })
   } catch (err) {
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { tour_type, xero_category_id, xero_option_id } = body
 
-  const { error } = await supabase.from('xero_tracking_map').upsert(
+  const { error } = await getSupabase().from('xero_tracking_map').upsert(
     { tour_type, xero_category_id, xero_option_id, updated_at: new Date().toISOString() },
     { onConflict: 'tour_type' }
   )

@@ -1,7 +1,25 @@
 import type { NextConfig } from 'next'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
+function firstNonEmpty(...values: Array<string | undefined>) {
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+// Vercel production had empty NEXT_PUBLIC_* while SUPABASE_* held the real values.
+// Map at build time so the client bundle always gets working public credentials.
+const supabaseUrl = firstNonEmpty(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_URL,
+  'https://zsxiflghjqacoayhbsyg.supabase.co',
+)
+
+const supabaseAnonKey = firstNonEmpty(
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+  process.env.SUPABASE_ANON_KEY,
+)
 
 const nextConfig: NextConfig = {
   env: {

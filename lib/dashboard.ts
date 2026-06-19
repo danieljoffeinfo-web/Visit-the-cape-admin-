@@ -1,5 +1,5 @@
 import { addDays, format, isWithinInterval, parseISO, startOfDay } from 'date-fns'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { parseFleetBookingNotes } from '@/lib/fleet'
 
 export type EnquiryRow = {
@@ -55,14 +55,14 @@ function isUnreadEnquiry(enquiry: EnquiryRow): boolean {
 }
 
 async function fetchEnquiries() {
-  const withStatus = await supabase
+  const withStatus = await getSupabase()
     .from('enquiries')
     .select('id, name, tour_type, created_at, status')
     .order('created_at', { ascending: false })
     .limit(100)
 
   if (withStatus.error?.message?.toLowerCase().includes('status')) {
-    const fallback = await supabase
+    const fallback = await getSupabase()
       .from('enquiries')
       .select('id, name, tour_type, created_at')
       .order('created_at', { ascending: false })
@@ -96,7 +96,7 @@ export async function getSeatsRemainingNext30Days(): Promise<number> {
   const today = format(new Date(), 'yyyy-MM-dd')
   const in30 = format(addDays(new Date(), 30), 'yyyy-MM-dd')
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('tag_along_tours')
     .select('seats_total, booked_seats')
     .gte('date', today)
@@ -147,7 +147,7 @@ export async function getUpcomingDeparturesNext7Days(): Promise<DepartureRow[]> 
   const today = format(new Date(), 'yyyy-MM-dd')
   const in7 = format(addDays(new Date(), 7), 'yyyy-MM-dd')
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('tag_along_tours')
     .select('*')
     .gte('date', today)
@@ -181,7 +181,7 @@ function buildEmptyRevenueDays(): RevenueDay[] {
 export async function getRevenueLast7Days(): Promise<RevenueDay[]> {
   const weekAgo = format(addDays(new Date(), -6), 'yyyy-MM-dd')
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from('tag_along_bookings')
     .select('amount, created_at, status')
     .gte('created_at', `${weekAgo}T00:00:00`)
