@@ -14,7 +14,7 @@ import { SettingsPanel } from '@/components/panels/settings-panel'
 import { FleetPanel } from '@/components/panels/fleet-panel'
 import { CalendarPanel } from '@/components/panels/calendar-panel'
 import { ActivityLogsPanel } from '@/components/panels/activity-logs-panel'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import type { BookingTab } from '@/lib/bookings'
 import { theme } from '@/lib/theme'
 
@@ -83,6 +83,7 @@ function PanelSlot({ active, name, children }: { active: boolean; name: Panel; c
 
 function AdminApp() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const { admin, loading, notApproved, signOut } = useAuth()
 
   const legacyPanel = searchParams?.get('panel')
@@ -104,6 +105,12 @@ function AdminApp() {
     setVisited((prev) => new Set(prev).add(panel))
     sessionStorage.setItem(PANEL_STORAGE_KEY, panel)
   }, [panel])
+
+  useEffect(() => {
+    if (!loading && !admin && !notApproved) {
+      router.replace('/login')
+    }
+  }, [loading, admin, notApproved, router])
 
   const changePanel = useCallback((next: Panel) => {
     setPanel(next)
@@ -128,7 +135,13 @@ function AdminApp() {
   }
 
   if (notApproved) return <NotApprovedScreen />
-  if (!admin) return null
+  if (!admin) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.textFaint, background: theme.bg }}>
+        Redirecting…
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: theme.bg }}>
