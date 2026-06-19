@@ -152,3 +152,59 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to update vehicle' }, { status: 500 })
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const vehicleId = String(body?.id || '').trim()
+
+    if (!vehicleId) {
+      return NextResponse.json({ error: 'Vehicle ID is required' }, { status: 400 })
+    }
+
+    const { data: bookings, error: bookingsError } = await supabaseAdmin
+      .from('tour_bookings')
+      .select('id,status')
+      .eq('product_id', vehicleId)
+      .eq('booking_type', 'fleet')
+
+    if (bookingsError) {
+      console.error('Fleet vehicle delete booking check error:', bookingsError)
+      return NextResponse.json({ error: 'Failed to check vehicle bookings' }, { status: 500 })
+    }
+
+    const hasActiveBookings = (bookings || []).some(
+      (row) => (row.status || '').toLowerCase() !== 'cancelled',
+    )
+
+    if (hasActiveBookings) {
+      return NextResponse.json(
+        { error: 'This vehicle has existing bookings. Cancel those bookings first, then delete the vehicle.' },
+        { status: 409 },
+      )
+    }
+
+    const { data: deleted, error } = await supabaseAdmin
+      .from('tour_products')
+      .update({ active: false, updated_at: new Date().toISOString() })
+      .eq('id', vehicleId)
+      .eq('family', 'fleet')
+      .eq('active', true)
+      .select('id')
+      .maybeSingle()
+
+    if (error) {
+      console.error('Fleet vehicle delete error:', error)
+      return NextResponse.json({ error: 'Failed to delete vehicle' }, { status: 500 })
+    }
+
+    if (!deleted) {
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('Fleet vehicle delete route error:', error)
+    return NextResponse.json({ error: 'Failed to delete vehicle' }, { status: 500 })
+  }
+}
