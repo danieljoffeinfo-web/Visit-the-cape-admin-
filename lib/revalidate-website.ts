@@ -1,8 +1,11 @@
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.visitthecape.co.za').replace(/\/$/, '')
-const REVALIDATE_SECRET = process.env.REVALIDATE_SECRET?.trim()
+
+function getRevalidateSecret() {
+  return process.env.REVALIDATE_SECRET?.trim() || process.env.ADMIN_CONTENT_SECRET?.trim() || ''
+}
 
 export async function revalidateWebsitePaths(paths: string[]) {
-  const secret = REVALIDATE_SECRET
+  const secret = getRevalidateSecret()
   if (!secret) {
     console.warn('REVALIDATE_SECRET not set — skipping website cache revalidation')
     return { ok: false, reason: 'missing_secret' as const }
@@ -13,11 +16,11 @@ export async function revalidateWebsitePaths(paths: string[]) {
 
   for (const path of unique) {
     try {
-      const url = `${SITE_URL}/api/revalidate?secret=${encodeURIComponent(secret)}`
+      const url = `${SITE_URL}/api/revalidate`
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ secret, path, tags: ['tours', 'site'] }),
         cache: 'no-store',
       })
       results.push({ path, ok: res.ok, status: res.status })

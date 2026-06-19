@@ -7,7 +7,7 @@ const PUBLIC_PATHS = [
   '/api/xero/callback',
   '/api/xero/connect',
   '/api/website/enquiry',
-  '/js/',
+  '/js',
 ]
 
 function isPublicPath(pathname: string) {
