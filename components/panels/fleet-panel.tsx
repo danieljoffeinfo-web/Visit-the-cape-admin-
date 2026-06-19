@@ -14,6 +14,7 @@ import {
   vehicleRegistration,
   vehicleSeats,
 } from '@/lib/fleet'
+import { uploadFleetVehicleImage, VehicleImageThumb, VehicleImageUpload } from '@/components/fleet/vehicle-image-upload'
 
 type VehicleRow = {
   id: string
@@ -24,6 +25,7 @@ type VehicleRow = {
   pickup_notes?: string | null
   base_price?: number | null
   active?: boolean | null
+  image_url?: string | null
 }
 
 type BookingRow = {
@@ -98,6 +100,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     notes: '',
   })
   const [savingVehicleEdit, setSavingVehicleEdit] = useState(false)
+  const [vehicleImageFile, setVehicleImageFile] = useState<File | null>(null)
 
   useEffect(() => {
     loadFleet()
@@ -143,6 +146,10 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     }
   }
 
+  const vehicleImageById = useMemo(() => {
+    return Object.fromEntries(vehicles.map((vehicle) => [vehicle.id, vehicle.image_url || null]))
+  }, [vehicles])
+
   const bookingDetails = useMemo(() => {
     return bookings
       .map((booking) => {
@@ -159,6 +166,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           vehicleName: notes.vehicle.title,
           registrationNumber: notes.vehicle.registrationNumber,
           seats: notes.vehicle.seats,
+          vehicleImageUrl: notes.vehicle.imageUrl || vehicleImageById[notes.vehicle.id] || null,
           days: notes.rental.days,
           startDate: notes.rental.startDate,
           endDate: notes.rental.endDate,
@@ -170,7 +178,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         }
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item))
-  }, [bookings, invoiceLinks])
+  }, [bookings, invoiceLinks, vehicleImageById])
 
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === (bookingForm.vehicleId || selectedVehicleId)) || vehicles[0] || null
   const selectedVehicleSeats = selectedVehicle ? vehicleSeats(selectedVehicle) : 0
@@ -364,7 +372,16 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       }
 
       toast.success('Vehicle added to fleet manager')
+      if (vehicleImageFile && result.vehicle?.id) {
+        try {
+          await uploadFleetVehicleImage(result.vehicle.id, vehicleImageFile)
+          toast.success('Vehicle photo uploaded')
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Vehicle saved but photo upload failed')
+        }
+      }
       setVehicleForm({ title: '', registrationNumber: '', seats: '7', defaultRate: '', notes: '' })
+      setVehicleImageFile(null)
       setShowVehicleForm(false)
       loadFleet()
     } catch (error) {
@@ -487,6 +504,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
               </div>
               <Input label="Default day rate" type="number" value={vehicleForm.defaultRate} onChange={(value) => setVehicleForm((current) => ({ ...current, defaultRate: value }))} placeholder="2500" />
               <TextArea label="Vehicle notes" value={vehicleForm.notes} onChange={(value) => setVehicleForm((current) => ({ ...current, notes: value }))} placeholder="Driver notes, colour, or vehicle class" />
+              <VehicleImageUpload deferUpload onFileSelect={setVehicleImageFile} />
               <button onClick={saveVehicle} disabled={savingVehicle} style={primaryButton}>
                 {savingVehicle ? 'Saving vehicle…' : 'Save Vehicle'}
               </button>
@@ -553,9 +571,12 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                           }}
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center' }}>
-                            <div>
-                              <div style={{ fontWeight: 700 }}>{vehicle.title}</div>
-                              <div style={mutedSmall}>{vehicleRegistration(vehicle) || 'No registration'} · {buildSeatsLabel(vehicleSeats(vehicle) || 0)}</div>
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center', minWidth: 0 }}>
+                              <VehicleImageThumb imageUrl={vehicle.image_url} title={vehicle.title} size={48} />
+                              <div>
+                                <div style={{ fontWeight: 700 }}>{vehicle.title}</div>
+                                <div style={mutedSmall}>{vehicleRegistration(vehicle) || 'No registration'} · {buildSeatsLabel(vehicleSeats(vehicle) || 0)}</div>
+                              </div>
                             </div>
                             <div style={{ fontWeight: 700, color: '#d7bc94' }}>{vehicle.base_price ? money(Number(vehicle.base_price)) : 'No rate'}</div>
                           </div>
@@ -587,11 +608,14 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
               </div>
 
               {selectedVehicle && (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
-                  <MiniInfo label="Registration" value={vehicleRegistration(selectedVehicle) || '—'} />
-                  <MiniInfo label="Seats" value={buildSeatsLabel(selectedVehicleSeats || 0)} />
-                  <MiniInfo label="Default rate" value={selectedVehicle.base_price ? money(Number(selectedVehicle.base_price)) : 'Set later'} />
-                  <MiniInfo label="Use type" value={usageTypeLabel(bookingForm.usageType)} />
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '10px 12px', borderRadius: 8, background: 'rgba(240,236,228,0.03)', border: '1px solid rgba(240,236,228,0.08)' }}>
+                  <VehicleImageThumb imageUrl={selectedVehicle.image_url} title={selectedVehicle.title} size={56} />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, flex: 1 }}>
+                    <MiniInfo label="Registration" value={vehicleRegistration(selectedVehicle) || '—'} />
+                    <MiniInfo label="Seats" value={buildSeatsLabel(selectedVehicleSeats || 0)} />
+                    <MiniInfo label="Default rate" value={selectedVehicle.base_price ? money(Number(selectedVehicle.base_price)) : 'Set later'} />
+                    <MiniInfo label="Use type" value={usageTypeLabel(bookingForm.usageType)} />
+                  </div>
                 </div>
               )}
 
@@ -647,10 +671,13 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {bookingDetails.slice(0, 5).map((item) => (
-                <div key={item.booking.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', background: 'rgba(240,236,228,0.02)' }}>
-                  <div style={{ fontWeight: 700 }}>{item.vehicleName}</div>
-                  <div style={mutedSmall}>{item.customerName} · {format(parseISO(item.startDate), 'd MMM')} → {format(parseISO(item.endDate), 'd MMM yyyy')}</div>
-                  <div style={{ ...mutedSmall, marginTop: 4 }}>{money(item.totalAmount)} · {item.invoice?.status || 'Pending invoice'}</div>
+                <div key={item.booking.id} style={{ padding: '12px 14px', borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', background: 'rgba(240,236,228,0.02)', display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <VehicleImageThumb imageUrl={item.vehicleImageUrl} title={item.vehicleName} size={48} />
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{item.vehicleName}</div>
+                    <div style={mutedSmall}>{item.customerName} · {format(parseISO(item.startDate), 'd MMM')} → {format(parseISO(item.endDate), 'd MMM yyyy')}</div>
+                    <div style={{ ...mutedSmall, marginTop: 4 }}>{money(item.totalAmount)} · {item.invoice?.status || 'Pending invoice'}</div>
+                  </div>
                 </div>
               ))}
               {bookingDetails.length > 5 && (
@@ -708,7 +735,11 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
             const revenue = vehicleBookings.reduce((sum, item) => sum + item.totalAmount, 0)
             const isEditingVehicle = editingVehicleId === vehicle.id
             return (
-              <div key={vehicle.id} style={{ borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', background: 'rgba(240,236,228,0.02)', padding: 16 }}>
+              <div key={vehicle.id} style={{ borderRadius: 8, border: '1px solid rgba(240,236,228,0.08)', background: 'rgba(240,236,228,0.02)', padding: 16, overflow: 'hidden' }}>
+                {vehicle.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={vehicle.image_url} alt={vehicle.title} style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 6, marginBottom: 14 }} />
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                   <div>
                     <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 20 }}>{vehicle.title}</div>
@@ -734,6 +765,11 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                     </div>
                     <Input label="Default rate" type="number" value={editingVehicleForm.defaultRate} onChange={(value) => setEditingVehicleForm((current) => ({ ...current, defaultRate: value }))} placeholder="2500" />
                     <TextArea label="Vehicle notes" value={editingVehicleForm.notes} onChange={(value) => setEditingVehicleForm((current) => ({ ...current, notes: value }))} placeholder="Driver notes, colour, or vehicle class" />
+                    <VehicleImageUpload
+                      vehicleId={editingVehicleId}
+                      imageUrl={vehicle.image_url}
+                      onUploaded={() => loadFleet()}
+                    />
                     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       <button type="button" onClick={saveVehicleEdit} disabled={savingVehicleEdit} style={primaryButton}>
                         {savingVehicleEdit ? 'Saving…' : 'Save changes'}

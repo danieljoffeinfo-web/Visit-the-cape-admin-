@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { addDays, format } from 'date-fns'
 import { toast } from 'sonner'
 import { isFleetVehicle, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { VehicleImageThumb } from '@/components/fleet/vehicle-image-upload'
 import { cardStyle, fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
 type VehicleRow = {
@@ -13,6 +14,7 @@ type VehicleRow = {
   summary?: string | null
   duration_label?: string | null
   base_price?: number | null
+  image_url?: string | null
 }
 
 export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolean; onSaved: () => void; onCancel: () => void }) {
@@ -48,6 +50,8 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
       })
       .catch(() => toast.error('Failed to load fleet vehicles'))
   }, [])
+
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.id === form.vehicleId) || null
 
   async function submit() {
     if (!form.vehicleId || !form.firstName || !form.surname || !form.email || !form.amount) {
@@ -97,6 +101,14 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
                 </option>
               ))}
             </select>
+            {selectedVehicle && (
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 10 }}>
+                <VehicleImageThumb imageUrl={selectedVehicle.image_url} title={selectedVehicle.title} size={52} />
+                <span style={{ color: theme.textMuted, fontSize: 12 }}>
+                  {selectedVehicle.image_url ? 'Vehicle photo on file' : 'No photo uploaded for this vehicle yet'}
+                </span>
+              </div>
+            )}
           </div>
           <div>
             <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Start date *</label>

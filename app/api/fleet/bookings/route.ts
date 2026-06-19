@@ -15,6 +15,7 @@ type TourProductRow = {
   summary?: string | null
   duration_label?: string | null
   base_price?: number | null
+  image_url?: string | null
 }
 
 export async function GET() {
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     const { data: vehicle, error: vehicleError } = await supabaseAdmin
       .from('tour_products')
-      .select('id,title,family,summary,duration_label,base_price')
+      .select('id,title,family,summary,duration_label,base_price,image_url')
       .eq('id', vehicleId)
       .eq('family', 'fleet')
       .single<TourProductRow>()
@@ -171,6 +172,7 @@ export async function POST(request: NextRequest) {
         title: vehicle.title,
         registrationNumber: vehicleRegistration(vehicle),
         seats: totalSeats,
+        imageUrl: vehicle.image_url || null,
       },
       rental: {
         startDate,

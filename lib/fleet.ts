@@ -7,6 +7,7 @@ export type FleetVehicle = {
   pickup_notes?: string | null
   base_price?: number | null
   active?: boolean | null
+  image_url?: string | null
 }
 
 export type FleetUsageType = 'internal' | 'tour'
@@ -25,6 +26,7 @@ export type FleetBookingNotes = {
     title: string
     registrationNumber: string
     seats: number
+    imageUrl?: string | null
   }
   rental: {
     startDate: string

@@ -38,7 +38,7 @@ export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from('tour_products')
-      .select('id,title,family,summary,duration_label,pickup_notes,base_price,active')
+      .select('id,title,family,summary,duration_label,pickup_notes,base_price,active,image_url')
       .eq('family', 'fleet')
       .order('title', { ascending: true })
 
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
         base_price: vehicle.defaultRate,
         active: true,
       })
-      .select('id,title,summary,duration_label,base_price,pickup_notes,active')
+      .select('id,title,summary,duration_label,base_price,pickup_notes,active,image_url')
       .single()
 
     if (error) {
@@ -127,7 +127,7 @@ export async function PATCH(request: NextRequest) {
       })
       .eq('id', vehicleId)
       .eq('family', 'fleet')
-      .select('id,title,summary,duration_label,base_price,pickup_notes,active')
+      .select('id,title,summary,duration_label,base_price,pickup_notes,active,image_url')
       .single()
 
     if (error || !updatedVehicle) {
