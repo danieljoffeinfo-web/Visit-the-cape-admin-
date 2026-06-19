@@ -3,20 +3,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { differenceInCalendarDays, isValid, parseISO } from 'date-fns'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { buildSeatsLabel, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { getFleetVehicleForBooking } from '@/lib/fleet-db'
 import { getAuthedXeroClient } from '@/lib/xero'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
 import { getApprovedAdminUser } from '@/lib/auth-server'
 import { logActivityServer } from '@/lib/activity-log-server'
-
-type TourProductRow = {
-  id: string
-  title: string
-  family: string
-  summary?: string | null
-  duration_label?: string | null
-  base_price?: number | null
-  image_url?: string | null
-}
 
 export async function GET() {
   try {
@@ -125,12 +116,7 @@ export async function POST(request: NextRequest) {
 
     const bookingUsageType = String(usageType || 'tour').toLowerCase() === 'internal' ? 'internal' : 'tour'
 
-    const { data: vehicle, error: vehicleError } = await supabaseAdmin
-      .from('tour_products')
-      .select('id,title,family,summary,duration_label,base_price,image_url')
-      .eq('id', vehicleId)
-      .eq('family', 'fleet')
-      .single<TourProductRow>()
+    const { data: vehicle, error: vehicleError } = await getFleetVehicleForBooking(vehicleId)
 
     if (vehicleError || !vehicle) {
       return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
