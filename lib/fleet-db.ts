@@ -17,6 +17,7 @@ export async function listFleetVehicles() {
     .from('tour_products')
     .select(LIST_COLUMNS_WITH_IMAGE)
     .eq('family', 'fleet')
+    .eq('active', true)
     .order('title', { ascending: true })
 
   if (withImage.error && isMissingImageUrlColumn(withImage.error.message)) {
@@ -24,6 +25,7 @@ export async function listFleetVehicles() {
       .from('tour_products')
       .select(LIST_COLUMNS)
       .eq('family', 'fleet')
+      .eq('active', true)
       .order('title', { ascending: true })
 
     if (fallback.error) return { data: null, error: fallback.error }

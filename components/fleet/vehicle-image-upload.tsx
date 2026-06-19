@@ -130,20 +130,43 @@ export function VehicleImageUpload({
 }
 
 export function VehicleImageThumb({ imageUrl, title, size = 44 }: { imageUrl?: string | null; title: string; size?: number }) {
-  if (!imageUrl) return null
+  if (imageUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={imageUrl}
+        alt={title}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: 6,
+          objectFit: 'cover',
+          border: `1px solid ${theme.border}`,
+          flexShrink: 0,
+          background: theme.surfaceMuted,
+        }}
+      />
+    )
+  }
+
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={imageUrl}
-      alt={title}
+    <div
+      aria-hidden
       style={{
         width: size,
         height: size,
         borderRadius: 6,
-        objectFit: 'cover',
         border: `1px solid ${theme.border}`,
+        background: theme.surfaceMuted,
         flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: Math.max(14, size * 0.32),
+        opacity: 0.5,
       }}
-    />
+    >
+      🚐
+    </div>
   )
 }
