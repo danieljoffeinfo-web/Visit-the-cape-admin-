@@ -1,5 +1,32 @@
   (function () {
 
+    /* ── Perf + favicon bootstrap (runs before booking logic) ── */
+    (function vcPerfBootstrap() {
+      var CDN = 'https://dft-admin.vercel.app';
+      var head = document.head;
+      if (head && !document.querySelector('link[data-vc-icon]')) {
+        [
+          { rel: 'icon', href: CDN + '/icon.webp', type: 'image/webp' },
+          { rel: 'icon', href: CDN + '/favicon.ico', sizes: 'any' },
+          { rel: 'apple-touch-icon', href: CDN + '/apple-touch-icon.png' },
+        ].forEach(function (cfg) {
+          var link = document.createElement('link');
+          link.rel = cfg.rel;
+          link.href = cfg.href;
+          if (cfg.type) link.type = cfg.type;
+          if (cfg.sizes) link.sizes = cfg.sizes;
+          link.setAttribute('data-vc-icon', '1');
+          head.appendChild(link);
+        });
+      }
+      document.querySelectorAll('link[rel="preload"][as="image"][href^="/images/"]').forEach(function (el) {
+        el.remove();
+      });
+      document.querySelectorAll('link[rel="preload"][as="script"][href*="/js/"]').forEach(function (el) {
+        el.remove();
+      });
+    })();
+
     /* Back nav: never patch pushState or redirect to /#tours — that breaks the site. */
     var returningFromTour = false;
 
