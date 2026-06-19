@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApprovedAdminUser } from '@/lib/auth-server'
 import { getContentSupabaseAdmin, type WebsiteTour } from '@/lib/content-supabase-admin'
+import { revalidateWebsitePaths, tourRevalidationPaths } from '@/lib/revalidate-website'
 
 export async function GET() {
   const admin = await getApprovedAdminUser()
@@ -76,7 +77,11 @@ export async function PATCH(request: NextRequest) {
       .single()
 
     if (error) throw error
-    return NextResponse.json({ tour: data as WebsiteTour })
+
+    const tour = data as WebsiteTour
+    const revalidation = await revalidateWebsitePaths(tourRevalidationPaths(tour))
+
+    return NextResponse.json({ tour, revalidation })
   } catch (error) {
     console.error('Tour update error:', error)
     return NextResponse.json({ error: 'Failed to update tour' }, { status: 500 })
