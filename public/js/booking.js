@@ -237,34 +237,37 @@
       });
     }
 
-    /* ── PAYGATE REDIRECT (document.write works on mobile Safari after async fetch) ── */
-    function submitPayGateRedirect(data) {
-      var fields = Object.keys(data.params).map(function (k) {
-        return '<input type="hidden" name="' + esc(k) + '" value="' + esc(data.params[k]) + '">';
-      }).join('');
-      var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-        '<title>Secure Payment</title><style>body{margin:0;font-family:system-ui,sans-serif;background:#0c0b09;color:#f5f0e6;' +
-        'display:flex;align-items:center;justify-content:center;min-height:100vh;padding:2rem;text-align:center}</style></head><body>' +
-        '<p>Redirecting to secure payment&hellip;</p><form id="pg" method="POST" action="' + esc(data.url) + '">' + fields +
-        '</form><script>document.getElementById("pg").submit();<\/script></body></html>';
-      document.open();
-      document.write(html);
-      document.close();
+    /* ── PAYGATE: sync form POST keeps user-gesture chain (mobile Safari) ── */
+    var PAYGATE_CHECKOUT_URL = 'https://dft-admin.vercel.app/api/paygate/checkout';
+
+    function beginPayGateCheckout(experience, name, email, phone, passengers, dateStr) {
+      var form = document.createElement('form');
+      form.method = 'POST';
+      form.action = PAYGATE_CHECKOUT_URL;
+      form.acceptCharset = 'UTF-8';
+      form.style.display = 'none';
+      var fields = {
+        experience: experience,
+        name: name,
+        email: email,
+        phone: phone || '',
+        passengers: String(passengers),
+        date: dateStr || '',
+      };
+      Object.keys(fields).forEach(function (k) {
+        var input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = k;
+        input.value = fields[k];
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
     }
 
     function redirectToPayFast(experience, name, email, phone, passengers, dateStr) {
-      return fetch('/api/paygate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ experience: experience, name: name, email: email, phone: phone || null, passengers: passengers, date: dateStr })
-      }).then(function (resp) {
-        if (!resp.ok) return Promise.resolve(false);
-        return resp.json();
-      }).then(function (data) {
-        if (!data || !data.url || !data.params) return false;
-        submitPayGateRedirect(data);
-        return true;
-      }).catch(function () { return false; });
+      beginPayGateCheckout(experience, name, email, phone, passengers, dateStr);
+      return Promise.resolve(true);
     }
 
     async function saveEnquiry(payload) {
@@ -281,24 +284,18 @@
     }
 
     /* ── PRIVATE BOOKING SUBMIT ── */
-    window.submitPrivateBooking = async function () {
+    window.submitPrivateBooking = function () {
       var name  = document.getElementById('book-name').value.trim();
       var email = document.getElementById('book-email').value.trim();
       var phone = document.getElementById('book-phone').value.trim();
       var statusEl = document.getElementById('booking-status');
       var btn = document.getElementById('book-submit-btn');
       if (!name || !email) { statusEl.textContent = 'Please fill in your name and email.'; statusEl.className = 'form-status error'; return; }
-      btn.disabled = true; setText(btn, 'Processing…'); statusEl.textContent = ''; statusEl.className = 'form-status';
+      btn.disabled = true; setText(btn, 'Redirecting to payment…'); statusEl.textContent = ''; statusEl.className = 'form-status';
       var dateStr = bkState.date ? bkState.date.toLocaleDateString('en-ZA', { weekday:'long', year:'numeric', month:'long', day:'numeric' }) : 'Date TBD';
       var payload = { name: name, email: email, phone: phone || null, experience: bkState.experience, message: '[Private Tour] ' + bkState.passengers + ' passengers · ' + dateStr };
-      await Promise.race([saveEnquiry(payload), new Promise(function (r) { setTimeout(r, 2500); })]);
-      setText(btn, 'Redirecting to payment…');
-      var ok = await redirectToPayFast(bkState.experience, name, email, phone, bkState.passengers, dateStr);
-      if (!ok) {
-        statusEl.textContent = 'Could not start payment. Please email hello@visitthecape.co.za';
-        statusEl.className = 'form-status error';
-        btn.disabled = false; setText(btn, 'Request Booking →');
-      }
+      saveEnquiry(payload);
+      beginPayGateCheckout(bkState.experience, name, email, phone, bkState.passengers, dateStr);
     };
 
     /* ── TAG ALONG: LOAD TOURS ── */
@@ -465,6 +462,13 @@
       if (closeBtn) {
         e.preventDefault();
         window.closeBooking();
+        return;
+      }
+
+      var submitBtn = e.target.closest('#book-submit-btn');
+      if (submitBtn) {
+        e.preventDefault();
+        window.submitPrivateBooking();
       }
     });
 
