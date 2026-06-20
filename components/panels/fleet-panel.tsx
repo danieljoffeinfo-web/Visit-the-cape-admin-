@@ -363,7 +363,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }} className="admin-grid-4">
         {[
           { label: 'Vehicles', value: stats.vehicles, sub: 'Active fleet' },
           { label: 'On the road', value: stats.activeRentals, sub: 'Rentals today' },
@@ -387,6 +387,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name or registration…"
             style={{ ...inputStyle, maxWidth: 280, padding: '8px 12px', fontSize: 13 }}
+            className="admin-search-input"
           />
         </div>
 
@@ -425,7 +426,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 20, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.05fr 0.95fr', gap: 20, alignItems: 'start' }} className="admin-grid-2col">
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div>

@@ -1,10 +1,17 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
+import './admin-shell.css'
 
 export const metadata: Metadata = {
   title: 'DFT Admin',
   description: 'DF Travel Admin Console',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -108,6 +108,7 @@ export function VehicleEditorDialog({
 
   return (
     <div
+      className="admin-modal-overlay"
       style={{
         position: 'fixed',
         inset: 0,
@@ -123,11 +124,8 @@ export function VehicleEditorDialog({
       <div
         role="dialog"
         aria-modal="true"
+        className="admin-modal"
         style={{
-          width: '100%',
-          maxWidth: 520,
-          maxHeight: '90vh',
-          overflowY: 'auto',
           background: theme.surface,
           borderRadius: 12,
           border: `1px solid ${theme.border}`,
@@ -171,7 +169,7 @@ export function VehicleEditorDialog({
 
         <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14, marginTop: 18 }}>
           <Field label="Vehicle name" value={form.title} onChange={(title) => setForm((c) => ({ ...c, title }))} placeholder="Mercedes Sprinter" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-2">
             <Field label="Registration" value={form.registrationNumber} onChange={(registrationNumber) => setForm((c) => ({ ...c, registrationNumber }))} placeholder="CAA 123 456" />
             <Field label="Seats" type="number" value={form.seats} onChange={(seats) => setForm((c) => ({ ...c, seats }))} placeholder="12" />
           </div>

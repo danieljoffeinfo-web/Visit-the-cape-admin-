@@ -150,6 +150,7 @@ export function BookVehicleDialog({
 
   return (
     <div
+      className="admin-modal-overlay"
       style={{
         position: 'fixed',
         inset: 0,
@@ -165,11 +166,8 @@ export function BookVehicleDialog({
       <div
         role="dialog"
         aria-modal="true"
+        className="admin-modal"
         style={{
-          width: '100%',
-          maxWidth: 520,
-          maxHeight: '90vh',
-          overflowY: 'auto',
           background: theme.surface,
           borderRadius: 12,
           border: `1px solid ${theme.border}`,
@@ -252,7 +250,7 @@ export function BookVehicleDialog({
             <>
               {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} compact />}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-2">
                 <SelectField label="Use type" value={usageType} onChange={setUsageType} options={[
                   { value: 'tour', label: 'Tour use' },
                   { value: 'internal', label: 'Internal use' },
@@ -260,7 +258,7 @@ export function BookVehicleDialog({
                 <Field label="Seats booked" type="number" value={seatsBooked} onChange={setSeatsBooked} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-3">
                 <Field label="Start date" type="date" value={startDate} onChange={handleStartDateChange} />
                 <Field label="End date" type="date" value={endDate} onChange={handleEndDateChange} />
                 <Field label="Days" type="number" value={bookingDays} onChange={handleBookingDaysChange} />
@@ -293,12 +291,12 @@ export function BookVehicleDialog({
             <>
               {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} compact />}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-2">
                 <Field label="Customer first name" value={firstName} onChange={setFirstName} />
                 <Field label="Customer surname" value={surname} onChange={setSurname} />
               </div>
               <Field label="Email" type="email" value={email} onChange={setEmail} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-2">
                 <Field label="Phone" value={phone} onChange={setPhone} />
                 <Field label="Account number" value={accountNumber} onChange={setAccountNumber} />
               </div>
