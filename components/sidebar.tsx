@@ -14,62 +14,84 @@ interface SidebarProps {
   onChange: (p: Panel) => void
   admin?: AdminUser | null
   onSignOut?: () => void
+  mobileOpen?: boolean
+  onClose?: () => void
 }
 
 const navItems = [
   {
     section: 'Main',
     items: [
-      { id: 'dashboard', label: 'Dashboard', icon: <GridIcon />, badge: null },
-      { id: 'bookings', label: 'Bookings', icon: <BookIcon />, badge: null },
-      { id: 'calendar', label: 'Calendar', icon: <CalIcon />, badge: null },
-      { id: 'enquiries', label: 'Enquiries', icon: <MailIcon />, badge: null },
+      { id: 'dashboard', label: 'Dashboard', icon: <GridIcon /> },
+      { id: 'bookings', label: 'Bookings', icon: <BookIcon /> },
+      { id: 'calendar', label: 'Calendar', icon: <CalIcon /> },
+      { id: 'enquiries', label: 'Enquiries', icon: <MailIcon /> },
     ],
   },
   {
     section: 'Operations',
     items: [
-      { id: 'tours', label: 'Tours & Pricing', icon: <MapIcon />, badge: null },
-      { id: 'fleet', label: 'Fleet Manager', icon: <CarIcon />, badge: null },
-      { id: 'accounting', label: 'Accounting', icon: <ChartIcon />, badge: null },
+      { id: 'tours', label: 'Tours & Pricing', icon: <MapIcon /> },
+      { id: 'fleet', label: 'Fleet Manager', icon: <CarIcon /> },
+      { id: 'accounting', label: 'Accounting', icon: <ChartIcon /> },
     ],
   },
   {
     section: null,
     items: [
-      { id: 'crm', label: 'CRM', icon: <UsersIcon />, badge: null },
-      { id: 'activity-logs', label: 'Activity Logs', icon: <LogIcon />, badge: null },
+      { id: 'crm', label: 'CRM', icon: <UsersIcon /> },
+      { id: 'activity-logs', label: 'Activity Logs', icon: <LogIcon /> },
     ],
   },
   {
     section: 'Config',
     items: [
-      { id: 'settings', label: 'Settings', icon: <GearIcon />, badge: null },
+      { id: 'settings', label: 'Settings', icon: <GearIcon /> },
     ],
   },
 ] as const
 
-export function Sidebar({ active, onChange, admin, onSignOut }: SidebarProps) {
+export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClose }: SidebarProps) {
+  function selectPanel(id: Panel) {
+    onChange(id)
+    onClose?.()
+  }
+
   return (
-    <aside style={{
-      width: 240,
-      minHeight: '100vh',
-      background: theme.surface,
-      borderRight: `1px solid ${theme.border}`,
-      display: 'flex',
-      flexDirection: 'column',
-      position: 'fixed',
-      top: 0, left: 0, bottom: 0,
-      zIndex: 100,
-      boxShadow: '2px 0 12px rgba(44, 38, 32, 0.04)',
-    }}>
-      <div style={{ padding: '24px 20px 20px', borderBottom: `1px solid ${theme.border}` }}>
-        <div style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 22, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.bronze, lineHeight: 1 }}>
-          Visit The Cape
+    <aside
+      className={`admin-sidebar${mobileOpen ? ' admin-sidebar--open' : ''}`}
+      aria-hidden={mobileOpen === false ? undefined : mobileOpen ? false : undefined}
+    >
+      <div style={{ padding: '24px 20px 20px', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div>
+          <div style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 22, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.bronze, lineHeight: 1 }}>
+            Visit The Cape
+          </div>
+          <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: theme.textFaint, marginTop: 4 }}>
+            Admin Console
+          </div>
         </div>
-        <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: theme.textFaint, marginTop: 4 }}>
-          Admin Console
-        </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close menu"
+            style={{
+              display: 'none',
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              border: `1px solid ${theme.border}`,
+              background: theme.surface,
+              color: theme.textMuted,
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+            className="admin-sidebar__close"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
@@ -85,7 +107,7 @@ export function Sidebar({ active, onChange, admin, onSignOut }: SidebarProps) {
               return (
                 <button
                   key={item.id}
-                  onClick={() => onChange(item.id as Panel)}
+                  onClick={() => selectPanel(item.id as Panel)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',

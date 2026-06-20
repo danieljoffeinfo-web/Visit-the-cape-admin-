@@ -125,9 +125,23 @@ function AdminApp() {
   const [bookingsAction, setBookingsAction] = useState<string | null>(
     () => searchParams?.get('action') || null,
   )
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
     sessionStorage.setItem(PANEL_STORAGE_KEY, panel)
+  }, [panel])
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [mobileNavOpen])
+
+  useEffect(() => {
+    setMobileNavOpen(false)
   }, [panel])
 
   useEffect(() => {
@@ -168,26 +182,49 @@ function AdminApp() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: theme.bg }}>
-      <Sidebar active={panel} onChange={changePanel} admin={admin} onSignOut={signOut} />
-      <div style={{ marginLeft: 240, flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        <div style={{ height: 60, background: theme.surface, borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', padding: '0 28px', gap: 16, position: 'sticky', top: 0, zIndex: 50 }}>
-          <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 20, letterSpacing: '0.05em', textTransform: 'uppercase', flex: 1, color: theme.text }}>
-            {PANEL_TITLES[panel]}
-          </div>
-          <UserColorBadge name={admin.full_name} color={admin.color} />
-          <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', background: theme.bronzeBg, color: theme.bronzeDark, padding: '4px 10px', borderRadius: 20, border: `1px solid ${theme.bronzeBorder}` }}>
-            Cape Town
-          </div>
+    <div className="admin-shell">
+      <button
+        type="button"
+        className={`admin-sidebar-backdrop${mobileNavOpen ? ' admin-sidebar-backdrop--visible' : ''}`}
+        aria-label="Close menu"
+        onClick={() => setMobileNavOpen(false)}
+        tabIndex={mobileNavOpen ? 0 : -1}
+      />
+      <Sidebar
+        active={panel}
+        onChange={changePanel}
+        admin={admin}
+        onSignOut={signOut}
+        mobileOpen={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+      />
+      <div className="admin-main">
+        <div className="admin-header">
           <button
-            onClick={signOut}
-            style={{ padding: '5px 12px', borderRadius: 4, border: `1px solid ${theme.border}`, background: 'transparent', color: theme.textMuted, cursor: 'pointer', fontSize: 12, fontFamily: theme.bodyFont }}
+            type="button"
+            className="admin-header__menu"
+            aria-label="Open menu"
+            onClick={() => setMobileNavOpen(true)}
           >
-            Logout
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+              <line x1="2" y1="4" x2="14" y2="4" />
+              <line x1="2" y1="8" x2="14" y2="8" />
+              <line x1="2" y1="12" x2="14" y2="12" />
+            </svg>
           </button>
+          <div className="admin-header__title">{PANEL_TITLES[panel]}</div>
+          <div className="admin-header__meta">
+            <span className="user-color-badge">
+              <UserColorBadge name={admin.full_name} color={admin.color} />
+            </span>
+            <div className="admin-header__location">Cape Town</div>
+            <button type="button" onClick={signOut} className="admin-header__logout">
+              Logout
+            </button>
+          </div>
         </div>
 
-        <div style={{ padding: 28, flex: 1 }}>
+        <div className="admin-content">
           {panel === 'dashboard' && <DashboardPanel onNavigate={navigate} />}
           {panel === 'bookings' && <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />}
           {panel === 'calendar' && <CalendarPanel />}

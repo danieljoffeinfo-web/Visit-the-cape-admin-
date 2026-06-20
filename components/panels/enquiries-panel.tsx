@@ -129,7 +129,7 @@ export function EnquiriesPanel() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) minmax(0, 1fr)', gap: 16, minHeight: 520 }}>
+      <div style={{ display: 'grid', gap: 16 }} className="admin-grid-split">
         <div style={{ ...cardStyle, padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '14px 16px', borderBottom: `1px solid ${theme.border}`, fontSize: 12, color: theme.textMuted, fontWeight: 600 }}>
             Inbox · {filtered.length}

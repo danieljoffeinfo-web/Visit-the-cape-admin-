@@ -120,7 +120,7 @@ export function ToursPanel() {
       ) : tours.length === 0 ? (
         <div style={{ ...cardStyle, color: theme.textMuted }}>No tours found on the website database.</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 320px) 1fr', gap: 20, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(240px, 320px) 1fr', gap: 20, alignItems: 'start' }} className="admin-grid-tours">
           <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '14px 16px', borderBottom: `1px solid ${theme.border}`, fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: theme.textMuted, fontWeight: 700 }}>
               Website tours ({tours.length})
