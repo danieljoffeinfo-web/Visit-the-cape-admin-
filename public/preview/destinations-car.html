@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview — Destinations scroll car · Visit the Cape</title>
+  <link rel="icon" href="/icon.webp" type="image/webp" />
+  <link rel="stylesheet" href="https://www.visitthecape.co.za/_next/static/css/eba5f980d2ebb98b.css" />
+  <style>
+    body { margin: 0; }
+    .preview-banner {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 999;
+      background: rgba(184, 149, 106, 0.92); color: #1a1408;
+      font: 600 11px/1.4 system-ui, sans-serif; letter-spacing: 0.14em;
+      text-transform: uppercase; text-align: center; padding: 0.55rem 1rem;
+    }
+    body { padding-top: 2rem; }
+    .preview-spacer { height: 70vh; display: flex; align-items: center; justify-content: center; }
+    .preview-spacer p {
+      font-family: var(--sans); font-size: 0.72rem; letter-spacing: 0.28em;
+      text-transform: uppercase; color: hsla(40,29%,92%,.35);
+    }
+    #vc-car-stage canvas { display: block; }
+  </style>
+</head>
+<body>
+  <div class="preview-banner">Preview only — scroll car animation · not live on visitthecape.co.za</div>
+
+  <div class="preview-spacer"><p>Scroll down ↓</p></div>
+
+  <section id="destinations">
+    <div class="dest-intro" style="background:#131009">
+      <div class="container">
+        <span class="section-label reveal visible">Destinations</span>
+        <h2 class="section-heading reveal visible">Places that<br/>demand to be <em>felt</em></h2>
+      </div>
+    </div>
+    <div>
+      <div class="dest-item">
+        <div class="dest-img-col">
+          <img class="dest-img reveal-img visible" src="https://www.visitthecape.co.za/images/dest-chapmans-peak.jpg" alt="Chapman's Peak coastal drive" decoding="async" />
+        </div>
+        <div class="dest-text-col">
+          <div class="inner">
+            <span class="section-label">01</span>
+            <h3 class="dest-place">Chapman's<br/>Peak</h3>
+            <div class="divider"></div>
+            <p class="section-body">Sheer cliffs dropping to the Atlantic. One of the world's most dramatic coastal drives — 114 curves over 9km of engineered audacity. Best at golden hour, when the rock turns amber.</p>
+            <p class="dest-distance">40 min from Cape Town</p>
+          </div>
+        </div>
+      </div>
+      <div class="dest-item">
+        <div class="dest-img-col">
+          <img class="dest-img reveal-img visible" src="https://www.visitthecape.co.za/images/dest-table-mountain.jpg" alt="Table Mountain summit" loading="lazy" decoding="async" />
+        </div>
+        <div class="dest-text-col">
+          <div class="inner">
+            <span class="section-label">02</span>
+            <h3 class="dest-place">Table<br/>Mountain</h3>
+            <div class="divider"></div>
+            <p class="section-body">One of the oldest mountains on Earth. A flat-topped icon rising 1,086m above the city — draped in cloud, alive with fynbos, overlooking two oceans.</p>
+            <p class="dest-distance">City centre</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="preview-spacer" style="height:50vh"><p>End of preview</p></div>
+
+  <script type="module" src="/js/vc-car.js" data-car="/images/v-class-top.webp"></script>
+</body>
+</html>

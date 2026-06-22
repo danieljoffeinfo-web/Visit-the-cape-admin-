@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   '/api/website/enquiry',
   '/api/paygate/checkout',
   '/js',
+  '/preview',
+  '/images',
 ]
 
 function isPublicPath(pathname: string) {
