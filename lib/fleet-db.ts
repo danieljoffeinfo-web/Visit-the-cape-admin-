@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import type { FleetVehicle } from '@/lib/fleet'
+import { fleetVehicleImageSrc } from '@/lib/fleet-image'
 
 const LIST_COLUMNS = 'id,title,family,summary,duration_label,pickup_notes,base_price,active'
 const LIST_COLUMNS_WITH_IMAGE = `${LIST_COLUMNS},image_url`
@@ -10,6 +11,13 @@ const BOOKING_VEHICLE_COLUMNS_WITH_IMAGE = `${BOOKING_VEHICLE_COLUMNS},image_url
 
 function isMissingImageUrlColumn(message?: string) {
   return (message || '').toLowerCase().includes('image_url')
+}
+
+function withResolvedImageUrl<T extends { image_url?: string | null }>(vehicle: T): T {
+  return {
+    ...vehicle,
+    image_url: fleetVehicleImageSrc(vehicle.image_url),
+  }
 }
 
 export async function listFleetVehicles() {
@@ -34,7 +42,7 @@ export async function listFleetVehicles() {
   }
 
   if (withImage.error) return { data: null, error: withImage.error }
-  return { data: (withImage.data || []) as FleetVehicle[], error: null }
+  return { data: ((withImage.data || []) as FleetVehicle[]).map(withResolvedImageUrl), error: null }
 }
 
 export async function getFleetVehicleDetail(vehicleId: string) {
@@ -58,7 +66,7 @@ export async function getFleetVehicleDetail(vehicleId: string) {
   }
 
   if (withImage.error || !withImage.data) return { data: null, error: withImage.error }
-  return { data: withImage.data, error: null }
+  return { data: withResolvedImageUrl(withImage.data), error: null }
 }
 
 export async function getFleetVehicleForBooking(vehicleId: string) {
@@ -82,5 +90,5 @@ export async function getFleetVehicleForBooking(vehicleId: string) {
   }
 
   if (withImage.error || !withImage.data) return { data: null, error: withImage.error }
-  return { data: withImage.data, error: null }
+  return { data: withResolvedImageUrl(withImage.data), error: null }
 }

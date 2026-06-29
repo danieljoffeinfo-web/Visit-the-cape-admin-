@@ -12,6 +12,7 @@ import {
   vehicleSeats,
 } from '@/lib/fleet'
 import { uploadFleetVehicleImage } from '@/components/fleet/vehicle-image-upload'
+import { fleetVehicleImageSrc } from '@/lib/fleet-image'
 import { VehicleCard } from '@/components/fleet/vehicle-card'
 import { BookVehicleDialog } from '@/components/fleet/book-vehicle-dialog'
 import { VehicleEditorDialog, type VehicleFormValues } from '@/components/fleet/vehicle-editor-dialog'
@@ -135,7 +136,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           days: notes.rental.days,
           totalAmount: Number(booking.amount || notes.rental.totalAmount || 0),
           customerName: fullCustomerName(notes),
-          vehicleImageUrl: notes.vehicle.imageUrl || vehicleImageById[notes.vehicle.id] || null,
+          vehicleImageUrl: fleetVehicleImageSrc(notes.vehicle.imageUrl) || vehicleImageById[notes.vehicle.id] || null,
         }
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item))

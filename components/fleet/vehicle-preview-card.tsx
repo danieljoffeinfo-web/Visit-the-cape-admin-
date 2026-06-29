@@ -3,6 +3,7 @@
 import { buildSeatsLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import type { FleetVehicleCardData } from '@/components/fleet/vehicle-card'
 import { fieldLabel, theme } from '@/lib/theme'
+import { fleetVehicleImageSrc } from '@/lib/fleet-image'
 
 type VehiclePreviewCardProps = {
   vehicle: FleetVehicleCardData
@@ -74,6 +75,8 @@ function VehiclePreviewImage({
   title: string
   height: number
 }) {
+  const resolvedImageUrl = fleetVehicleImageSrc(imageUrl)
+
   return (
     <div
       style={{
@@ -83,13 +86,13 @@ function VehiclePreviewImage({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: imageUrl ? 10 : 16,
+        padding: resolvedImageUrl ? 10 : 16,
       }}
     >
-      {imageUrl ? (
+      {resolvedImageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={imageUrl}
+          src={resolvedImageUrl}
           alt={title}
           style={{
             width: '100%',

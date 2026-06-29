@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { fieldLabel, secondaryButton, theme } from '@/lib/theme'
+import { fleetVehicleImageSrc } from '@/lib/fleet-image'
 
 type VehicleImageUploadProps = {
   vehicleId?: string | null
@@ -46,7 +47,7 @@ export function VehicleImageUpload({
     }
   }, [localPreview])
 
-  const displayUrl = localPreview || imageUrl || null
+  const displayUrl = localPreview || fleetVehicleImageSrc(imageUrl) || null
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -130,11 +131,13 @@ export function VehicleImageUpload({
 }
 
 export function VehicleImageThumb({ imageUrl, title, size = 44 }: { imageUrl?: string | null; title: string; size?: number }) {
-  if (imageUrl) {
+  const resolvedImageUrl = fleetVehicleImageSrc(imageUrl)
+
+  if (resolvedImageUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={imageUrl}
+        src={resolvedImageUrl}
         alt={title}
         style={{
           width: size,

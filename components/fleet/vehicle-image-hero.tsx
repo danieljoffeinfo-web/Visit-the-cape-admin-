@@ -1,6 +1,7 @@
 'use client'
 
 import { fieldLabel, secondaryButton, theme } from '@/lib/theme'
+import { fleetVehicleImageSrc } from '@/lib/fleet-image'
 
 type VehicleImageHeroProps = {
   imageUrl?: string | null
@@ -19,6 +20,8 @@ export function VehicleImageHero({
   uploading,
   onChoosePhoto,
 }: VehicleImageHeroProps) {
+  const resolvedImageUrl = fleetVehicleImageSrc(imageUrl)
+
   return (
     <div
       style={{
@@ -31,10 +34,10 @@ export function VehicleImageHero({
         background: `linear-gradient(145deg, ${theme.surfaceMuted} 0%, ${theme.surface} 100%)`,
       }}
     >
-      {imageUrl ? (
+      {resolvedImageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={imageUrl}
+          src={resolvedImageUrl}
           alt={title}
           style={{
             width: '100%',
@@ -72,7 +75,7 @@ export function VehicleImageHero({
           )}
         </div>
       )}
-      {imageUrl && editable && onChoosePhoto && (
+      {resolvedImageUrl && editable && onChoosePhoto && (
         <button
           type="button"
           onClick={onChoosePhoto}
