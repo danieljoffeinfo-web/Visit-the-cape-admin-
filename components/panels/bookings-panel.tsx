@@ -4,21 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { getSupabase } from '@/lib/supabase'
-import type { BookingTab, UnifiedBooking } from '@/lib/bookings'
+import type { BookingInvoiceLink, BookingTab, UnifiedBooking } from '@/lib/bookings'
 import { filterBookingsByTab } from '@/lib/bookings'
 import { cardStyle, pageTitle, primaryButton, secondaryButton } from '@/lib/theme'
 import { BookingsTabBar } from '@/components/bookings/bookings-tab-bar'
 import { BookingsTable } from '@/components/bookings/bookings-table'
+import { InvoiceViewerDialog } from '@/components/bookings/invoice-viewer-dialog'
 import { CreateTourForm, emptyTourForm } from '@/components/bookings/create-tour-form'
 import { CreateInternalForm, emptyInternalForm } from '@/components/bookings/create-internal-form'
 import { CreateFleetForm } from '@/components/bookings/create-fleet-form'
 
-type InvoiceLink = {
-  booking_id: string
-  xero_invoice_id: string
-  xero_invoice_number?: string
-  status: string
-}
+type InvoiceLink = BookingInvoiceLink
 
 const TAB_CREATE_LABEL: Partial<Record<BookingTab, string>> = {
   tours: '+ New Tour Booking',
@@ -50,6 +46,7 @@ export function BookingsPanel({
   const [invoiceLinks, setInvoiceLinks] = useState<Record<string, InvoiceLink>>({})
   const [xeroConnected, setXeroConnected] = useState(false)
   const [raising, setRaising] = useState<string | null>(null)
+  const [invoiceBooking, setInvoiceBooking] = useState<UnifiedBooking | null>(null)
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab)
@@ -69,16 +66,14 @@ export function BookingsPanel({
       setBookings(data.bookings || [])
       setXeroConnected(!!xeroRes.connected)
 
-      if (xeroRes.connected) {
-        const tourIds = (data.bookings || [])
-          .filter((b: UnifiedBooking) => b.kind === 'tour' || b.kind === 'private')
-          .map((b: UnifiedBooking) => b.raw_id)
-        if (tourIds.length > 0) {
-          const { data: links } = await getSupabase().from('xero_invoice_links').select('*').in('booking_id', tourIds)
-          const linkMap: Record<string, InvoiceLink> = {}
-          for (const l of links || []) linkMap[l.booking_id] = l
-          setInvoiceLinks(linkMap)
-        }
+      const bookingIds = ((data.bookings || []) as UnifiedBooking[]).map((b) => b.raw_id)
+      if (bookingIds.length > 0) {
+        const { data: links } = await getSupabase().from('xero_invoice_links').select('*').in('booking_id', bookingIds)
+        const linkMap: Record<string, InvoiceLink> = {}
+        for (const l of links || []) linkMap[l.booking_id] = l as InvoiceLink
+        setInvoiceLinks(linkMap)
+      } else {
+        setInvoiceLinks({})
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to load bookings')
@@ -201,6 +196,7 @@ export function BookingsPanel({
   }
 
   const createLabel = TAB_CREATE_LABEL[activeTab]
+  const activeInvoiceLink = invoiceBooking ? invoiceLinks[invoiceBooking.raw_id] : null
 
   return (
     <div>
@@ -240,6 +236,7 @@ export function BookingsPanel({
           invoiceLinks={invoiceLinks}
           onCancel={cancelBooking}
           onRaiseInvoice={raiseInvoice}
+          onViewInvoice={setInvoiceBooking}
           raisingId={raising}
           emptyMessage={
             activeTab === 'private'
@@ -250,6 +247,13 @@ export function BookingsPanel({
           }
         />
       </div>
+
+      <InvoiceViewerDialog
+        open={!!invoiceBooking}
+        booking={invoiceBooking}
+        invoiceNumber={activeInvoiceLink?.xero_invoice_number}
+        onClose={() => setInvoiceBooking(null)}
+      />
     </div>
   )
 }

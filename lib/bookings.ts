@@ -161,6 +161,29 @@ export const BOOKING_TABS: { id: BookingTab; label: string }[] = [
   { id: 'private', label: 'Private' },
 ]
 
+export type BookingInvoiceLink = {
+  booking_id: string
+  xero_invoice_id?: string | null
+  xero_invoice_number?: string | null
+  status: string
+}
+
+export function bookingHasViewableInvoice(
+  booking: UnifiedBooking,
+  link?: BookingInvoiceLink | null,
+) {
+  if (link) return true
+  if (booking.invoice_status) return true
+  return booking.kind === 'fleet'
+}
+
+export function invoiceLabelForBooking(
+  booking: UnifiedBooking,
+  link?: BookingInvoiceLink | null,
+) {
+  return link?.status || booking.invoice_status || 'View invoice'
+}
+
 export { cardStyle, inputStyle } from '@/lib/theme'
 
 export const muted = 'rgba(44, 38, 32, 0.55)'

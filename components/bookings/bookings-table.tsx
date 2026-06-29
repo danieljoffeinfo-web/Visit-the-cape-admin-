@@ -1,7 +1,8 @@
 'use client'
 
 import { format } from 'date-fns'
-import type { UnifiedBooking } from '@/lib/bookings'
+import type { BookingInvoiceLink, UnifiedBooking } from '@/lib/bookings'
+import { bookingHasViewableInvoice, invoiceLabelForBooking } from '@/lib/bookings'
 import { SourceBadge, StatusBadge, UserColorBadge } from '@/components/user-badge'
 import { theme } from '@/lib/theme'
 
@@ -19,20 +20,50 @@ const kindLabel: Record<UnifiedBooking['kind'], string> = {
   private: 'Private',
 }
 
-type InvoiceLink = {
-  booking_id: string
-  status: string
-}
-
 type BookingsTableProps = {
   bookings: UnifiedBooking[]
   loading: boolean
   xeroConnected?: boolean
-  invoiceLinks?: Record<string, InvoiceLink>
+  invoiceLinks?: Record<string, BookingInvoiceLink>
   onCancel?: (booking: UnifiedBooking) => void
   onRaiseInvoice?: (booking: UnifiedBooking) => void
+  onViewInvoice?: (booking: UnifiedBooking) => void
   raisingId?: string | null
   emptyMessage?: string
+}
+
+function InvoiceBadge({
+  label,
+  colors,
+  onClick,
+}: {
+  label: string
+  colors: { bg: string; color: string }
+  onClick?: () => void
+}) {
+  const style = {
+    padding: '3px 8px',
+    borderRadius: 12,
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: '0.06em',
+    textTransform: 'uppercase' as const,
+    background: colors.bg,
+    color: colors.color,
+    border: 'none',
+    cursor: onClick ? 'pointer' : 'default',
+    fontFamily: theme.bodyFont,
+  }
+
+  if (!onClick) {
+    return <span style={style}>{label}</span>
+  }
+
+  return (
+    <button type="button" onClick={onClick} style={style} title="View invoice">
+      {label}
+    </button>
+  )
 }
 
 export function BookingsTable({
@@ -42,6 +73,7 @@ export function BookingsTable({
   invoiceLinks = {},
   onCancel,
   onRaiseInvoice,
+  onViewInvoice,
   raisingId,
   emptyMessage = 'No bookings yet',
 }: BookingsTableProps) {
@@ -79,11 +111,22 @@ export function BookingsTable({
         <tbody>
           {bookings.map((b) => {
             const link = invoiceLinks[b.raw_id]
-            const sc = link ? STATUS_COLORS[link.status] || STATUS_COLORS.DRAFT : null
+            const invoiceLabel = invoiceLabelForBooking(b, link)
+            const sc = STATUS_COLORS[invoiceLabel.toUpperCase()] || STATUS_COLORS.DRAFT
+            const canViewInvoice = bookingHasViewableInvoice(b, link)
             const canCancel = b.kind !== 'private' && b.status !== 'cancelled' && (b.kind !== 'tour' || b.source !== 'website')
 
             return (
-              <tr key={b.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
+              <tr
+                key={b.id}
+                style={{
+                  borderBottom: `1px solid ${theme.border}`,
+                  cursor: canViewInvoice && onViewInvoice ? 'pointer' : 'default',
+                }}
+                onClick={() => {
+                  if (canViewInvoice && onViewInvoice) onViewInvoice(b)
+                }}
+              >
                 <td style={{ padding: '10px 12px', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: theme.bronzeDark, fontWeight: 600 }}>
                   {kindLabel[b.kind]}
                 </td>
@@ -111,11 +154,13 @@ export function BookingsTable({
                 <td style={{ padding: '10px 12px' }}>
                   <StatusBadge status={b.status} />
                 </td>
-                <td style={{ padding: '10px 12px' }}>
-                  {link && sc ? (
-                    <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', ...sc }}>
-                      {link.status}
-                    </span>
+                <td style={{ padding: '10px 12px' }} onClick={(event) => event.stopPropagation()}>
+                  {canViewInvoice ? (
+                    <InvoiceBadge
+                      label={invoiceLabel}
+                      colors={sc}
+                      onClick={onViewInvoice ? () => onViewInvoice(b) : undefined}
+                    />
                   ) : onRaiseInvoice && xeroConnected && (b.kind === 'tour' || b.kind === 'private') ? (
                     <button
                       disabled={raisingId === b.raw_id}
@@ -133,13 +178,11 @@ export function BookingsTable({
                     >
                       {raisingId === b.raw_id ? '…' : 'Raise Invoice'}
                     </button>
-                  ) : b.invoice_status ? (
-                    <StatusBadge status={b.invoice_status} />
                   ) : (
                     <span style={{ color: theme.textMuted, fontSize: 12 }}>—</span>
                   )}
                 </td>
-                <td style={{ padding: '10px 12px' }}>
+                <td style={{ padding: '10px 12px' }} onClick={(event) => event.stopPropagation()}>
                   {canCancel && onCancel && (
                     <button
                       onClick={() => onCancel(b)}
