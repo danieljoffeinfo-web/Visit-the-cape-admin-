@@ -67,8 +67,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const imageUrl = await resolveFleetVehicleImageUrl(supabaseAdmin, updated.image_url)
-    return NextResponse.json({ imageUrl })
+    const resolvedImageUrl = await resolveFleetVehicleImageUrl(supabaseAdmin, updated.image_url)
+    return NextResponse.json({ imageUrl: resolvedImageUrl })
   } catch (error) {
     console.error('Fleet vehicle upload route error:', error)
     return NextResponse.json({ error: 'Failed to upload vehicle image' }, { status: 500 })
