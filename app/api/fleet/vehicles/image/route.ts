@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireApprovedAdmin } from '@/lib/auth-server'
 import { FLEET_VEHICLE_BUCKET } from '@/lib/fleet-image'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
@@ -22,11 +21,6 @@ function isSafeStoragePath(path: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const { error } = await requireApprovedAdmin(request)
-  if (error) {
-    return NextResponse.json({ error }, { status: 401 })
-  }
-
   const path = request.nextUrl.searchParams.get('path')?.trim() || ''
   if (!isSafeStoragePath(path)) {
     return NextResponse.json({ error: 'Invalid image path' }, { status: 400 })
@@ -46,7 +40,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(bytes, {
     headers: {
       'Content-Type': contentTypeForPath(path, data.type),
-      'Cache-Control': 'private, max-age=3600, stale-while-revalidate=86400',
+      'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
     },
   })
 }

@@ -8,6 +8,7 @@ const PUBLIC_PATHS = [
   '/api/xero/connect',
   '/api/website/enquiry',
   '/api/paygate/checkout',
+  '/api/fleet/vehicles/image',
   '/js',
 ]
 

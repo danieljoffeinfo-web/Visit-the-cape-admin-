@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { FLEET_VEHICLE_BUCKET, fleetVehicleImageSrc, fleetVehicleStoragePath, validateFleetVehicleImage } from '@/lib/fleet-image'
+import { FLEET_VEHICLE_BUCKET, fleetVehicleStoragePath, resolveFleetVehicleImageUrl, validateFleetVehicleImage } from '@/lib/fleet-image'
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,7 +67,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ imageUrl: fleetVehicleImageSrc(updated.image_url) })
+    const imageUrl = await resolveFleetVehicleImageUrl(supabaseAdmin, updated.image_url)
+    return NextResponse.json({ imageUrl })
   } catch (error) {
     console.error('Fleet vehicle upload route error:', error)
     return NextResponse.json({ error: 'Failed to upload vehicle image' }, { status: 500 })
