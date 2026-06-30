@@ -15,6 +15,13 @@ export async function GET() {
 
   if (error) {
     console.error('Content media list error:', error)
+    if (error.message.toLowerCase().includes('content_media')) {
+      return NextResponse.json({
+        media: [],
+        setupRequired: true,
+        error: 'Run supabase/content_library.sql in the admin Supabase SQL editor.',
+      })
+    }
     return NextResponse.json({ error: 'Failed to load media library' }, { status: 500 })
   }
 

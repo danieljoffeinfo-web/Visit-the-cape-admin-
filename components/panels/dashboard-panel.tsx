@@ -3,14 +3,16 @@
 import { useEffect, useState } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
-  type CrmSnapshot,
   type DepartureRow,
   type EnquiryRow,
   type FleetVehicleStatus,
   type OutstandingInvoices,
   type RevenueDay,
 } from '@/lib/dashboard'
-import { cardStyle, theme } from '@/lib/theme'
+import { cardStyle, dangerButton, theme } from '@/lib/theme'
+import type { BookingTab } from '@/lib/bookings'
+import { ClearDataDialog, useClearAdminData } from '@/components/admin/clear-data-dialog'
+import { toast } from 'sonner'
 
 const card = cardStyle
 
@@ -110,8 +112,6 @@ function PulseSkeleton() {
   )
 }
 
-import type { BookingTab } from '@/lib/bookings'
-
 export function DashboardPanel({
   onNavigate,
 }: {
@@ -125,7 +125,8 @@ export function DashboardPanel({
   const [enquiries, setEnquiries] = useState<EnquiryRow[]>([])
   const [revenueDays, setRevenueDays] = useState<RevenueDay[]>([])
   const [fleet, setFleet] = useState<FleetVehicleStatus[]>([])
-  const [crm, setCrm] = useState<CrmSnapshot>({ newThisWeek: 0, totalCustomers: 0, repeatBookerPercent: null })
+  const [showClearDialog, setShowClearDialog] = useState(false)
+  const { clearing, clearAllData } = useClearAdminData()
 
   useEffect(() => {
     loadDashboard()
@@ -145,7 +146,6 @@ export function DashboardPanel({
       setEnquiries(data.unreadEnquiries ?? [])
       setRevenueDays(data.revenueDays ?? [])
       setFleet(data.fleet ?? [])
-      setCrm(data.crm ?? { newThisWeek: 0, totalCustomers: 0, repeatBookerPercent: null })
     } catch (error) {
       console.error('Dashboard load error:', error)
     } finally {
@@ -154,6 +154,17 @@ export function DashboardPanel({
   }
 
   const revenueTotal = revenueDays.reduce((s, d) => s + d.amount, 0)
+
+  async function handleClearAllData() {
+    try {
+      const data = await clearAllData()
+      toast.success(`All admin data cleared. ${data.fleetPreserved ?? 0} fleet vehicles kept.`)
+      setShowClearDialog(false)
+      await loadDashboard()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to clear data')
+    }
+  }
 
   const pulseCards = [
     {
@@ -455,37 +466,6 @@ export function DashboardPanel({
             ))
           )}
         </div>
-
-        {/* CRM Snapshot */}
-        <div style={card}>
-          <h3 style={{ ...sectionTitle, marginBottom: 14 }}>CRM Snapshot</h3>
-          {loading ? (
-            <div style={{ color: mutedLight, fontSize: 13 }}>Loading CRM...</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 12, color: muted }}>New this week</span>
-                <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 800, fontSize: 24, color: '#b8956a' }}>
-                  {crm.newThisWeek}
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 12, color: muted }}>Total customers</span>
-                <span style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 24, color: theme.text }}>
-                  {crm.totalCustomers}
-                </span>
-              </div>
-              {crm.repeatBookerPercent !== null && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span style={{ fontSize: 12, color: muted }}>Repeat bookers</span>
-                  <span style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 24, color: theme.text }}>
-                    {crm.repeatBookerPercent}%
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Quick Actions */}
@@ -527,6 +507,23 @@ export function DashboardPanel({
           </div>
         ))}
       </div>
+
+      <div style={{ ...card, marginTop: 24, border: '1px solid rgba(196, 92, 74, 0.2)' }}>
+        <h3 style={{ ...sectionTitle, marginBottom: 10, color: theme.danger }}>Clear all data</h3>
+        <p style={{ color: muted, fontSize: 13, lineHeight: 1.6, marginBottom: 14 }}>
+          Remove all bookings, enquiries, customers, and dashboard stats. You will be asked to type a confirmation phrase first.
+        </p>
+        <button type="button" onClick={() => setShowClearDialog(true)} disabled={clearing} style={dangerButton}>
+          Clear all admin data…
+        </button>
+      </div>
+
+      <ClearDataDialog
+        open={showClearDialog}
+        onClose={() => setShowClearDialog(false)}
+        onConfirm={handleClearAllData}
+        loading={clearing}
+      />
     </div>
   )
 }
