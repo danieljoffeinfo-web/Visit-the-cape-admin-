@@ -7,7 +7,7 @@ import { theme } from '@/lib/theme'
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
   | 'tours' | 'fleet' | 'accounting' | 'crm' | 'settings'
-  | 'activity-logs' | 'content-library'
+  | 'activity-logs' | 'content-library' | 'jarvis'
 
 interface SidebarProps {
   active: Panel
@@ -23,6 +23,7 @@ const navItems = [
     section: 'Main',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: <GridIcon /> },
+      { id: 'jarvis', label: 'Jarvis', icon: <SparkIcon /> },
       { id: 'bookings', label: 'Bookings', icon: <BookIcon /> },
       { id: 'calendar', label: 'Calendar', icon: <CalIcon /> },
       { id: 'enquiries', label: 'Enquiries', icon: <MailIcon /> },
@@ -162,6 +163,7 @@ export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClos
 }
 
 function GridIcon() { return <svg viewBox="0 0 16 16" fill="currentColor"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg> }
+function SparkIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M8 1.5l1.2 3.8L13 6.5l-3.8 1.2L8 11.5 6.8 7.7 3 6.5l3.8-1.2L8 1.5z"/><path d="M12.5 10.5l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6.6-1.9z"/></svg> }
 function BookIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="2" width="12" height="12" rx="1.5"/><line x1="5" y1="6" x2="11" y2="6"/><line x1="5" y1="9" x2="9" y2="9"/></svg> }
 function CalIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3" width="12" height="11" rx="1.5"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/></svg> }
 function MailIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><polyline points="2,3 8,9 14,3"/></svg> }
