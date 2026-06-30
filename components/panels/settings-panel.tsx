@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
+import { ClearDataDialog, useClearAdminData } from '@/components/admin/clear-data-dialog'
 import { cardStyle, dangerButton, pageTitle, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
 type XeroToken = { tenant_id: string; org_name: string; expires_at: string; updated_at: string } | null
@@ -10,8 +11,9 @@ type XeroToken = { tenant_id: string; org_name: string; expires_at: string; upda
 export function SettingsPanel() {
   const [xeroToken, setXeroToken] = useState<XeroToken>(null)
   const [loadingXero, setLoadingXero] = useState(true)
-  const [wiping, setWiping] = useState(false)
+  const [showClearDialog, setShowClearDialog] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+  const { clearing, clearAllData } = useClearAdminData()
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -55,18 +57,13 @@ export function SettingsPanel() {
     }
   }
 
-  async function clearRevenueData() {
-    if (!confirm('Clear all bookings, customers, invoice links, and revenue stats? Fleet vehicles will be kept.')) return
-    setWiping(true)
+  async function handleClearAllData() {
     try {
-      const res = await fetch('/api/admin/wipe-revenue', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Wipe failed')
-      toast.success(`Revenue data cleared. ${data.fleetPreserved ?? 0} fleet vehicles kept.`)
+      const data = await clearAllData()
+      toast.success(`All admin data cleared. ${data.fleetPreserved ?? 0} fleet vehicles kept.`)
+      setShowClearDialog(false)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to clear data')
-    } finally {
-      setWiping(false)
     }
   }
 
@@ -123,15 +120,26 @@ export function SettingsPanel() {
         )}
       </div>
 
-      <div style={{ ...card, marginBottom: 20 }}>
-        <h2 style={{ ...sectionTitle, marginBottom: 16 }}>Data</h2>
-        <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16 }}>
-          Remove all bookings, customers, invoice links, and dashboard revenue stats. Fleet vehicles are not deleted.
+      <div style={{ ...card, marginBottom: 20, border: '1px solid rgba(196, 92, 74, 0.2)' }}>
+        <h2 style={{ ...sectionTitle, marginBottom: 16, color: theme.danger }}>Danger zone</h2>
+        <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
+          Permanently clear all bookings, enquiries, customers, invoice links, activity logs, content library, and Jarvis chats.
+          Fleet vehicles, admin users, and your Xero connection are kept.
         </p>
-        <button onClick={clearRevenueData} disabled={wiping} style={dangerButton}>
-          {wiping ? 'Clearing…' : 'Clear revenue & booking data'}
+        <p style={{ color: theme.textFaint, fontSize: 12, marginBottom: 16 }}>
+          Owner account only. You must type a confirmation phrase before anything is deleted.
+        </p>
+        <button type="button" onClick={() => setShowClearDialog(true)} disabled={clearing} style={dangerButton}>
+          Clear all admin data…
         </button>
       </div>
+
+      <ClearDataDialog
+        open={showClearDialog}
+        onClose={() => setShowClearDialog(false)}
+        onConfirm={handleClearAllData}
+        loading={clearing}
+      />
 
       <div style={{ ...card, marginBottom: 20 }}>
         <h2 style={{ ...sectionTitle, marginBottom: 16 }}>Supabase Database</h2>

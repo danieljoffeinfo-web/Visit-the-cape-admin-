@@ -48,6 +48,8 @@ export function ContentLibraryPanel() {
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null)
   const [placement, setPlacement] = useState<ContentPlacement>('post')
   const [caption, setCaption] = useState('')
+  const [setupRequired, setSetupRequired] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const monthKey = format(month, 'yyyy-MM')
@@ -61,7 +63,16 @@ export function ContentLibraryPanel() {
       ])
       const mediaData = await mediaRes.json()
       const allocationData = await allocationsRes.json()
-      if (!mediaRes.ok) throw new Error(mediaData.error || 'Failed to load media')
+      if (!mediaRes.ok) {
+        if (mediaData.setupRequired) {
+          setSetupRequired(true)
+          setMedia([])
+          setAllocations(allocationData.allocations || [])
+          return
+        }
+        throw new Error(mediaData.error || 'Failed to load media')
+      }
+      setSetupRequired(false)
       if (!allocationsRes.ok) throw new Error(allocationData.error || 'Failed to load allocations')
       setMedia(mediaData.media || [])
       setAllocations(allocationData.allocations || [])
@@ -181,8 +192,21 @@ export function ContentLibraryPanel() {
     }
   }
 
+  function openFilePicker() {
+    fileInputRef.current?.click()
+  }
+
   return (
     <div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
+        multiple
+        style={{ display: 'none' }}
+        onChange={(event) => void uploadFiles(event.target.files)}
+      />
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
         <div>
           <h1 style={pageTitle}>Content Library</h1>
@@ -190,19 +214,59 @@ export function ContentLibraryPanel() {
             Upload media once, then allocate it to Instagram, TikTok, and Facebook posts or stories by date.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*,video/*"
-            multiple
-            style={{ display: 'none' }}
-            onChange={(event) => void uploadFiles(event.target.files)}
-          />
-          <button type="button" style={secondaryButton} disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-            {uploading ? 'Uploading…' : 'Upload media'}
-          </button>
+        <button
+          type="button"
+          style={{ ...primaryButton, minWidth: 160, fontSize: 14 }}
+          disabled={uploading || setupRequired}
+          onClick={openFilePicker}
+        >
+          {uploading ? 'Uploading…' : '+ Upload media'}
+        </button>
+      </div>
+
+      {setupRequired && (
+        <div style={{ ...cardStyle, borderColor: theme.bronzeBorder, background: theme.bronzeBg, marginBottom: 20 }}>
+          <strong style={{ color: theme.bronzeDark }}>Database setup required</strong>
+          <p style={{ margin: '8px 0 0', fontSize: 14, color: theme.textMuted }}>
+            Run <code>supabase/content_library.sql</code> in the admin Supabase SQL editor, then refresh. Upload is disabled until then.
+          </p>
         </div>
+      )}
+
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          if (!setupRequired) setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragOver(false)
+          if (!setupRequired) void uploadFiles(e.dataTransfer.files)
+        }}
+        style={{
+          ...cardStyle,
+          marginBottom: 20,
+          border: `2px dashed ${dragOver ? theme.bronze : theme.bronzeBorder}`,
+          background: dragOver ? theme.bronzeBg : theme.surfaceMuted,
+          textAlign: 'center',
+          padding: '28px 20px',
+        }}
+      >
+        <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 18, color: theme.bronzeDark, marginBottom: 8 }}>
+          Upload photos & videos
+        </div>
+        <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16 }}>
+          Drag files here or use the button below. Max 100MB per file.
+        </p>
+        <button
+          type="button"
+          style={{ ...primaryButton, minWidth: 200 }}
+          disabled={uploading || setupRequired}
+          onClick={openFilePicker}
+        >
+          {uploading ? 'Uploading…' : 'Choose files to upload'}
+        </button>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 0.8fr)', gap: 20 }} className="admin-grid-2col">
@@ -369,9 +433,16 @@ export function ContentLibraryPanel() {
           </div>
 
           <div style={cardStyle}>
-            <div style={{ ...sectionTitle, marginBottom: 12 }}>Media library</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <div style={sectionTitle}>Media library</div>
+              <button type="button" onClick={openFilePicker} disabled={uploading || setupRequired} style={{ ...secondaryButton, fontSize: 12 }}>
+                + Add media
+              </button>
+            </div>
             {media.length === 0 ? (
-              <div style={{ color: theme.textMuted, fontSize: 13 }}>Upload photos or videos to start scheduling.</div>
+              <div style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', padding: '24px 12px' }}>
+                No media yet. Use the upload area above to add photos or videos.
+              </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10, maxHeight: 520, overflowY: 'auto' }}>
                 {media.map((item) => {
