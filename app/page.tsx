@@ -55,11 +55,15 @@ const ContentLibraryPanel = dynamic(
   () => import('@/components/panels/content-library-panel').then((m) => ({ default: m.ContentLibraryPanel })),
   { loading: () => <PanelLoader /> },
 )
+const JarvisPanel = dynamic(
+  () => import('@/components/panels/jarvis-panel').then((m) => ({ default: m.JarvisPanel })),
+  { loading: () => <PanelLoader /> },
+)
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
   | 'tours' | 'fleet' | 'accounting' | 'crm' | 'settings'
-  | 'activity-logs' | 'content-library'
+  | 'activity-logs' | 'content-library' | 'jarvis'
 
 const PANEL_STORAGE_KEY = 'vtc_active_panel'
 
@@ -75,6 +79,7 @@ const PANEL_TITLES: Record<Panel, string> = {
   settings: 'Settings',
   'activity-logs': 'Activity Logs',
   'content-library': 'Content Library',
+  jarvis: 'Jarvis',
 }
 
 function resolveInitialPanel(raw: string | null): Panel {
@@ -241,6 +246,7 @@ function AdminApp() {
           {panel === 'settings' && <SettingsPanel />}
           {panel === 'activity-logs' && <ActivityLogsPanel />}
           {panel === 'content-library' && <ContentLibraryPanel />}
+          {panel === 'jarvis' && <JarvisPanel />}
         </div>
       </div>
     </div>
