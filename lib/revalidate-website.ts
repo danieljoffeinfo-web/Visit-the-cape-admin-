@@ -42,3 +42,7 @@ export function tourRevalidationPaths(tour: { slug?: string | null }) {
   if (tour.slug) paths.push(`/tours/${tour.slug}`)
   return paths
 }
+
+export function fleetAvailabilityRevalidationPaths() {
+  return ['/', '/tours', '/fleet', '/contact']
+}

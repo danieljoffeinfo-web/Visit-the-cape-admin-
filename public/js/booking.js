@@ -112,6 +112,7 @@
         '.tour-detail-cta-row{flex-direction:column;width:100%}',
         '.tour-detail-cta-row .btn-fill,.tour-detail-cta-row .btn-outline{width:100%;justify-content:center}',
         '.booking-type-card,.cal-day,.tagalong-tour-item{min-height:48px;touch-action:manipulation}',
+        '.cal-day--booked{opacity:.45;text-decoration:line-through}',
         '}'
       ].join('');
       document.head.appendChild(style);
@@ -122,6 +123,41 @@
       tagPassengers: 1, selectedTour: null,
       calYear: 0, calMonth: 0,
     };
+
+    var FLEET_AVAILABILITY_URL = 'https://dft-admin.vercel.app/api/website/fleet-availability';
+    var fleetFullyBookedDates = new Set();
+    var fleetAvailabilityLoading = false;
+
+    function pad2(n) { return n < 10 ? '0' + n : String(n); }
+    function isoDate(y, m, d) { return y + '-' + pad2(m + 1) + '-' + pad2(d); }
+
+    function loadFleetAvailability(callback) {
+      if (fleetAvailabilityLoading) {
+        if (callback) window.setTimeout(callback, 120);
+        return;
+      }
+      fleetAvailabilityLoading = true;
+      var from = new Date();
+      var to = new Date();
+      to.setMonth(to.getMonth() + 6);
+      var fromStr = isoDate(from.getFullYear(), from.getMonth(), from.getDate());
+      var toStr = isoDate(to.getFullYear(), to.getMonth(), to.getDate());
+      fetch(FLEET_AVAILABILITY_URL + '?from=' + encodeURIComponent(fromStr) + '&to=' + encodeURIComponent(toStr))
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          fleetFullyBookedDates = new Set((data && data.fullyBookedDates) || []);
+          fleetAvailabilityLoading = false;
+          if (callback) callback();
+        })
+        .catch(function () {
+          fleetAvailabilityLoading = false;
+          if (callback) callback();
+        });
+    }
+
+    function isFleetFullyBooked(y, m, d) {
+      return fleetFullyBookedDates.has(isoDate(y, m, d));
+    }
 
     function resetBookingUi() {
       bkState.experience = '';
@@ -177,7 +213,7 @@
       document.querySelectorAll('.booking-step').forEach(function (el) { el.classList.remove('active'); });
       var target = document.getElementById('step-' + step);
       if (target) target.classList.add('active');
-      if (step === 'date')      renderCalendar();
+      if (step === 'date')      loadFleetAvailability(renderCalendar);
       if (step === 'confirm')   renderBookingSummary();
       if (step === 'tagalong')  loadTagAlongTours();
     };
@@ -202,12 +238,14 @@
       for (var i = 0; i < firstDow; i++) rows += '<div class="cal-day cal-day--empty"></div>';
       for (var d = 1; d <= daysInMo; d++) {
         var dt = new Date(yr, mo, d);
-        var disabled = dt < today || dt > maxDate;
+        var fleetBooked = isFleetFullyBooked(yr, mo, d);
+        var disabled = dt < today || dt > maxDate || fleetBooked;
         var isSel = bkState.date && dt.getTime() === bkState.date.getTime();
         var isToday = dt.getTime() === today.getTime();
-        var cls = 'cal-day' + (disabled ? ' cal-day--disabled' : isSel ? ' cal-day--selected' : isToday ? ' cal-day--today' : '');
+        var cls = 'cal-day' + (disabled ? ' cal-day--disabled' : isSel ? ' cal-day--selected' : isToday ? ' cal-day--today' : '') + (fleetBooked ? ' cal-day--booked' : '');
         var dAttr = disabled ? '' : (' data-y="' + yr + '" data-m="' + mo + '" data-d="' + d + '"');
-        rows += '<div class="' + cls + '"' + dAttr + '>' + d + '</div>';
+        var titleAttr = fleetBooked ? ' title="All vehicles booked"' : '';
+        rows += '<div class="' + cls + '"' + dAttr + titleAttr + '>' + d + '</div>';
       }
 
       var widget = document.getElementById('calendar-widget');

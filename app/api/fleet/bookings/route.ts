@@ -8,6 +8,7 @@ import { getAuthedXeroClient } from '@/lib/xero'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
 import { getApprovedAdminUser } from '@/lib/auth-server'
 import { logActivityServer } from '@/lib/activity-log-server'
+import { revalidateFleetAvailabilityOnWebsite } from '@/lib/revalidate-fleet'
 
 export async function GET(request: NextRequest) {
   try {
@@ -248,6 +249,8 @@ export async function POST(request: NextRequest) {
       newValue: { vehicleId: vehicle.id, startDate, endDate, totalAmount },
     })
 
+    void revalidateFleetAvailabilityOnWebsite()
+
     return NextResponse.json({
       booking: {
         id: insertedBooking.id,
@@ -441,6 +444,8 @@ export async function DELETE(request: NextRequest) {
       oldValue: { status: bookingRow.status },
       newValue: { status: 'cancelled' },
     })
+
+    void revalidateFleetAvailabilityOnWebsite()
 
     return NextResponse.json({ ok: true })
   } catch (error) {

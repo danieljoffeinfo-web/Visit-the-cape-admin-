@@ -51,11 +51,15 @@ const ActivityLogsPanel = dynamic(
   () => import('@/components/panels/activity-logs-panel').then((m) => ({ default: m.ActivityLogsPanel })),
   { loading: () => <PanelLoader /> },
 )
+const ContentLibraryPanel = dynamic(
+  () => import('@/components/panels/content-library-panel').then((m) => ({ default: m.ContentLibraryPanel })),
+  { loading: () => <PanelLoader /> },
+)
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
   | 'tours' | 'fleet' | 'accounting' | 'crm' | 'settings'
-  | 'activity-logs'
+  | 'activity-logs' | 'content-library'
 
 const PANEL_STORAGE_KEY = 'vtc_active_panel'
 
@@ -70,6 +74,7 @@ const PANEL_TITLES: Record<Panel, string> = {
   crm: 'CRM',
   settings: 'Settings',
   'activity-logs': 'Activity Logs',
+  'content-library': 'Content Library',
 }
 
 function resolveInitialPanel(raw: string | null): Panel {
@@ -235,6 +240,7 @@ function AdminApp() {
           {panel === 'crm' && <CrmPanel />}
           {panel === 'settings' && <SettingsPanel />}
           {panel === 'activity-logs' && <ActivityLogsPanel />}
+          {panel === 'content-library' && <ContentLibraryPanel />}
         </div>
       </div>
     </div>

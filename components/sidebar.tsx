@@ -7,7 +7,7 @@ import { theme } from '@/lib/theme'
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
   | 'tours' | 'fleet' | 'accounting' | 'crm' | 'settings'
-  | 'activity-logs'
+  | 'activity-logs' | 'content-library'
 
 interface SidebarProps {
   active: Panel
@@ -33,6 +33,7 @@ const navItems = [
     items: [
       { id: 'tours', label: 'Tours & Pricing', icon: <MapIcon /> },
       { id: 'fleet', label: 'Fleet Manager', icon: <CarIcon /> },
+      { id: 'content-library', label: 'Content Library', icon: <MediaIcon /> },
       { id: 'accounting', label: 'Accounting', icon: <ChartIcon /> },
     ],
   },
@@ -166,6 +167,7 @@ function CalIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="current
 function MailIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><polyline points="2,3 8,9 14,3"/></svg> }
 function MapIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><polygon points="2,2 6,4 10,2 14,4 14,14 10,12 6,14 2,12"/><line x1="6" y1="4" x2="6" y2="14"/><line x1="10" y1="2" x2="10" y2="12"/></svg> }
 function CarIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 9l1.5-4h9L14 9"/><rect x="1" y="9" width="14" height="4" rx="1.5"/><circle cx="4.5" cy="13" r="1.5"/><circle cx="11.5" cy="13" r="1.5"/></svg> }
+function MediaIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><circle cx="6" cy="7" r="1.5"/><path d="M14 10l-3-2.5-3 2.5-2-1.5-2 1.5"/></svg> }
 function ChartIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="2" y1="14" x2="14" y2="14"/><rect x="3" y="8" width="3" height="6"/><rect x="7" y="5" width="3" height="9"/><rect x="11" y="2" width="3" height="12"/></svg> }
 function UsersIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="5" r="2.5"/><path d="M1 14c0-3 2.2-5 5-5s5 2 5 5"/><circle cx="12" cy="5" r="2"/><path d="M10 14c0-2 1-3.5 3-4"/></svg> }
 function LogIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 2h7l3 3v9H3V2z"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="10" x2="10" y2="10"/></svg> }
