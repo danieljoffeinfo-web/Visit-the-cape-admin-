@@ -31,6 +31,8 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   AUTHORISED: { bg: 'rgba(100, 149, 237, 0.12)', color: '#4a7fd4' },
   OVERDUE: { bg: 'rgba(196, 92, 74, 0.12)', color: theme.danger },
   DRAFT: { bg: theme.surfaceMuted, color: theme.textMuted },
+  VOIDED: { bg: theme.surfaceMuted, color: theme.text },
+  DELETED: { bg: theme.surfaceMuted, color: theme.textFaint },
 }
 
 const tableHead = {
@@ -71,6 +73,7 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
   const [loading, setLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ contact: '', description: '', amount: '', dueDate: '' })
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [stats, setStats] = useState({ totalRevenue: 0, outstanding: 0, paymentsWeek: 0, overdue: 0 })
 
   useEffect(() => {
@@ -100,6 +103,40 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
       toast.error('Failed to load invoice data')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function deleteInvoice(inv: XeroInvoice) {
+    if (!inv.invoiceID) return
+
+    const status = (inv.status || '').toUpperCase()
+    if (status === 'PAID') {
+      toast.error('Paid invoices cannot be deleted from here.')
+      return
+    }
+    if (status === 'VOIDED' || status === 'DELETED') {
+      toast.error('This invoice is already voided.')
+      return
+    }
+
+    const label = inv.invoiceNumber || inv.invoiceID
+    if (!confirm(`Delete invoice ${label}? This will void it in Xero.`)) return
+
+    setDeletingId(inv.invoiceID)
+    try {
+      const res = await fetch(`/api/xero/invoices/${inv.invoiceID}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: inv.status }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to delete invoice')
+      toast.success(`Invoice ${label} voided in Xero`)
+      loadData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete invoice')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -165,18 +202,20 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
-              {['Contact', 'Invoice #', 'Amount', 'Due Date', 'Status'].map((h) => (
-                <th key={h} style={tableHead}>{h}</th>
+              {['Contact', 'Invoice #', 'Amount', 'Due Date', 'Status', ''].map((h) => (
+                <th key={h || 'actions'} style={tableHead}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>Loading...</td></tr>
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>Loading...</td></tr>
             ) : invoices.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>No invoices found</td></tr>
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>No invoices found</td></tr>
             ) : invoices.slice(0, 50).map((inv) => {
               const sc = STATUS_COLORS[inv.status || 'DRAFT'] || STATUS_COLORS.DRAFT
+              const status = (inv.status || '').toUpperCase()
+              const canDelete = status !== 'PAID' && status !== 'VOIDED' && status !== 'DELETED'
               return (
                 <tr key={inv.invoiceID} style={{ borderBottom: `1px solid ${theme.border}` }}>
                   <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{inv.contact?.name || '—'}</td>
@@ -185,6 +224,27 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
                   <td style={{ padding: '10px 12px', fontSize: 13, color: theme.textMuted }}>{inv.dueDate ? format(new Date(inv.dueDate), 'd MMM yyyy') : '—'}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', ...sc }}>{inv.status}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => deleteInvoice(inv)}
+                        disabled={deletingId === inv.invoiceID}
+                        style={{
+                          ...secondaryButton,
+                          fontSize: 12,
+                          padding: '5px 10px',
+                          color: theme.danger,
+                          borderColor: 'rgba(196, 92, 74, 0.35)',
+                          opacity: deletingId === inv.invoiceID ? 0.6 : 1,
+                        }}
+                      >
+                        {deletingId === inv.invoiceID ? 'Deleting…' : 'Delete'}
+                      </button>
+                    ) : (
+                      <span style={{ fontSize: 11, color: theme.textFaint }}>—</span>
+                    )}
                   </td>
                 </tr>
               )
