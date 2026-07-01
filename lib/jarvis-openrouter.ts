@@ -34,7 +34,9 @@ export async function runJarvisCompletion(
 ): Promise<string> {
   const apiKey = getOpenRouterApiKey()
   if (!apiKey) {
-    throw new Error('OPENROUTER_API_KEY is not configured on the server.')
+    throw new Error(
+      'Jarvis is not configured. Add OPENROUTER_API_KEY (sk-or-v1-…) in Vercel environment variables.',
+    )
   }
 
   const workingMessages: Array<Record<string, unknown>> = messages.map((m) => {
@@ -64,16 +66,22 @@ export async function runJarvisCompletion(
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://dft-admin.vercel.app',
-        'X-Title': 'Visit The Cape Jarvis',
+        'HTTP-Referer': process.env.NEXT_PUBLIC_SITE_URL || 'https://admin.visitthecape.co.za',
+        'X-OpenRouter-Title': 'Visit The Cape Jarvis',
       },
       body: JSON.stringify(body),
     })
 
-    const data = (await response.json()) as OpenRouterResponse
+    const data = (await response.json()) as OpenRouterResponse & {
+      error?: { message?: string; code?: number }
+    }
 
     if (!response.ok) {
-      throw new Error(data.error?.message || `OpenRouter error (${response.status})`)
+      const msg = data.error?.message || `OpenRouter error (${response.status})`
+      if (msg.toLowerCase().includes('authentication')) {
+        throw new Error('OpenRouter API key is invalid. Check OPENROUTER_API_KEY in Vercel (must start with sk-or-v1-).')
+      }
+      throw new Error(msg)
     }
 
     const choice = data.choices?.[0]

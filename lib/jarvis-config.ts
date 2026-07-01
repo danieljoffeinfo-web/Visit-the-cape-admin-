@@ -1,18 +1,43 @@
 import type { AdminUser } from '@/lib/auth-types'
 
-/** Default OpenRouter model slug for Jarvis SK v1 */
-export const JARVIS_DEFAULT_MODEL =
-  'Jarvissk-or-v1-7e526376e640fe569f8cad64842747f52a3711a76b1aec1e1f3cea9d2df80ca8'
+/** Default model for Jarvis (OpenRouter). */
+export const JARVIS_DEFAULT_MODEL = 'openrouter/auto'
 
 const DEFAULT_ALLOWED_EMAILS = ['tanya@visitthecape.co.za']
 
 export function getJarvisModel(): string {
-  return process.env.JARVIS_MODEL?.trim() || JARVIS_DEFAULT_MODEL
+  const raw = process.env.JARVIS_MODEL?.trim()
+  if (!raw) return JARVIS_DEFAULT_MODEL
+  // Invalid legacy value: the old env var held an API key, not a model id.
+  if (raw.startsWith('Jarvissk-or-v1-') || raw.startsWith('sk-or-v1-')) {
+    return JARVIS_DEFAULT_MODEL
+  }
+  return raw
+}
+
+/**
+ * Normalize OpenRouter API key. The Jarvissk-or-v1-… string was mistakenly used
+ * as both model and key — the real key is sk-or-v1-… with the same suffix.
+ */
+export function normalizeOpenRouterApiKey(raw: string | undefined | null): string | null {
+  const key = raw?.trim()
+  if (!key) return null
+  if (key.startsWith('sk-or-v1-')) return key
+  if (key.startsWith('Jarvissk-or-v1-')) {
+    return `sk-or-v1-${key.slice('Jarvissk-or-v1-'.length)}`
+  }
+  if (key.startsWith('or-v1-')) {
+    return `sk-${key}`
+  }
+  return null
 }
 
 export function getOpenRouterApiKey(): string | null {
-  const key = process.env.OPENROUTER_API_KEY?.trim()
-  return key || null
+  return normalizeOpenRouterApiKey(process.env.OPENROUTER_API_KEY)
+}
+
+export function isJarvisConfigured(): boolean {
+  return Boolean(getOpenRouterApiKey())
 }
 
 function getAllowedEmails(): string[] | null {
