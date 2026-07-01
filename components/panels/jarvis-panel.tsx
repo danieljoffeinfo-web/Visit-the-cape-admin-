@@ -1,23 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { useAuth } from '@/components/auth-provider'
 import { cardStyle, inputStyle, pageTitle, primaryButton, secondaryButton, theme } from '@/lib/theme'
 
-type Thread = {
-  id: string
-  title: string
-  created_at: string
-  updated_at: string
-}
-
 type Message = {
   id?: string
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant'
   content: string
-  created_at?: string
 }
 
 const SUGGESTIONS = [
@@ -25,14 +16,11 @@ const SUGGESTIONS = [
   'How many unread enquiries do we have?',
   'Which fleet vehicles are available this week?',
   'Summarise revenue for the last 7 days',
-  'What departures are coming up and how many seats are left?',
-  'Any suggestions to improve bookings this month?',
 ]
 
 export function JarvisPanel() {
   const { admin } = useAuth()
-  const [threads, setThreads] = useState<Thread[]>([])
-  const [activeThreadId, setActiveThreadId] = useState<string | null>(null)
+  const [threadId, setThreadId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
@@ -51,96 +39,80 @@ export function JarvisPanel() {
     scrollToBottom()
   }, [messages, streamingText, scrollToBottom])
 
-  const loadThreads = useCallback(async () => {
+  const loadSession = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/jarvis/threads', { cache: 'no-store' })
-      if (res.status === 403) {
+      const [sessionRes, statusRes] = await Promise.all([
+        fetch('/api/jarvis/session', { cache: 'no-store' }),
+        fetch('/api/jarvis/status', { cache: 'no-store' }),
+      ])
+
+      if (statusRes.ok) {
+        const status = await statusRes.json()
+        setJarvisConfigured(Boolean(status.configured))
+      } else {
+        setJarvisConfigured(false)
+      }
+
+      if (sessionRes.status === 403) {
         toast.error('Jarvis is not enabled for your account')
         return
       }
-      const data = await res.json()
+
+      const data = await sessionRes.json()
       if (data.setupRequired) {
         setSetupRequired(true)
-        setThreads([])
+        setThreadId(null)
+        setMessages([])
         return
       }
+
+      if (!sessionRes.ok) {
+        throw new Error(data.error || 'Failed to load Jarvis')
+      }
+
       setSetupRequired(false)
-      setThreads(data.threads || [])
-    } catch {
-      toast.error('Failed to load Jarvis conversations')
+      setThreadId(data.thread?.id || null)
+      setMessages(data.messages || [])
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to load Jarvis')
     } finally {
       setLoading(false)
     }
   }, [])
 
-  const loadThread = useCallback(async (threadId: string) => {
+  useEffect(() => {
+    void loadSession()
+  }, [loadSession])
+
+  async function clearChat() {
+    if (!confirm('Clear this conversation? Your chat history will be removed.')) return
     try {
-      const res = await fetch(`/api/jarvis/threads/${threadId}`, { cache: 'no-store' })
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      setMessages((data.messages || []).filter((m: Message) => m.role !== 'system'))
-    } catch {
-      toast.error('Failed to load conversation')
-    }
-  }, [])
-
-  useEffect(() => {
-    loadThreads()
-    fetch('/api/jarvis/status', { cache: 'no-store' })
-      .then((res) => res.json())
-      .then((data) => setJarvisConfigured(Boolean(data.configured)))
-      .catch(() => setJarvisConfigured(false))
-  }, [loadThreads])
-
-  useEffect(() => {
-    if (activeThreadId) {
-      loadThread(activeThreadId)
-    } else {
+      const res = await fetch('/api/jarvis/session', { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to clear')
       setMessages([])
-    }
-  }, [activeThreadId, loadThread])
-
-  async function startNewChat() {
-    setActiveThreadId(null)
-    setMessages([])
-    setStreamingText('')
-    inputRef.current?.focus()
-  }
-
-  async function deleteThread(threadId: string, e: React.MouseEvent) {
-    e.stopPropagation()
-    if (!confirm('Delete this conversation?')) return
-    try {
-      const res = await fetch(`/api/jarvis/threads/${threadId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
-      setThreads((prev) => prev.filter((t) => t.id !== threadId))
-      if (activeThreadId === threadId) {
-        setActiveThreadId(null)
-        setMessages([])
-      }
-      toast.success('Conversation deleted')
+      setStreamingText('')
+      toast.success('Conversation cleared')
     } catch {
-      toast.error('Could not delete conversation')
+      toast.error('Could not clear conversation')
     }
   }
 
   async function sendMessage(text?: string) {
     const message = (text ?? input).trim()
-    if (!message || sending) return
+    if (!message || sending || setupRequired || !jarvisConfigured) return
 
     setInput('')
     setSending(true)
     setStreamingText('')
 
-    const userMessage: Message = { role: 'user', content: message }
-    setMessages((prev) => [...prev, userMessage])
+    setMessages((prev) => [...prev, { role: 'user', content: message }])
 
     try {
       const res = await fetch('/api/jarvis/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, threadId: activeThreadId }),
+        body: JSON.stringify({ message, threadId }),
       })
 
       if (!res.ok) {
@@ -154,7 +126,6 @@ export function JarvisPanel() {
       const decoder = new TextDecoder()
       let buffer = ''
       let fullText = ''
-      let threadId = activeThreadId
 
       while (true) {
         const { done, value } = await reader.read()
@@ -175,8 +146,7 @@ export function JarvisPanel() {
             }
 
             if (event.type === 'meta' && event.threadId) {
-              threadId = event.threadId
-              if (!activeThreadId) setActiveThreadId(event.threadId)
+              setThreadId(event.threadId)
             }
             if (event.type === 'token' && event.content) {
               fullText += event.content
@@ -196,9 +166,9 @@ export function JarvisPanel() {
       }
 
       setStreamingText('')
-      setMessages((prev) => [...prev, { role: 'assistant', content: fullText }])
-      await loadThreads()
-      if (threadId && !activeThreadId) setActiveThreadId(threadId)
+      if (fullText) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: fullText }])
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Jarvis failed to respond'
       toast.error(msg)
@@ -206,219 +176,147 @@ export function JarvisPanel() {
       setInput(message)
     } finally {
       setSending(false)
+      inputRef.current?.focus()
     }
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      sendMessage()
+      void sendMessage()
     }
   }
 
+  const chatDisabled = sending || setupRequired || !jarvisConfigured
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, height: 'calc(100vh - 120px)', minHeight: 520 }}>
-      <div>
-        <h1 style={pageTitle}>Jarvis</h1>
-        <p style={{ color: theme.textMuted, fontSize: 14, marginTop: 4 }}>
-          Your private AI assistant for tours, pricing, bookings, fleet, reports, and suggestions.
-          {admin ? ` Signed in as ${admin.full_name}.` : ''}
-        </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: 'calc(100vh - 120px)', minHeight: 520 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={pageTitle}>Jarvis</h1>
+          <p style={{ color: theme.textMuted, fontSize: 14, marginTop: 4 }}>
+            Your private assistant for tours, pricing, bookings, fleet, and reports.
+            {admin ? ` Signed in as ${admin.full_name}.` : ''}
+          </p>
+        </div>
+        {messages.length > 0 && (
+          <button type="button" onClick={() => void clearChat()} style={{ ...secondaryButton, fontSize: 12 }}>
+            Clear chat
+          </button>
+        )}
       </div>
 
       {setupRequired && (
         <div style={{ ...cardStyle, borderColor: theme.bronzeBorder, background: theme.bronzeBg }}>
           <strong style={{ color: theme.bronzeDark }}>Setup required</strong>
           <p style={{ margin: '8px 0 0', fontSize: 14, color: theme.textMuted }}>
-            Run <code>supabase/jarvis_chat.sql</code> in the admin Supabase SQL editor, then refresh this page.
+            Run <code>supabase/jarvis_chat.sql</code> in the admin Supabase SQL editor, then refresh.
           </p>
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) 1fr', gap: 16, flex: 1, minHeight: 0 }}>
-        {/* Thread sidebar */}
-        <aside style={{ ...cardStyle, padding: 12, display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden' }}>
-          <button type="button" onClick={startNewChat} style={{ ...primaryButton, width: '100%' }}>
-            + New chat
-          </button>
-          <div style={{ flex: 1, overflowY: 'auto', marginTop: 4 }}>
-            {loading && <p style={{ fontSize: 13, color: theme.textFaint, padding: 8 }}>Loading…</p>}
-            {!loading && threads.length === 0 && (
-              <p style={{ fontSize: 13, color: theme.textFaint, padding: 8 }}>No conversations yet.</p>
-            )}
-            {threads.map((thread) => {
-              const active = activeThreadId === thread.id
-              return (
-                <button
-                  key={thread.id}
-                  type="button"
-                  onClick={() => setActiveThreadId(thread.id)}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: '10px 12px',
-                    marginBottom: 4,
-                    borderRadius: 8,
-                    border: `1px solid ${active ? theme.bronzeBorder : 'transparent'}`,
-                    background: active ? theme.bronzeBg : 'transparent',
-                    cursor: 'pointer',
-                    fontFamily: theme.bodyFont,
-                  }}
-                >
-                  <div style={{ fontSize: 13, fontWeight: 600, color: theme.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {thread.title}
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                    <span style={{ fontSize: 11, color: theme.textFaint }}>
-                      {format(new Date(thread.updated_at), 'd MMM')}
-                    </span>
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(e) => deleteThread(thread.id, e)}
-                      onKeyDown={(e) => e.key === 'Enter' && deleteThread(thread.id, e as unknown as React.MouseEvent)}
-                      style={{ fontSize: 11, color: theme.textFaint, padding: '2px 6px' }}
-                    >
-                      Delete
-                    </span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </aside>
+      {!jarvisConfigured && !setupRequired && (
+        <div style={{ ...cardStyle, borderColor: 'rgba(196, 92, 74, 0.35)', background: 'rgba(196, 92, 74, 0.08)' }}>
+          <strong style={{ color: theme.danger }}>Jarvis is not connected</strong>
+          <p style={{ margin: '8px 0 0', fontSize: 14, color: theme.textMuted }}>
+            OpenRouter API key is missing or invalid on the server. Contact your admin to set <code>OPENROUTER_API_KEY</code> in Vercel.
+          </p>
+        </div>
+      )}
 
-        {/* Chat area */}
-        <section style={{ ...cardStyle, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <section style={{ ...cardStyle, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1, minHeight: 0 }}>
+        <div
+          style={{
+            padding: '14px 20px',
+            borderBottom: `1px solid ${theme.border}`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            background: `linear-gradient(135deg, ${theme.bronzeBg} 0%, ${theme.surface} 100%)`,
+          }}
+        >
           <div
             style={{
-              padding: '16px 20px',
-              borderBottom: `1px solid ${theme.border}`,
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              background: theme.bronze,
               display: 'flex',
               alignItems: 'center',
-              gap: 12,
-              background: `linear-gradient(135deg, ${theme.bronzeBg} 0%, ${theme.surface} 100%)`,
+              justifyContent: 'center',
+              color: '#fff',
+              fontWeight: 800,
+              fontFamily: theme.headingFont,
             }}
           >
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                background: theme.bronze,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontWeight: 800,
-                fontSize: 16,
-                fontFamily: theme.headingFont,
-              }}
-            >
-              J
-            </div>
-            <div>
-              <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 18, letterSpacing: '0.06em', textTransform: 'uppercase', color: theme.bronzeDark }}>
-                Jarvis SK v1
-              </div>
-              <div style={{ fontSize: 12, color: theme.textMuted }}>Connected to Visit The Cape admin data</div>
-            </div>
+            J
           </div>
+          <div>
+            <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 16, letterSpacing: '0.06em', textTransform: 'uppercase', color: theme.bronzeDark }}>
+              Jarvis SK v1
+            </div>
+            <div style={{ fontSize: 12, color: theme.textMuted }}>Connected to Visit The Cape admin data</div>
+          </div>
+        </div>
 
-          <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {messages.length === 0 && !streamingText && !sending && (
-              <div style={{ margin: 'auto 0', maxWidth: 640 }}>
-                <p style={{ fontSize: 15, color: theme.textMuted, marginBottom: 16, lineHeight: 1.6 }}>
-                  Ask me anything about the admin dashboard — tour pricing, bookings, fleet availability, enquiries, content calendar, or business suggestions.
-                </p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {SUGGESTIONS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => sendMessage(s)}
-                      style={{ ...secondaryButton, fontSize: 13, textAlign: 'left' }}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {loading ? (
+            <div style={{ margin: 'auto', color: theme.textMuted, fontSize: 14 }}>Loading Jarvis…</div>
+          ) : messages.length === 0 && !streamingText && !sending ? (
+            <div style={{ margin: 'auto 0', maxWidth: 640 }}>
+              <p style={{ fontSize: 15, color: theme.textMuted, marginBottom: 16, lineHeight: 1.6 }}>
+                Ask anything about tours, pricing, bookings, fleet, enquiries, or reports.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {SUGGESTIONS.map((s) => (
+                  <button key={s} type="button" onClick={() => void sendMessage(s)} disabled={chatDisabled} style={{ ...secondaryButton, fontSize: 13, textAlign: 'left' }}>
+                    {s}
+                  </button>
+                ))}
               </div>
-            )}
-
-            {messages
-              .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
-              .map((msg, i) => (
-                <MessageBubble key={msg.id || i} role={msg.role as 'user' | 'assistant'} content={msg.content} />
+            </div>
+          ) : (
+            <>
+              {messages.map((msg, i) => (
+                <MessageBubble key={msg.id || i} role={msg.role} content={msg.content} />
               ))}
+              {streamingText && <MessageBubble role="assistant" content={streamingText} streaming />}
+              {sending && !streamingText && (
+                <div style={{ color: theme.textFaint, fontSize: 13 }}>Jarvis is thinking…</div>
+              )}
+            </>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
 
-            {streamingText && <MessageBubble role="assistant" content={streamingText} streaming />}
-
-            {sending && !streamingText && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: theme.textFaint, fontSize: 13 }}>
-                <span className="jarvis-typing">Jarvis is thinking</span>
-                <span style={{ animation: 'pulse 1s infinite' }}>…</span>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
+        <div style={{ padding: '16px 20px', borderTop: `1px solid ${theme.border}`, background: theme.surfaceMuted }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Message Jarvis…"
+              rows={2}
+              disabled={chatDisabled}
+              style={{ ...inputStyle, flex: 1, resize: 'none', minHeight: 52, maxHeight: 120 }}
+            />
+            <button
+              type="button"
+              onClick={() => void sendMessage()}
+              disabled={chatDisabled || !input.trim()}
+              style={{ ...primaryButton, opacity: chatDisabled || !input.trim() ? 0.6 : 1, minWidth: 88 }}
+            >
+              {sending ? '…' : 'Send'}
+            </button>
           </div>
-
-          <div style={{ padding: '16px 20px', borderTop: `1px solid ${theme.border}`, background: theme.surfaceMuted }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Ask Jarvis about tours, pricing, bookings, reports…"
-                rows={2}
-                disabled={sending || setupRequired}
-                style={{
-                  ...inputStyle,
-                  flex: 1,
-                  resize: 'none',
-                  minHeight: 52,
-                  maxHeight: 120,
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => sendMessage()}
-                disabled={sending || !input.trim() || setupRequired}
-                style={{
-                  ...primaryButton,
-                  opacity: sending || !input.trim() ? 0.6 : 1,
-                  minWidth: 88,
-                }}
-              >
-                {sending ? '…' : 'Send'}
-              </button>
-            </div>
-          </div>
-        </section>
-      </div>
-
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.3; }
-          50% { opacity: 1; }
-        }
-      `}</style>
+        </div>
+      </section>
     </div>
   )
 }
 
-function MessageBubble({
-  role,
-  content,
-  streaming,
-}: {
-  role: 'user' | 'assistant'
-  content: string
-  streaming?: boolean
-}) {
+function MessageBubble({ role, content, streaming }: { role: 'user' | 'assistant'; content: string; streaming?: boolean }) {
   const isUser = role === 'user'
   return (
     <div style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start' }}>

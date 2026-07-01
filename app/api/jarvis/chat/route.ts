@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server'
 import { getApprovedAdminUser } from '@/lib/auth-server'
-import { canUseJarvis, jarvisSystemPrompt } from '@/lib/jarvis-config'
+import { canUseJarvis, isJarvisConfigured, jarvisSystemPrompt } from '@/lib/jarvis-config'
 import { buildJarvisBriefContext } from '@/lib/jarvis-context'
 import { runJarvisCompletion, type ChatMessage } from '@/lib/jarvis-openrouter'
+import { getOrCreatePrimaryThread } from '@/lib/jarvis-session'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export const runtime = 'nodejs'
@@ -32,6 +33,12 @@ export async function POST(request: NextRequest) {
   if (!canUseJarvis(admin)) {
     return new Response(JSON.stringify({ error: 'Jarvis is not enabled for your account' }), { status: 403 })
   }
+  if (!isJarvisConfigured()) {
+    return new Response(
+      JSON.stringify({ error: 'Jarvis is not connected. OPENROUTER_API_KEY is missing or invalid on the server.' }),
+      { status: 503 },
+    )
+  }
 
   let body: { message?: string; threadId?: string }
   try {
@@ -53,25 +60,14 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: 'Conversation not found' }), { status: 404 })
     }
   } else {
-    const title = deriveTitle(message)
-    const { data: created, error: createError } = await supabaseAdmin
-      .from('jarvis_threads')
-      .insert({ admin_user_id: admin.id, title })
-      .select('id')
-      .single()
-
-    if (createError) {
-      const setupRequired = createError.message.toLowerCase().includes('jarvis_threads')
+    const session = await getOrCreatePrimaryThread(admin.id)
+    if (session.setupRequired || !session.thread) {
       return new Response(
-        JSON.stringify({
-          error: setupRequired
-            ? 'Jarvis database tables missing. Run supabase/jarvis_chat.sql in Supabase.'
-            : 'Failed to create conversation',
-        }),
-        { status: setupRequired ? 503 : 500 },
+        JSON.stringify({ error: 'Jarvis database tables missing. Run supabase/jarvis_chat.sql in Supabase.' }),
+        { status: 503 },
       )
     }
-    threadId = created.id
+    threadId = session.thread.id
   }
 
   const { error: userMsgError } = await supabaseAdmin.from('jarvis_messages').insert({

@@ -1,7 +1,7 @@
 import type { AdminUser } from '@/lib/auth-types'
 
 /** Default model for Jarvis (OpenRouter). */
-export const JARVIS_DEFAULT_MODEL = 'openrouter/auto'
+export const JARVIS_DEFAULT_MODEL = 'google/gemini-2.5-flash'
 
 const DEFAULT_ALLOWED_EMAILS = ['tanya@visitthecape.co.za']
 
