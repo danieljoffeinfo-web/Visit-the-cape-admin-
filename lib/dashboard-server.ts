@@ -1,7 +1,6 @@
-import { addDays, format, isWithinInterval, parseISO, startOfDay } from 'date-fns'
+import { addDays, format } from 'date-fns'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { listFleetVehicles } from '@/lib/fleet-db'
-import { parseFleetBookingNotes } from '@/lib/fleet'
+import { getFleetStatusForDashboard } from '@/lib/fleet-status'
 import { getAuthedXeroClient } from '@/lib/xero'
 import type {
   CrmSnapshot,
@@ -158,39 +157,7 @@ async function getRevenueLast7Days(): Promise<RevenueDay[]> {
 
 async function getFleetStatus(): Promise<FleetVehicleStatus[]> {
   try {
-    const [vehiclesResult, bookingsRes] = await Promise.all([
-      listFleetVehicles(),
-      supabaseAdmin
-        .from('tour_bookings')
-        .select('status, notes')
-        .eq('booking_type', 'fleet'),
-    ])
-
-    if (vehiclesResult.error || !vehiclesResult.data) return []
-
-    const today = startOfDay(new Date())
-    const bookedVehicleIds = new Set<string>()
-
-    for (const booking of bookingsRes.data || []) {
-      if ((booking.status || '').toLowerCase() === 'cancelled') continue
-      const notes = parseFleetBookingNotes(booking.notes)
-      if (!notes) continue
-      const start = startOfDay(parseISO(notes.rental.startDate))
-      const end = startOfDay(parseISO(notes.rental.endDate))
-      if (isWithinInterval(today, { start, end })) {
-        bookedVehicleIds.add(notes.vehicle.id)
-      }
-    }
-
-    return vehiclesResult.data.map((vehicle) => {
-      if (vehicle.active === false) {
-        return { id: vehicle.id, name: vehicle.title, status: 'in_service' as const, statusLabel: 'In service' }
-      }
-      if (bookedVehicleIds.has(vehicle.id)) {
-        return { id: vehicle.id, name: vehicle.title, status: 'on_tour' as const, statusLabel: 'On tour' }
-      }
-      return { id: vehicle.id, name: vehicle.title, status: 'available' as const, statusLabel: 'Available' }
-    })
+    return await getFleetStatusForDashboard()
   } catch {
     return []
   }

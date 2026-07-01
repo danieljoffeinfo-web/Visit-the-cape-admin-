@@ -1,8 +1,8 @@
 import { format } from 'date-fns'
 import { buildDashboardSnapshot } from '@/lib/dashboard-server'
 import { fetchEnquiriesFromSource } from '@/lib/enquiries-server'
-import { listFleetVehicles } from '@/lib/fleet-db'
-import { getFleetAvailability } from '@/lib/fleet-availability'
+import { getFleetOperationalSnapshot } from '@/lib/fleet-status'
+import { parseFleetBookingNotes, fullCustomerName } from '@/lib/fleet'
 import { getContentSupabaseAdmin } from '@/lib/content-supabase-admin'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
@@ -67,7 +67,7 @@ export const JARVIS_TOOLS = [
     type: 'function' as const,
     function: {
       name: 'get_fleet',
-      description: 'Get fleet vehicles, daily rates, and availability calendar for the next 60 days.',
+      description: 'Get fleet vehicles with live booking status for today (Cape Town time): which vehicles are booked right now, active rentals, customer names, rental dates, and availability.',
       parameters: { type: 'object', properties: {}, additionalProperties: false },
     },
   },
@@ -140,15 +140,20 @@ export async function executeJarvisTool(
       const bookings = {
         tours: tagAlongRes.data || [],
         private: enquiriesRes.data || [],
-        fleet: (fleetRes.data || []).map((row) => ({
-          id: row.id,
-          name: row.name,
-          email: row.email,
-          passengers: row.passengers,
-          amount: row.amount,
-          status: row.status,
-          created_at: row.created_at,
-        })),
+        fleet: (fleetRes.data || []).map((row) => {
+          const notes = parseFleetBookingNotes(row.notes)
+          return {
+            id: row.id,
+            customerName: notes ? fullCustomerName(notes) : row.name,
+            email: notes?.customer.email || row.email,
+            vehicle: notes?.vehicle.title || null,
+            startDate: notes?.rental.startDate || null,
+            endDate: notes?.rental.endDate || null,
+            amount: row.amount ?? notes?.rental.totalAmount ?? null,
+            status: row.status,
+            created_at: row.created_at,
+          }
+        }),
       }
 
       if (type === 'tours') return { bookings: bookings.tours.slice(0, limit) }
@@ -179,24 +184,7 @@ export async function executeJarvisTool(
       })
 
     case 'get_fleet':
-      return safeQuery('fleet', async () => {
-        const today = format(new Date(), 'yyyy-MM-dd')
-        const in60 = format(new Date(Date.now() + 60 * 86400000), 'yyyy-MM-dd')
-        const [vehiclesResult, availability] = await Promise.all([
-          listFleetVehicles(),
-          getFleetAvailability(today, in60),
-        ])
-        return {
-          vehicles: (vehiclesResult.data || []).map((v) => ({
-            id: v.id,
-            title: v.title,
-            daily_rate: v.base_price,
-            active: v.active,
-          })),
-          vehicleCount: availability.vehicleCount,
-          fullyBookedDates: availability.fullyBookedDates.slice(0, 30),
-        }
-      })
+      return safeQuery('fleet', () => getFleetOperationalSnapshot())
 
     case 'get_content_library': {
       const month = args.month ? String(args.month) : format(new Date(), 'yyyy-MM')
@@ -268,10 +256,23 @@ export async function executeJarvisTool(
 
 export async function buildJarvisBriefContext(): Promise<string> {
   try {
-    const snapshot = await buildDashboardSnapshot()
-    const today = format(new Date(), 'yyyy-MM-dd')
-    return `Live brief (${today}): ${snapshot.unreadCount} unread enquiries, ${snapshot.seatsRemaining} tour seats left (30d), ${snapshot.fleet.filter((f) => f.status === 'available').length}/${snapshot.fleet.length} fleet available, CRM ${snapshot.crm.totalCustomers} customers (${snapshot.crm.newThisWeek} new this week).`
+    const [snapshot, fleet] = await Promise.all([
+      buildDashboardSnapshot(),
+      getFleetOperationalSnapshot(),
+    ])
+    const bookedList = fleet.activeBookingsToday
+      .map((b) => `${b.vehicleName} (${b.customerName}, ${b.startDate} to ${b.endDate})`)
+      .join('; ')
+
+    return [
+      `Live brief (${fleet.today} Cape Town):`,
+      `${snapshot.unreadCount} unread enquiries,`,
+      `${snapshot.seatsRemaining} tour seats left (30d),`,
+      `fleet ${fleet.bookedToday} booked today, ${fleet.availableToday}/${fleet.vehicleCount} available.`,
+      bookedList ? `Active rentals: ${bookedList}.` : 'No active fleet rentals today.',
+      'Always use get_fleet or get_bookings type=fleet for vehicle booking questions.',
+    ].join(' ')
   } catch {
-    return 'Live brief unavailable — use tools for current data.'
+    return 'Live brief unavailable — use get_fleet and get_bookings tools for current data.'
   }
 }
