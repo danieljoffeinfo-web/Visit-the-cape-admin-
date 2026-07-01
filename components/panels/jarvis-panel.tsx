@@ -38,6 +38,7 @@ export function JarvisPanel() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [setupRequired, setSetupRequired] = useState(false)
+  const [jarvisConfigured, setJarvisConfigured] = useState(true)
   const [streamingText, setStreamingText] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -86,6 +87,10 @@ export function JarvisPanel() {
 
   useEffect(() => {
     loadThreads()
+    fetch('/api/jarvis/status', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => setJarvisConfigured(Boolean(data.configured)))
+      .catch(() => setJarvisConfigured(false))
   }, [loadThreads])
 
   useEffect(() => {
