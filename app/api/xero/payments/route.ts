@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getAuthedXeroClient } from '@/lib/xero'
 import { format, subDays } from 'date-fns'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 export async function GET() {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const auth = await getAuthedXeroClient()
   if (!auth) return NextResponse.json({ error: 'Not connected' }, { status: 401 })
 

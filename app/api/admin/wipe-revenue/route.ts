@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
   const results: Record<string, string> = {}
 
   const tables = [
+    // Jarvis was removed from the admin, but clear any rows it left behind.
     'jarvis_messages',
     'jarvis_threads',
     'content_allocations',

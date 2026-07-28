@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { addDays, format } from 'date-fns'
 import { toast } from 'sonner'
-import { isFleetVehicle, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { differenceInCalendarDays, parseISO } from 'date-fns'
+import { FLEET_USAGE_TYPES, isFleetVehicle, rentalTotal, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { VehicleImageThumb } from '@/components/fleet/vehicle-image-upload'
 import { cardStyle, fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
@@ -13,8 +14,18 @@ type VehicleRow = {
   family: string
   summary?: string | null
   duration_label?: string | null
-  base_price?: number | null
   image_url?: string | null
+}
+
+function money(amount: number) {
+  return `R ${amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function rentalDaysBetween(startDate: string, endDate: string) {
+  const start = parseISO(startDate)
+  const end = parseISO(endDate)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0
+  return differenceInCalendarDays(end, start) + 1
 }
 
 export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolean; onSaved: () => void; onCancel: () => void }) {
@@ -25,7 +36,7 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
     usageType: 'tour',
     startDate: format(new Date(), 'yyyy-MM-dd'),
     endDate: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
-    amount: '',
+    dailyRate: '',
     seatsBooked: '1',
     firstName: '',
     surname: '',
@@ -33,6 +44,7 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
     phone: '',
     notes: '',
   })
+  const [sendInvoiceToXero, setSendInvoiceToXero] = useState(true)
 
   useEffect(() => {
     fetch('/api/fleet/vehicles', { cache: 'no-store' })
@@ -52,10 +64,16 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
   }, [])
 
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === form.vehicleId) || null
+  const rentalDays = rentalDaysBetween(form.startDate, form.endDate)
+  const totalAmount = rentalTotal(form.dailyRate, rentalDays)
 
   async function submit() {
-    if (!form.vehicleId || !form.firstName || !form.surname || !form.email || !form.amount) {
-      toast.error('Complete vehicle, customer, and amount fields')
+    if (!form.vehicleId || !form.firstName || !form.surname || !form.email || !form.dailyRate) {
+      toast.error('Complete vehicle, customer, and rate fields')
+      return
+    }
+    if (totalAmount <= 0) {
+      toast.error('Check the rate per day and the booking dates')
       return
     }
 
@@ -66,13 +84,14 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          amount: Number(form.amount),
+          dailyRate: Number(form.dailyRate),
           seatsBooked: Number(form.seatsBooked) || 1,
+          sendInvoiceToXero,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create fleet booking')
-      toast.success('Fleet booking created')
+      toast.success(sendInvoiceToXero ? 'Fleet booking created' : 'Fleet booking created without a Xero invoice')
       onSaved()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create fleet booking')
@@ -119,8 +138,32 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
             <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Amount (ZAR) *</label>
-            <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Rate per day (ZAR) *</label>
+            <input type="number" value={form.dailyRate} onChange={(e) => setForm({ ...form, dailyRate: e.target.value })} style={inputStyle} placeholder="2500" />
+            <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>
+              {totalAmount > 0
+                ? `Total ${money(totalAmount)} · ${rentalDays} day${rentalDays === 1 ? '' : 's'}`
+                : 'Total is the rate per day × booked days.'}
+            </div>
+          </div>
+          <div>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Vehicle use</label>
+            <select value={form.usageType} onChange={(e) => setForm({ ...form, usageType: e.target.value })} style={inputStyle}>
+              {FLEET_USAGE_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Send invoice to Xero</label>
+            <select
+              value={sendInvoiceToXero ? 'yes' : 'no'}
+              onChange={(e) => setSendInvoiceToXero(e.target.value === 'yes')}
+              style={inputStyle}
+            >
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
           </div>
           <div>
             <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>First name *</label>

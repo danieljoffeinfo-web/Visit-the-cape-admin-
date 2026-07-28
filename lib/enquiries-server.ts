@@ -1,6 +1,55 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getContentSupabaseAdmin } from '@/lib/content-supabase-admin'
 import type { Enquiry } from '@/lib/enquiries'
+
+/**
+ * Enquiries live in ONE of two Supabase projects: the website/content project
+ * (where the public site writes them) or the admin project.
+ *
+ * Reads and writes must agree on which one, otherwise marking an enquiry as
+ * replied updates a row nobody is looking at. `getEnquiriesDb()` is the single
+ * place that decides, and every read and write below goes through it.
+ */
+
+export type EnquiriesSource = 'external-api' | 'content' | 'admin'
+
+function hasExternalApi() {
+  return Boolean(process.env.INQUIRIES_API_URL?.trim())
+}
+
+function hasContentProject() {
+  return Boolean(process.env.CONTENT_SUPABASE_SERVICE_ROLE_KEY?.trim())
+}
+
+/** Which source owns enquiry rows right now. */
+export function getEnquiriesSource(): EnquiriesSource {
+  if (hasExternalApi()) return 'external-api'
+  if (hasContentProject()) return 'content'
+  return 'admin'
+}
+
+/**
+ * The Supabase client that owns enquiry rows.
+ *
+ * Returns null when enquiries come from an external HTTP API, since there is no
+ * database for the admin to write to in that case.
+ */
+export function getEnquiriesDb(): { client: SupabaseClient; source: EnquiriesSource } | null {
+  const source = getEnquiriesSource()
+  if (source === 'external-api') return null
+
+  if (source === 'content') {
+    try {
+      return { client: getContentSupabaseAdmin(), source }
+    } catch (err) {
+      console.warn('Content Supabase unavailable, using admin project for enquiries:', err)
+      return { client: supabaseAdmin, source: 'admin' }
+    }
+  }
+
+  return { client: supabaseAdmin, source }
+}
 
 function normalizeEnquiry(row: Record<string, unknown>): Enquiry {
   return {
@@ -18,16 +67,19 @@ function normalizeEnquiry(row: Record<string, unknown>): Enquiry {
   }
 }
 
-function mapExperienceToTourType(experience?: string | null) {
-  if (!experience) return null
-  return experience
+/** Website forms post `experience`; the admin reads `tour_type`. */
+function withTourType(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...row,
+    tour_type: row.tour_type || row.experience || null,
+  }
 }
 
 export async function fetchEnquiriesFromSource(): Promise<Enquiry[]> {
   const apiUrl = process.env.INQUIRIES_API_URL?.trim()
-  const apiKey = process.env.INQUIRIES_API_KEY?.trim()
 
   if (apiUrl) {
+    const apiKey = process.env.INQUIRIES_API_KEY?.trim()
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`
 
@@ -41,40 +93,38 @@ export async function fetchEnquiriesFromSource(): Promise<Enquiry[]> {
     return rows.map((row: Record<string, unknown>) => normalizeEnquiry(row))
   }
 
-  if (process.env.CONTENT_SUPABASE_SERVICE_ROLE_KEY?.trim()) {
-    try {
-      const content = getContentSupabaseAdmin()
-      const { data, error } = await content
-        .from('enquiries')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(200)
+  const db = getEnquiriesDb()
+  if (!db) return []
 
-      if (!error && data) {
-        return data.map((row) =>
-          normalizeEnquiry({
-            ...row,
-            tour_type: (row as Record<string, unknown>).tour_type || mapExperienceToTourType((row as Record<string, unknown>).experience as string),
-          } as Record<string, unknown>),
-        )
-      }
-    } catch (err) {
-      console.warn('Content enquiries fetch failed, falling back to admin DB:', err)
-    }
-  }
-
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db.client
     .from('enquiries')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(200)
 
   if (error) throw error
-  return (data || []).map((row) => normalizeEnquiry(row as Record<string, unknown>))
+  return (data || []).map((row) => normalizeEnquiry(withTourType(row as Record<string, unknown>)))
+}
+
+/** Unread enquiries, read from the same source the inbox reads. */
+export async function fetchUnreadEnquiries(limit = 100): Promise<Enquiry[]> {
+  const enquiries = await fetchEnquiriesFromSource()
+  return enquiries
+    .filter((enquiry) => {
+      const status = (enquiry.status || '').toLowerCase()
+      return !status || status === 'new' || status === 'unread'
+    })
+    .slice(0, limit)
 }
 
 export async function updateEnquiryStatus(id: string, status: string, extra?: Record<string, unknown>) {
-  const { data, error } = await supabaseAdmin
+  const db = getEnquiriesDb()
+  if (!db) {
+    // Enquiries are owned by an external API — nothing local to update.
+    return null
+  }
+
+  const { data, error } = await db.client
     .from('enquiries')
     .update({ status, ...extra, updated_at: new Date().toISOString() })
     .eq('id', id)
@@ -83,9 +133,14 @@ export async function updateEnquiryStatus(id: string, status: string, extra?: Re
 
   if (error) throw error
   if (!data) return null
-  return normalizeEnquiry(data as Record<string, unknown>)
+  return normalizeEnquiry(withTourType(data as Record<string, unknown>))
 }
 
+/**
+ * Reply audit trail. Always stored in the admin project even when the enquiry
+ * itself lives in the content project, so `enquiry_id` is a plain reference
+ * rather than a foreign key — see supabase/enquiry_replies.sql.
+ */
 export async function recordEnquiryReply(input: {
   enquiryId: string
   adminName: string

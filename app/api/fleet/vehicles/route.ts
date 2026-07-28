@@ -2,21 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { buildSeatsLabel } from '@/lib/fleet'
 import { getFleetVehicleDetail, listFleetVehicles } from '@/lib/fleet-db'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 function slugifyRegistrationNumber(value: string) {
   return `fleet-${value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 }
 
-function parseVehiclePayload(body: any) {
+/** Rental rates are set per booking, not per vehicle — see /api/fleet/bookings. */
+function parseVehiclePayload(body: Record<string, unknown> | null) {
   const title = String(body?.title || '').trim()
   const registrationNumber = String(body?.registrationNumber || '').trim()
   const seats = Math.max(1, Number.parseInt(String(body?.seats || '1'), 10) || 1)
-  const defaultRate = body?.defaultRate === '' || body?.defaultRate === null || body?.defaultRate === undefined
-    ? null
-    : Number(body.defaultRate)
   const notes = String(body?.notes || '').trim()
 
-  return { title, registrationNumber, seats, defaultRate, notes }
+  return { title, registrationNumber, seats, notes }
 }
 
 function validateVehiclePayload(vehicle: ReturnType<typeof parseVehiclePayload>) {
@@ -28,14 +27,13 @@ function validateVehiclePayload(vehicle: ReturnType<typeof parseVehiclePayload>)
     return 'Seats must be greater than zero'
   }
 
-  if (vehicle.defaultRate !== null && (!Number.isFinite(vehicle.defaultRate) || vehicle.defaultRate < 0)) {
-    return 'Default rate must be zero or greater'
-  }
-
   return null
 }
 
 export async function GET() {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const { data, error } = await listFleetVehicles()
 
@@ -52,6 +50,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const vehicle = parseVehiclePayload(await request.json())
     const validationError = validateVehiclePayload(vehicle)
@@ -74,7 +75,6 @@ export async function POST(request: NextRequest) {
         summary: vehicle.registrationNumber,
         duration_label: buildSeatsLabel(vehicle.seats),
         pickup_notes: vehicle.notes || null,
-        base_price: vehicle.defaultRate,
         active: true,
       })
       .select('id')
@@ -103,6 +103,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const body = await request.json()
     const vehicleId = String(body?.id || '').trim()
@@ -125,7 +128,6 @@ export async function PATCH(request: NextRequest) {
         summary: vehicle.registrationNumber,
         duration_label: buildSeatsLabel(vehicle.seats),
         pickup_notes: vehicle.notes || null,
-        base_price: vehicle.defaultRate,
         updated_at: new Date().toISOString(),
       })
       .eq('id', vehicleId)
@@ -154,6 +156,9 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const body = await request.json()
     const vehicleId = String(body?.id || '').trim()

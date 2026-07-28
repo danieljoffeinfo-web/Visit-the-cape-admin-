@@ -123,7 +123,7 @@ export function SettingsPanel() {
       <div style={{ ...card, marginBottom: 20, border: '1px solid rgba(196, 92, 74, 0.2)' }}>
         <h2 style={{ ...sectionTitle, marginBottom: 16, color: theme.danger }}>Danger zone</h2>
         <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
-          Permanently clear all bookings, enquiries, customers, invoice links, activity logs, content library, and Jarvis chats.
+          Permanently clear all bookings, enquiries, customers, invoice links, activity logs, and content library.
           Fleet vehicles, admin users, and your Xero connection are kept.
         </p>
         <p style={{ color: theme.textFaint, fontSize: 12, marginBottom: 16 }}>

@@ -74,26 +74,33 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState({ contact: '', description: '', amount: '', dueDate: '' })
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [showHidden, setShowHidden] = useState(false)
+  const [hiddenCount, setHiddenCount] = useState(0)
   const [stats, setStats] = useState({ totalRevenue: 0, outstanding: 0, paymentsWeek: 0, overdue: 0 })
 
   useEffect(() => {
     if (!connected) return
     loadData()
-  }, [connected, filter])
+  }, [connected, filter, showHidden])
 
   async function loadData() {
     setLoading(true)
     try {
       const [invRes, payRes] = await Promise.all([
-        fetch(`/api/xero/invoices?status=${filter}`),
+        fetch(`/api/xero/invoices?status=${filter}${showHidden ? '&hidden=true' : ''}`),
         fetch('/api/xero/payments'),
       ])
-      const invData: XeroInvoice[] = await invRes.json()
+      const invPayload = await invRes.json()
       const payData: XeroPayment[] = await payRes.json()
-      setInvoices(Array.isArray(invData) ? invData : [])
+      const invData: XeroInvoice[] = Array.isArray(invPayload?.invoices) ? invPayload.invoices : []
+      setInvoices(invData)
       setPayments(Array.isArray(payData) ? payData : [])
+      setHiddenCount(Number(invPayload?.hiddenCount) || 0)
+      if (invPayload?.setupRequired) {
+        toast.error('Run supabase/xero_hidden_invoices.sql to enable hiding invoices')
+      }
 
-      const arr = Array.isArray(invData) ? invData : []
+      const arr = invData
       const totalRevenue = arr.filter(i => i.status === 'PAID').reduce((s, i) => s + (i.total || 0), 0)
       const outstanding = arr.filter(i => i.status === 'AUTHORISED').reduce((s, i) => s + (i.amountDue || 0), 0)
       const paymentsWeek = Array.isArray(payData) ? payData.reduce((s, p) => s + (p.amount || 0), 0) : 0
@@ -109,32 +116,40 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
   async function deleteInvoice(inv: XeroInvoice) {
     if (!inv.invoiceID) return
 
-    const status = (inv.status || '').toUpperCase()
-    if (status === 'PAID') {
-      toast.error('Paid invoices cannot be deleted from here.')
-      return
-    }
-    if (status === 'VOIDED' || status === 'DELETED') {
-      toast.error('This invoice is already voided.')
-      return
-    }
-
     const label = inv.invoiceNumber || inv.invoiceID
-    if (!confirm(`Delete invoice ${label}? This will void it in Xero.`)) return
+    if (!confirm(`Remove invoice ${label} from this list? It stays untouched in Xero and can be restored.`)) return
 
     setDeletingId(inv.invoiceID)
     try {
       const res = await fetch(`/api/xero/invoices/${inv.invoiceID}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: inv.status }),
+        body: JSON.stringify({ invoiceNumber: inv.invoiceNumber, contactName: inv.contact?.name }),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Failed to delete invoice')
-      toast.success(`Invoice ${label} voided in Xero`)
+      if (!res.ok) throw new Error(data.error || 'Failed to remove invoice')
+      toast.success(`Invoice ${label} removed from the list`)
       loadData()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to delete invoice')
+      toast.error(err instanceof Error ? err.message : 'Failed to remove invoice')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  async function restoreInvoice(inv: XeroInvoice) {
+    if (!inv.invoiceID) return
+
+    const label = inv.invoiceNumber || inv.invoiceID
+    setDeletingId(inv.invoiceID)
+    try {
+      const res = await fetch(`/api/xero/invoices/${inv.invoiceID}`, { method: 'PATCH' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to restore invoice')
+      toast.success(`Invoice ${label} restored`)
+      loadData()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to restore invoice')
     } finally {
       setDeletingId(null)
     }
@@ -187,18 +202,29 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
 
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-          <h3 style={sectionTitle}>Invoices</h3>
+          <h3 style={sectionTitle}>{showHidden ? 'Removed invoices' : 'Invoices'}</h3>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {(['ALL', 'PAID', 'AUTHORISED', 'OVERDUE', 'DRAFT'] as const).map((s) => (
               <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>
                 {s === 'AUTHORISED' ? 'Outstanding' : s.charAt(0) + s.slice(1).toLowerCase()}
               </FilterChip>
             ))}
+            {(hiddenCount > 0 || showHidden) && (
+              <FilterChip active={showHidden} onClick={() => setShowHidden((v) => !v)}>
+                {showHidden ? 'Back to invoices' : `Removed (${hiddenCount})`}
+              </FilterChip>
+            )}
             <button onClick={() => setShowModal(true)} style={{ ...primaryButton, fontSize: 13, padding: '6px 14px' }}>
               + Create Invoice
             </button>
           </div>
         </div>
+
+        {showHidden && (
+          <p style={{ color: theme.textMuted, fontSize: 13, margin: '0 0 14px' }}>
+            These are hidden from your invoice list only — every one of them is still intact in Xero.
+          </p>
+        )}
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
@@ -211,11 +237,11 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
             {loading ? (
               <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>Loading...</td></tr>
             ) : invoices.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>No invoices found</td></tr>
+              <tr><td colSpan={6} style={{ padding: 24, textAlign: 'center', color: theme.textMuted }}>
+                {showHidden ? 'No removed invoices' : 'No invoices found'}
+              </td></tr>
             ) : invoices.slice(0, 50).map((inv) => {
               const sc = STATUS_COLORS[inv.status || 'DRAFT'] || STATUS_COLORS.DRAFT
-              const status = (inv.status || '').toUpperCase()
-              const canDelete = status !== 'PAID' && status !== 'VOIDED' && status !== 'DELETED'
               return (
                 <tr key={inv.invoiceID} style={{ borderBottom: `1px solid ${theme.border}` }}>
                   <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{inv.contact?.name || '—'}</td>
@@ -226,7 +252,21 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
                     <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', ...sc }}>{inv.status}</span>
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    {canDelete ? (
+                    {showHidden ? (
+                      <button
+                        type="button"
+                        onClick={() => restoreInvoice(inv)}
+                        disabled={deletingId === inv.invoiceID}
+                        style={{
+                          ...secondaryButton,
+                          fontSize: 12,
+                          padding: '5px 10px',
+                          opacity: deletingId === inv.invoiceID ? 0.6 : 1,
+                        }}
+                      >
+                        {deletingId === inv.invoiceID ? 'Restoring…' : 'Restore'}
+                      </button>
+                    ) : (
                       <button
                         type="button"
                         onClick={() => deleteInvoice(inv)}
@@ -240,10 +280,8 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
                           opacity: deletingId === inv.invoiceID ? 0.6 : 1,
                         }}
                       >
-                        {deletingId === inv.invoiceID ? 'Deleting…' : 'Delete'}
+                        {deletingId === inv.invoiceID ? 'Removing…' : 'Delete'}
                       </button>
-                    ) : (
-                      <span style={{ fontSize: 11, color: theme.textFaint }}>—</span>
                     )}
                   </td>
                 </tr>

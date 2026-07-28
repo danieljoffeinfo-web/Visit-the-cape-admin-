@@ -47,7 +47,6 @@ export type FleetOperationalSnapshot = {
   vehicles: Array<{
     id: string
     title: string
-    daily_rate: number | null
     active: boolean
     status: FleetVehicleStatus['status']
     statusLabel: string
@@ -105,7 +104,6 @@ export async function getFleetOperationalSnapshot(): Promise<FleetOperationalSna
       return {
         id: vehicle.id,
         title: vehicle.title,
-        daily_rate: vehicle.base_price ?? null,
         active: false,
         status: 'in_service' as const,
         statusLabel: 'In service',
@@ -115,7 +113,6 @@ export async function getFleetOperationalSnapshot(): Promise<FleetOperationalSna
       return {
         id: vehicle.id,
         title: vehicle.title,
-        daily_rate: vehicle.base_price ?? null,
         active: true,
         status: 'on_tour' as const,
         statusLabel: 'Booked',
@@ -124,7 +121,6 @@ export async function getFleetOperationalSnapshot(): Promise<FleetOperationalSna
     return {
       id: vehicle.id,
       title: vehicle.title,
-      daily_rate: vehicle.base_price ?? null,
       active: true,
       status: 'available' as const,
       statusLabel: 'Available',

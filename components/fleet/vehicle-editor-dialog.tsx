@@ -12,7 +12,6 @@ export type VehicleFormValues = {
   title: string
   registrationNumber: string
   seats: string
-  defaultRate: string
   notes: string
 }
 
@@ -31,7 +30,6 @@ const emptyForm: VehicleFormValues = {
   title: '',
   registrationNumber: '',
   seats: '7',
-  defaultRate: '',
   notes: '',
 }
 
@@ -59,7 +57,6 @@ export function VehicleEditorDialog({
         title: vehicle.title,
         registrationNumber: vehicleRegistration(vehicle),
         seats: String(vehicleSeats(vehicle) || 1),
-        defaultRate: vehicle.base_price === null || vehicle.base_price === undefined ? '' : String(Number(vehicle.base_price)),
         notes: vehicleNotes(vehicle),
       })
       setLocalImageUrl(vehicle.image_url || null)
@@ -173,7 +170,6 @@ export function VehicleEditorDialog({
             <Field label="Registration" value={form.registrationNumber} onChange={(registrationNumber) => setForm((c) => ({ ...c, registrationNumber }))} placeholder="CAA 123 456" />
             <Field label="Seats" type="number" value={form.seats} onChange={(seats) => setForm((c) => ({ ...c, seats }))} placeholder="12" />
           </div>
-          <Field label="Default day rate (R)" type="number" value={form.defaultRate} onChange={(defaultRate) => setForm((c) => ({ ...c, defaultRate }))} placeholder="2500" />
           <TextArea label="Notes" value={form.notes} onChange={(notes) => setForm((c) => ({ ...c, notes }))} placeholder="Colour, class, driver notes…" />
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>

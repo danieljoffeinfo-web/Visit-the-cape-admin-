@@ -15,7 +15,6 @@ export type FleetVehicleCardData = {
   summary?: string | null
   duration_label?: string | null
   pickup_notes?: string | null
-  base_price?: number | null
   image_url?: string | null
 }
 
@@ -61,10 +60,10 @@ export function VehicleCard({ vehicle, bookingCount, revenue, onEdit, onBook }: 
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           {[
-            { label: 'Day rate', value: vehicle.base_price ? money(Number(vehicle.base_price)) : 'Not set' },
             { label: 'Bookings', value: String(bookingCount) },
             { label: 'Revenue', value: money(revenue) },
             { label: 'Seats', value: buildSeatsLabel(seats || 0) },
+            { label: 'Registration', value: vehicleRegistration(vehicle) || 'Not set' },
           ].map((item) => (
             <div
               key={item.label}

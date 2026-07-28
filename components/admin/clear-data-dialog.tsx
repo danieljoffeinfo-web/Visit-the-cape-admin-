@@ -52,7 +52,7 @@ export function ClearDataDialog({ open, onClose, onConfirm, loading }: ClearData
         <h2 style={{ ...sectionTitle, color: theme.danger, marginBottom: 12 }}>Clear all admin data?</h2>
         <p style={{ color: theme.textMuted, fontSize: 14, lineHeight: 1.6, marginBottom: 16 }}>
           This permanently removes bookings, enquiries, customers, tour departures, invoice links, activity logs,
-          content library schedules, and Jarvis chat history from the admin database.
+          and content library schedules from the admin database.
         </p>
         <div
           style={{

@@ -2,7 +2,7 @@ import { Invoice } from 'xero-node'
 import { NextRequest, NextResponse } from 'next/server'
 import { differenceInCalendarDays, isValid, parseISO } from 'date-fns'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { buildSeatsLabel, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { buildSeatsLabel, normalizeUsageType, parseFleetBookingNotes, rentalTotal, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { getFleetVehicleForBooking } from '@/lib/fleet-db'
 import { getAuthedXeroClient } from '@/lib/xero'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
@@ -11,6 +11,9 @@ import { logActivityServer } from '@/lib/activity-log-server'
 import { revalidateFleetAvailabilityOnWebsite } from '@/lib/revalidate-fleet'
 
 export async function GET(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const refreshXero = request.nextUrl.searchParams.get('refresh') === 'true'
 
@@ -102,13 +105,14 @@ export async function POST(request: NextRequest) {
       email,
       startDate,
       endDate,
-      amount,
+      dailyRate,
       seatsBooked,
       usageType,
       notes,
+      sendInvoiceToXero,
     } = body
 
-    if (!vehicleId || !firstName || !surname || !email || !startDate || !endDate || amount === undefined || amount === null) {
+    if (!vehicleId || !firstName || !surname || !email || !startDate || !endDate || dailyRate === undefined || dailyRate === null) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -119,12 +123,20 @@ export async function POST(request: NextRequest) {
     }
 
     const rentalDays = differenceInCalendarDays(end, start) + 1
-    const totalAmount = Number(amount)
-    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
-      return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
+    const ratePerDay = Number(dailyRate)
+    if (!Number.isFinite(ratePerDay) || ratePerDay <= 0) {
+      return NextResponse.json({ error: 'Rate per day must be greater than zero' }, { status: 400 })
     }
 
-    const bookingUsageType = String(usageType || 'tour').toLowerCase() === 'internal' ? 'internal' : 'tour'
+    // The rate is agreed per booking; the total always follows rate x days.
+    const totalAmount = rentalTotal(ratePerDay, rentalDays)
+    if (totalAmount <= 0) {
+      return NextResponse.json({ error: 'Booking total must be greater than zero' }, { status: 400 })
+    }
+
+    // Default to raising an invoice so existing callers keep working.
+    const wantsXeroInvoice = sendInvoiceToXero === undefined ? true : Boolean(sendInvoiceToXero)
+    const bookingUsageType = normalizeUsageType(usageType)
 
     const { data: vehicle, error: vehicleError } = await getFleetVehicleForBooking(vehicleId)
 
@@ -175,6 +187,7 @@ export async function POST(request: NextRequest) {
         endDate,
         days: rentalDays,
         seatsBooked: bookedSeats,
+        dailyRate: ratePerDay,
         totalAmount,
         usageType: bookingUsageType,
         paymentReceived: false,
@@ -216,16 +229,18 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'email' })
 
-    const invoiceResult = await createXeroInvoiceForBooking({
-      contactName: `${String(firstName).trim()} ${String(surname).trim()}`.trim(),
-      contactEmail: String(email).trim(),
-      description: `${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''} rental · ${usageTypeLabel(bookingUsageType)} · ${startDate} to ${endDate} · ${rentalDays} day${rentalDays === 1 ? '' : 's'}`,
-      amount: totalAmount,
-      dueDate: endDate,
-      bookingId: insertedBooking.id,
-      bookingType: 'fleet',
-      reference: accountNumber ? String(accountNumber).trim() : insertedBooking.id,
-    })
+    const invoiceResult = wantsXeroInvoice
+      ? await createXeroInvoiceForBooking({
+          contactName: `${String(firstName).trim()} ${String(surname).trim()}`.trim(),
+          contactEmail: String(email).trim(),
+          description: `${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''} rental · ${usageTypeLabel(bookingUsageType)} · ${startDate} to ${endDate} · ${rentalDays} day${rentalDays === 1 ? '' : 's'} @ ${ratePerDay}/day`,
+          amount: totalAmount,
+          dueDate: endDate,
+          bookingId: insertedBooking.id,
+          bookingType: 'fleet',
+          reference: accountNumber ? String(accountNumber).trim() : insertedBooking.id,
+        })
+      : { connected: false as const, invoice: null }
 
     if (invoiceResult.invoice) {
       await supabaseAdmin.from('customers').upsert({
@@ -246,7 +261,16 @@ export async function POST(request: NextRequest) {
       entityType: 'fleet_booking',
       entityId: insertedBooking.id,
       entityLabel: `${vehicle.title} — ${firstName} ${surname}`,
-      newValue: { vehicleId: vehicle.id, startDate, endDate, totalAmount },
+      newValue: {
+        vehicleId: vehicle.id,
+        startDate,
+        endDate,
+        dailyRate: ratePerDay,
+        rentalDays,
+        totalAmount,
+        usageType: bookingUsageType,
+        sentToXero: wantsXeroInvoice,
+      },
     })
 
     void revalidateFleetAvailabilityOnWebsite()
@@ -262,10 +286,12 @@ export async function POST(request: NextRequest) {
         startDate,
         endDate,
         rentalDays,
+        dailyRate: ratePerDay,
         totalAmount,
       },
       invoice: invoiceResult.invoice,
       xeroConnected: invoiceResult.connected,
+      invoiceRequested: wantsXeroInvoice,
     })
   } catch (error) {
     console.error('Fleet booking route error:', error)
@@ -314,11 +340,16 @@ export async function PATCH(request: NextRequest) {
     }
 
     const parsedNotes = parseFleetBookingNotes(bookingRow.notes)
+    // Editing the total re-derives the per-day rate so total === dailyRate x days.
+    const nextDailyRate = updatingAmount && parsedNotes && parsedNotes.rental.days > 0
+      ? nextAmount! / parsedNotes.rental.days
+      : parsedNotes?.rental.dailyRate ?? null
     const updatedNotes = parsedNotes
       ? JSON.stringify({
           ...parsedNotes,
           rental: {
             ...parsedNotes.rental,
+            dailyRate: nextDailyRate,
             totalAmount: updatingAmount ? nextAmount! : parsedNotes.rental.totalAmount,
             paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : parsedNotes.rental.paymentReceived || false,
           },

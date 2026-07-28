@@ -1,5 +1,6 @@
 import { addDays, format } from 'date-fns'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { fetchUnreadEnquiries } from '@/lib/enquiries-server'
 import { getFleetStatusForDashboard } from '@/lib/fleet-status'
 import { getAuthedXeroClient } from '@/lib/xero'
 import type {
@@ -11,34 +12,24 @@ import type {
   RevenueDay,
 } from '@/lib/dashboard'
 
-const UNREAD_STATUSES = ['new', 'unread']
-
-function isUnreadEnquiry(enquiry: EnquiryRow): boolean {
-  const status = (enquiry.status || '').toLowerCase()
-  if (!status) return true
-  return UNREAD_STATUSES.includes(status)
-}
-
-async function fetchEnquiries(): Promise<EnquiryRow[]> {
-  const withStatus = await supabaseAdmin
-    .from('enquiries')
-    .select('id, name, tour_type, created_at, status')
-    .order('created_at', { ascending: false })
-    .limit(100)
-
-  if (withStatus.error?.message?.toLowerCase().includes('status')) {
-    const fallback = await supabaseAdmin
-      .from('enquiries')
-      .select('id, name, tour_type, created_at')
-      .order('created_at', { ascending: false })
-      .limit(100)
-
-    if (fallback.error) return []
-    return (fallback.data || []) as EnquiryRow[]
+/**
+ * Unread count comes from the same source the Enquiries inbox reads, so the
+ * badge always matches what is actually in the list.
+ */
+async function fetchUnread(): Promise<EnquiryRow[]> {
+  try {
+    const unread = await fetchUnreadEnquiries()
+    return unread.map((enquiry) => ({
+      id: enquiry.id,
+      name: enquiry.name,
+      tour_type: enquiry.tour_type,
+      created_at: enquiry.created_at,
+      status: enquiry.status,
+    })) as EnquiryRow[]
+  } catch (error) {
+    console.error('Dashboard enquiries fetch error:', error)
+    return []
   }
-
-  if (withStatus.error) return []
-  return (withStatus.data || []) as EnquiryRow[]
 }
 
 function buildEmptyRevenueDays(): RevenueDay[] {
@@ -201,8 +192,7 @@ export type DashboardSnapshot = {
 }
 
 export async function buildDashboardSnapshot(): Promise<DashboardSnapshot> {
-  const enquiries = await fetchEnquiries()
-  const unread = enquiries.filter(isUnreadEnquiry)
+  const unread = await fetchUnread()
 
   const [seatsRemaining, invoices, departures, revenueDays, fleet, crm] = await Promise.all([
     getSeatsRemainingNext30Days(),

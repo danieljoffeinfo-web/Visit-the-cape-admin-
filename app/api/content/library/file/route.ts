@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CONTENT_LIBRARY_BUCKET } from '@/lib/content-library'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 function isSafeStoragePath(path: string) {
   if (!path || path.startsWith('/') || path.includes('..')) return false
@@ -8,6 +9,9 @@ function isSafeStoragePath(path: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const path = request.nextUrl.searchParams.get('path')?.trim() || ''
   if (!isSafeStoragePath(path)) {
     return NextResponse.json({ error: 'Invalid file path' }, { status: 400 })

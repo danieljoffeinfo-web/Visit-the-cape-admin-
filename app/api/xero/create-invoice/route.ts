@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 export async function POST(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const body = await request.json()
   const { contactName, contactEmail, description, amount, dueDate, bookingId, bookingType, reference } = body
 

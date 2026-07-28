@@ -5,7 +5,6 @@ import { cardStyle, pageTitle, sectionTitle, theme } from '@/lib/theme'
 const PANEL_LABELS: Record<string, string> = {
   calendar: 'Calendar',
   fleet: 'Fleet Manager',
-  socials: 'Socials',
   enquiries: 'Enquiries',
   tours: 'Tours & Pricing',
 }

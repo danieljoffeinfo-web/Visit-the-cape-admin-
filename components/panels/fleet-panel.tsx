@@ -43,7 +43,6 @@ type VehicleRow = {
   summary?: string | null
   duration_label?: string | null
   pickup_notes?: string | null
-  base_price?: number | null
   active?: boolean | null
   image_url?: string | null
 }
@@ -134,6 +133,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           startDate: notes.rental.startDate,
           endDate: notes.rental.endDate,
           days: notes.rental.days,
+          dailyRate: notes.rental.dailyRate ?? null,
           totalAmount: Number(booking.amount || notes.rental.totalAmount || 0),
           customerName: fullCustomerName(notes),
           vehicleImageUrl: fleetVehicleImageSrc(notes.vehicle.imageUrl) || vehicleImageById[notes.vehicle.id] || null,
@@ -225,7 +225,6 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       const payload = {
         ...values,
         seats: Number(values.seats),
-        defaultRate: values.defaultRate ? Number(values.defaultRate) : null,
       }
 
       if (editorMode === 'add') {
@@ -294,8 +293,9 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     bookingDays: string
     startDate: string
     endDate: string
-    amount: string
+    dailyRate: string
     seatsBooked: string
+    sendInvoiceToXero: boolean
     firstName: string
     surname: string
     accountNumber: string
@@ -307,8 +307,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       toast.error('Complete the vehicle and customer details')
       return
     }
-    if (!payload.amount || Number(payload.amount) <= 0) {
-      toast.error('Enter the rental amount')
+    if (!payload.dailyRate || Number(payload.dailyRate) <= 0) {
+      toast.error('Enter the rate per day')
       return
     }
     if (getConflicts(payload.vehicleId, payload.startDate, payload.endDate).length > 0) {
@@ -324,13 +324,21 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
-          amount: Number(payload.amount),
+          dailyRate: Number(payload.dailyRate),
           seatsBooked: payload.seatsBooked ? Number(payload.seatsBooked) : vehicleSeats(vehicle || { duration_label: '1 seat' }) || 1,
         }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Failed to create booking')
-      toast.success(result.xeroConnected ? 'Vehicle booked and invoice created in Xero' : 'Vehicle booked. Connect Xero to create the invoice.')
+
+      if (!payload.sendInvoiceToXero) {
+        toast.success('Vehicle booked. No Xero invoice was created.')
+      } else if (result.xeroConnected) {
+        toast.success('Vehicle booked and invoice created in Xero')
+      } else {
+        toast.success('Vehicle booked. Connect Xero to create the invoice.')
+      }
+
       setBookOpen(false)
       loadFleet()
     } catch (error) {
@@ -451,7 +459,10 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                       {item.customerName} · {format(parseISO(item.startDate), 'd MMM')} → {format(parseISO(item.endDate), 'd MMM yyyy')}
                     </div>
                     <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>
-                      {money(item.totalAmount)} · {item.invoice?.status || 'Pending invoice'}
+                      {money(item.totalAmount)}
+                      {item.dailyRate ? ` · ${money(Number(item.dailyRate))}/day × ${item.days}` : ''}
+                      {' · '}
+                      {item.invoice?.status || 'No invoice'}
                     </div>
                   </div>
                 </div>

@@ -10,14 +10,9 @@ type VehiclePreviewCardProps = {
   compact?: boolean
 }
 
-function money(amount: number) {
-  return `R ${amount.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
 export function VehiclePreviewCard({ vehicle, compact }: VehiclePreviewCardProps) {
   const seats = vehicleSeats(vehicle)
   const registration = vehicleRegistration(vehicle) || 'No registration'
-  const dayRate = vehicle.base_price ? `${money(Number(vehicle.base_price))}/day` : 'No day rate'
 
   if (compact) {
     return (
@@ -59,7 +54,7 @@ export function VehiclePreviewCard({ vehicle, compact }: VehiclePreviewCardProps
           {vehicle.title}
         </div>
         <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>
-          {registration} · {buildSeatsLabel(seats || 0)} · {dayRate}
+          {registration} · {buildSeatsLabel(seats || 0)}
         </div>
       </div>
     </div>

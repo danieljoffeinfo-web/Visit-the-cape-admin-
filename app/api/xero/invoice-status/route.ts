@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthedXeroClient } from '@/lib/xero'
-import { getSupabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 export async function GET(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const bookingId = request.nextUrl.searchParams.get('booking_id')
   if (!bookingId) return NextResponse.json(null)
 
-  const { data: link } = await getSupabase()
+  const { data: link } = await supabaseAdmin
     .from('xero_invoice_links')
     .select('*')
     .eq('booking_id', bookingId)
@@ -22,7 +26,7 @@ export async function GET(request: NextRequest) {
       const inv = response.body.invoices?.[0]
       if (inv) {
         const status = inv.status as unknown as string
-        await getSupabase().from('xero_invoice_links').update({ status, updated_at: new Date().toISOString() }).eq('booking_id', bookingId)
+        await supabaseAdmin.from('xero_invoice_links').update({ status, updated_at: new Date().toISOString() }).eq('booking_id', bookingId)
         return NextResponse.json({ ...link, status })
       }
     } catch { /* use cached status */ }

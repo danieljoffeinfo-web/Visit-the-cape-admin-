@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { getXeroTokens, refreshXeroTokenIfNeeded } from '@/lib/xero'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 export async function GET() {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const token = await getXeroTokens()
   if (!token) return NextResponse.json({ connected: false })
 
@@ -29,6 +33,9 @@ export async function GET() {
 }
 
 export async function DELETE() {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { error } = await supabaseAdmin
     .from('xero_tokens')
     .delete()

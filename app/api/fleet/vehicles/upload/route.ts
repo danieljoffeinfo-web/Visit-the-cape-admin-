@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { FLEET_VEHICLE_BUCKET, fleetVehicleStoragePath, resolveFleetVehicleImageUrl, validateFleetVehicleImage } from '@/lib/fleet-image'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 export async function POST(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const formData = await request.formData()
     const file = formData.get('file')

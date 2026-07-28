@@ -2,11 +2,11 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 import type { FleetVehicle } from '@/lib/fleet'
 import { resolveFleetVehicleImageUrl } from '@/lib/fleet-image'
 
-const LIST_COLUMNS = 'id,title,family,summary,duration_label,pickup_notes,base_price,active'
+const LIST_COLUMNS = 'id,title,family,summary,duration_label,pickup_notes,active'
 const LIST_COLUMNS_WITH_IMAGE = `${LIST_COLUMNS},image_url`
-const DETAIL_COLUMNS = 'id,title,summary,duration_label,base_price,pickup_notes,active'
+const DETAIL_COLUMNS = 'id,title,summary,duration_label,pickup_notes,active'
 const DETAIL_COLUMNS_WITH_IMAGE = `${DETAIL_COLUMNS},image_url`
-const BOOKING_VEHICLE_COLUMNS = 'id,title,family,summary,duration_label,base_price'
+const BOOKING_VEHICLE_COLUMNS = 'id,title,family,summary,duration_label'
 const BOOKING_VEHICLE_COLUMNS_WITH_IMAGE = `${BOOKING_VEHICLE_COLUMNS},image_url`
 
 function isMissingImageUrlColumn(message?: string) {

@@ -2,7 +2,7 @@
 
 import { addDays, differenceInCalendarDays, format, isBefore, parseISO } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
-import { buildSeatsLabel, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { buildSeatsLabel, FLEET_USAGE_TYPES, rentalTotal, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { VehiclePreviewCard } from '@/components/fleet/vehicle-preview-card'
 import type { FleetVehicleCardData } from '@/components/fleet/vehicle-card'
 import { fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
@@ -26,8 +26,9 @@ type BookVehicleDialogProps = {
     bookingDays: string
     startDate: string
     endDate: string
-    amount: string
+    dailyRate: string
     seatsBooked: string
+    sendInvoiceToXero: boolean
     firstName: string
     surname: string
     accountNumber: string
@@ -65,8 +66,9 @@ export function BookVehicleDialog({
   const [bookingDays, setBookingDays] = useState('2')
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [endDate, setEndDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-  const [amount, setAmount] = useState('')
+  const [dailyRate, setDailyRate] = useState('')
   const [seatsBooked, setSeatsBooked] = useState('')
+  const [sendInvoiceToXero, setSendInvoiceToXero] = useState(true)
   const [firstName, setFirstName] = useState('')
   const [surname, setSurname] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
@@ -84,8 +86,9 @@ export function BookVehicleDialog({
     setBookingDays('2')
     setStartDate(format(new Date(), 'yyyy-MM-dd'))
     setEndDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-    setAmount('')
+    setDailyRate('')
     setSeatsBooked(vehicle ? String(vehicleSeats(vehicle) || 1) : '')
+    setSendInvoiceToXero(true)
     setFirstName('')
     setSurname('')
     setAccountNumber('')
@@ -96,9 +99,7 @@ export function BookVehicleDialog({
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId) || null
   const rentalDays = useMemo(() => computeRentalDays(startDate, endDate), [startDate, endDate])
-  const suggestedAmount = selectedVehicle?.base_price
-    ? Number(selectedVehicle.base_price) * Math.max(1, Number.parseInt(bookingDays, 10) || rentalDays || 1)
-    : 0
+  const totalAmount = rentalTotal(dailyRate, rentalDays)
   const conflicts = vehicleId ? conflictsForVehicle(vehicleId, startDate, endDate) : []
 
   if (!open) return null
@@ -107,10 +108,6 @@ export function BookVehicleDialog({
     const vehicle = vehicles.find((v) => v.id === nextId)
     setVehicleId(nextId)
     if (vehicle) setSeatsBooked(String(vehicleSeats(vehicle) || 1))
-    if (!amount && vehicle?.base_price) {
-      const days = Math.max(1, Number.parseInt(bookingDays, 10) || rentalDays || 1)
-      setAmount(String(Number(vehicle.base_price) * days))
-    }
   }
 
   function handleStartDateChange(value: string) {
@@ -134,13 +131,9 @@ export function BookVehicleDialog({
     if (!Number.isNaN(start.getTime())) setEndDate(format(addDays(start, nextDays - 1), 'yyyy-MM-dd'))
   }
 
-  function applySuggestedAmount() {
-    if (suggestedAmount > 0) setAmount(String(suggestedAmount))
-  }
-
   function goNext() {
     if (step === 0 && !vehicleId) return
-    if (step === 1 && conflicts.length > 0) return
+    if (step === 1 && (conflicts.length > 0 || totalAmount <= 0)) return
     setStep((s) => Math.min(s + 1, STEPS.length - 1))
   }
 
@@ -217,8 +210,9 @@ export function BookVehicleDialog({
               bookingDays,
               startDate,
               endDate,
-              amount,
+              dailyRate,
               seatsBooked,
+              sendInvoiceToXero,
               firstName,
               surname,
               accountNumber,
@@ -251,10 +245,7 @@ export function BookVehicleDialog({
               {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} compact />}
 
               <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-2">
-                <SelectField label="Use type" value={usageType} onChange={setUsageType} options={[
-                  { value: 'tour', label: 'Tour use' },
-                  { value: 'internal', label: 'Internal use' },
-                ]} />
+                <SelectField label="Vehicle use" value={usageType} onChange={setUsageType} options={FLEET_USAGE_TYPES.map((o) => ({ value: o.value, label: o.label }))} />
                 <Field label="Seats booked" type="number" value={seatsBooked} onChange={setSeatsBooked} />
               </div>
 
@@ -264,19 +255,25 @@ export function BookVehicleDialog({
                 <Field label="Days" type="number" value={bookingDays} onChange={handleBookingDaysChange} />
               </div>
 
-              <Field label="Amount (R)" type="number" value={amount} onChange={setAmount} placeholder={suggestedAmount ? String(suggestedAmount) : ''} />
+              <Field label="Rate per day (R)" type="number" value={dailyRate} onChange={setDailyRate} placeholder="2500" />
+
+              <div style={{ padding: '12px 14px', borderRadius: 8, background: theme.bronzeBg, border: `1px solid ${theme.bronzeBorder}` }}>
+                <div style={{ ...fieldLabel, marginBottom: 4 }}>Booking total</div>
+                <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 24, color: theme.text }}>
+                  {totalAmount > 0 ? money(totalAmount) : '—'}
+                </div>
+                <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>
+                  {totalAmount > 0
+                    ? `${money(Number(dailyRate))} × ${rentalDays} day${rentalDays === 1 ? '' : 's'}`
+                    : 'Enter a rate per day to work out the total.'}
+                </div>
+              </div>
 
               {selectedVehicle && (
                 <div style={{ fontSize: 12, color: theme.textMuted, padding: '10px 12px', background: theme.surfaceMuted, borderRadius: 8, border: `1px solid ${theme.border}` }}>
                   {buildSeatsLabel(vehicleSeats(selectedVehicle) || 0)} · {usageTypeLabel(usageType)}
                   {rentalDays > 0 ? ` · ${rentalDays} day${rentalDays === 1 ? '' : 's'}` : ''}
                 </div>
-              )}
-
-              {suggestedAmount > 0 && !amount && (
-                <button type="button" onClick={applySuggestedAmount} style={{ ...secondaryButton, textAlign: 'left' }}>
-                  Use suggested amount: {money(suggestedAmount)}
-                </button>
               )}
 
               {conflicts.length > 0 && (
@@ -300,13 +297,39 @@ export function BookVehicleDialog({
                 <Field label="Phone" value={phone} onChange={setPhone} />
                 <Field label="Account number" value={accountNumber} onChange={setAccountNumber} />
               </div>
-              <Field label="Booking notes" value={notes} onChange={setNotes} placeholder="Airport collection, etc." />
+              <Field label="Booking notes" value={notes} onChange={setNotes} placeholder="Collection point, driver notes, etc." />
+
+              <fieldset style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: '12px 14px', margin: 0 }}>
+                <legend style={{ ...fieldLabel, padding: '0 6px' }}>Send invoice to Xero?</legend>
+                <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
+                  {[
+                    { value: true, label: 'Yes' },
+                    { value: false, label: 'No' },
+                  ].map((option) => (
+                    <label key={option.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: theme.text, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="sendInvoiceToXero"
+                        checked={sendInvoiceToXero === option.value}
+                        onChange={() => setSendInvoiceToXero(option.value)}
+                        style={{ accentColor: theme.bronze, cursor: 'pointer' }}
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+                <p style={{ fontSize: 12, color: theme.textMuted, margin: '8px 0 0' }}>
+                  {sendInvoiceToXero
+                    ? 'An invoice will be raised in Xero for this booking.'
+                    : 'The booking is saved without creating a Xero invoice.'}
+                </p>
+              </fieldset>
 
               <div style={{ padding: '12px 14px', borderRadius: 8, background: theme.bronzeBg, border: `1px solid ${theme.bronzeBorder}`, fontSize: 13, color: theme.textMuted }}>
                 <strong style={{ color: theme.text }}>{selectedVehicle?.title}</strong>
                 {' · '}
                 {format(parseISO(startDate), 'd MMM')} → {format(parseISO(endDate), 'd MMM yyyy')}
-                {amount ? ` · ${money(Number(amount))}` : ''}
+                {totalAmount > 0 ? ` · ${money(totalAmount)}` : ''}
               </div>
             </>
           )}
@@ -320,14 +343,14 @@ export function BookVehicleDialog({
             {step < STEPS.length - 1 ? (
               <button
                 type="submit"
-                disabled={step === 0 && !vehicleId}
+                disabled={(step === 0 && !vehicleId) || (step === 1 && totalAmount <= 0)}
                 style={primaryButton}
               >
                 Continue
               </button>
             ) : (
               <button type="submit" disabled={saving || vehicles.length === 0} style={primaryButton}>
-                {saving ? 'Creating booking…' : 'Book & create invoice'}
+                {saving ? 'Creating booking…' : sendInvoiceToXero ? 'Book & create invoice' : 'Book vehicle'}
               </button>
             )}
             <button type="button" onClick={onClose} style={secondaryButton}>

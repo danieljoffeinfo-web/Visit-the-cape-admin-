@@ -2,8 +2,12 @@ import { NextResponse } from 'next/server'
 import { Contact } from 'xero-node'
 import { getAuthedXeroClient } from '@/lib/xero'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 export async function GET() {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const auth = await getAuthedXeroClient()
   if (!auth) return NextResponse.json({ error: 'Not connected' }, { status: 401 })
 
@@ -19,6 +23,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const auth = await getAuthedXeroClient()
   if (!auth) return NextResponse.json({ error: 'Not connected' }, { status: 401 })
 

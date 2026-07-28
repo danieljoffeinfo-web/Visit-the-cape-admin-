@@ -17,12 +17,20 @@ function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))
 }
 
-export async function middleware(request: NextRequest) {
+/**
+ * Renamed from `middleware` in Next.js 16 — see the Proxy docs.
+ *
+ * This is an optimistic gate only: it refreshes the Supabase session and turns
+ * anonymous visitors away early. It is NOT the authorization boundary. Next's
+ * own docs warn against using Proxy for session management or authorization, so
+ * every route handler re-checks the caller with `getApprovedAdminUser()`.
+ */
+export async function proxy(request: NextRequest) {
   const supabaseUrl = getSupabaseUrl()
   const supabaseAnonKey = getSupabaseAnonKey()
 
   if (!supabaseUrl || !supabaseAnonKey) {
-    console.error('Middleware: missing Supabase env (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_URL)')
+    console.error('Proxy: missing Supabase env (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_URL)')
     return new NextResponse('Server configuration error: Supabase env vars missing', { status: 500 })
   }
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 type CustomerRow = {
   id: string
@@ -15,6 +16,9 @@ type CustomerRow = {
 }
 
 export async function GET() {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const { data, error } = await supabaseAdmin
       .from('customers')

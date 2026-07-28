@@ -5,12 +5,17 @@ export type FleetVehicle = {
   summary?: string | null
   duration_label?: string | null
   pickup_notes?: string | null
-  base_price?: number | null
   active?: boolean | null
   image_url?: string | null
 }
 
-export type FleetUsageType = 'internal' | 'tour'
+export type FleetUsageType = 'internal' | 'tour' | 'airport_transfer'
+
+export const FLEET_USAGE_TYPES: { value: FleetUsageType; label: string }[] = [
+  { value: 'tour', label: 'Tour use' },
+  { value: 'internal', label: 'Internal use' },
+  { value: 'airport_transfer', label: 'Airport transfer' },
+]
 
 export type FleetBookingNotes = {
   kind: 'fleet-booking'
@@ -33,6 +38,8 @@ export type FleetBookingNotes = {
     endDate: string
     days: number
     seatsBooked: number
+    /** Rate per day agreed at booking time. Total = dailyRate x days. */
+    dailyRate?: number | null
     totalAmount: number
     usageType?: FleetUsageType | null
     paymentReceived?: boolean | null
@@ -61,8 +68,22 @@ export function buildSeatsLabel(seats: number) {
   return `${Math.max(1, seats)} seats`
 }
 
+export function normalizeUsageType(usageType?: string | null): FleetUsageType {
+  const value = (usageType || '').toLowerCase().replace(/[\s-]+/g, '_')
+  const match = FLEET_USAGE_TYPES.find((option) => option.value === value)
+  return match ? match.value : 'tour'
+}
+
 export function usageTypeLabel(usageType?: string | null) {
-  return (usageType || '').toLowerCase() === 'internal' ? 'Internal use' : 'Tour use'
+  const value = normalizeUsageType(usageType)
+  return FLEET_USAGE_TYPES.find((option) => option.value === value)?.label || 'Tour use'
+}
+
+/** Total for a rental. Falls back to 0 when either input is unusable. */
+export function rentalTotal(dailyRate: number | string | null | undefined, days: number) {
+  const rate = Number(dailyRate)
+  if (!Number.isFinite(rate) || rate <= 0 || days <= 0) return 0
+  return rate * days
 }
 
 export function parseFleetBookingNotes(value?: string | null): FleetBookingNotes | null {

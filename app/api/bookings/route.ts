@@ -9,12 +9,18 @@ import {
   sortBookings,
   type BookingTab,
 } from '@/lib/bookings'
+import { fetchEnquiriesFromSource } from '@/lib/enquiries-server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 async function fetchAllBookings() {
-  const [tagAlongRes, enquiriesRes, fleetRes, invoicesRes] = await Promise.all([
+  const [tagAlongRes, enquiries, fleetRes, invoicesRes] = await Promise.all([
     supabaseAdmin.from('tag_along_bookings').select('*').order('created_at', { ascending: false }).limit(200),
-    supabaseAdmin.from('enquiries').select('*').order('created_at', { ascending: false }).limit(200),
+    // Private enquiries come from whichever project owns them — same source the
+    // Enquiries inbox reads, so both tabs show the same rows.
+    fetchEnquiriesFromSource().catch((error) => {
+      console.error('Bookings private enquiries fetch error:', error)
+      return []
+    }),
     supabaseAdmin
       .from('tour_bookings')
       .select('id,name,email,passengers,amount,status,notes,created_at')
@@ -25,7 +31,6 @@ async function fetchAllBookings() {
   ])
 
   if (tagAlongRes.error) throw tagAlongRes.error
-  if (enquiriesRes.error) throw enquiriesRes.error
   if (fleetRes.error) throw fleetRes.error
 
   const invoiceMap = Object.fromEntries(
@@ -36,7 +41,7 @@ async function fetchAllBookings() {
   )
 
   const tagAlong = (tagAlongRes.data || []).map(normalizeTagAlongRow)
-  const privateRows = (enquiriesRes.data || []).map(normalizeEnquiryRow)
+  const privateRows = enquiries.map(normalizeEnquiryRow)
   const fleet = (fleetRes.data || []).map((row) =>
     normalizeFleetRow(row, invoiceMap[row.id] || null),
   )

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { parseFleetBookingNotes, fullCustomerName, usageTypeLabel, vehicleRegistration } from '@/lib/fleet'
 import { supabaseAdmin } from '@/lib/supabase-admin'
+import { getApprovedAdminUser } from '@/lib/auth-server'
 
 type FleetBookingRow = {
   id: string
@@ -21,6 +22,9 @@ type ProductRow = {
 }
 
 export async function GET() {
+  const admin = await getApprovedAdminUser()
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   try {
     const [fleetRes, departuresRes, productsRes] = await Promise.all([
       supabaseAdmin
