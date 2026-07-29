@@ -133,7 +133,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           startDate: notes.rental.startDate,
           endDate: notes.rental.endDate,
           days: notes.rental.days,
-          dailyRate: notes.rental.dailyRate ?? null,
+          depositAmount: notes.rental.depositAmount ?? null,
+          invoiceNumber: notes.invoice?.number || null,
           totalAmount: Number(booking.amount || notes.rental.totalAmount || 0),
           customerName: fullCustomerName(notes),
           vehicleImageUrl: fleetVehicleImageSrc(notes.vehicle.imageUrl) || vehicleImageById[notes.vehicle.id] || null,
@@ -293,7 +294,9 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     bookingDays: string
     startDate: string
     endDate: string
-    dailyRate: string
+    amount: string
+    depositRequired: boolean
+    depositAmount: string
     seatsBooked: string
     sendInvoiceToXero: boolean
     firstName: string
@@ -303,12 +306,21 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     email: string
     notes: string
   }) {
-    if (!payload.vehicleId || !payload.firstName.trim() || !payload.surname.trim() || !payload.email.trim()) {
-      toast.error('Complete the vehicle and customer details')
+    // Email and account number are optional — only the customer's name is needed.
+    if (!payload.vehicleId || !payload.firstName.trim() || !payload.surname.trim()) {
+      toast.error('Enter the customer name')
       return
     }
-    if (!payload.dailyRate || Number(payload.dailyRate) <= 0) {
-      toast.error('Enter the rate per day')
+    if (!payload.amount || Number(payload.amount) <= 0) {
+      toast.error('Enter the booking amount')
+      return
+    }
+    if (payload.depositRequired && (!payload.depositAmount || Number(payload.depositAmount) <= 0)) {
+      toast.error('Enter the upfront deposit amount')
+      return
+    }
+    if (payload.depositRequired && Number(payload.depositAmount) > Number(payload.amount)) {
+      toast.error('The deposit cannot be more than the total amount')
       return
     }
     if (getConflicts(payload.vehicleId, payload.startDate, payload.endDate).length > 0) {
@@ -324,23 +336,32 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
-          dailyRate: Number(payload.dailyRate),
+          amount: Number(payload.amount),
+          depositAmount: payload.depositRequired ? Number(payload.depositAmount) : null,
           seatsBooked: payload.seatsBooked ? Number(payload.seatsBooked) : vehicleSeats(vehicle || { duration_label: '1 seat' }) || 1,
         }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || 'Failed to create booking')
 
-      if (!payload.sendInvoiceToXero) {
-        toast.success('Vehicle booked. No Xero invoice was created.')
-      } else if (result.xeroConnected) {
-        toast.success('Vehicle booked and invoice created in Xero')
-      } else {
-        toast.success('Vehicle booked. Connect Xero to create the invoice.')
-      }
-
       setBookOpen(false)
       loadFleet()
+
+      toast.success(
+        result.invoiceEmailed
+          ? `Booked. Invoice ${result.invoiceNumber} emailed to you.`
+          : `Booked. Invoice ${result.invoiceNumber} ready to download.`,
+        {
+          description: result.invoiceEmailed ? undefined : result.invoiceEmailError || undefined,
+          action: result.invoiceDownloadUrl
+            ? {
+                label: 'Download invoice',
+                onClick: () => window.open(result.invoiceDownloadUrl, '_blank', 'noopener'),
+              }
+            : undefined,
+          duration: 10000,
+        },
+      )
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create booking')
     } finally {
@@ -460,9 +481,20 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                     </div>
                     <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>
                       {money(item.totalAmount)}
-                      {item.dailyRate ? ` · ${money(Number(item.dailyRate))}/day × ${item.days}` : ''}
-                      {' · '}
-                      {item.invoice?.status || 'No invoice'}
+                      {item.depositAmount
+                        ? ` · ${money(Number(item.depositAmount))} upfront, ${money(Math.max(0, item.totalAmount - Number(item.depositAmount)))} balance`
+                        : ''}
+                    </div>
+                    <div style={{ fontSize: 12, marginTop: 4, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <span style={{ color: theme.textFaint }}>{item.invoiceNumber || item.invoice?.status || 'No invoice'}</span>
+                      <a
+                        href={`/api/xero/invoice-pdf?booking_id=${encodeURIComponent(item.booking.id)}&kind=fleet`}
+                        target="_blank"
+                        rel="noopener"
+                        style={{ color: theme.bronzeDark, fontWeight: 600, textDecoration: 'none' }}
+                      >
+                        Download invoice
+                      </a>
                     </div>
                   </div>
                 </div>

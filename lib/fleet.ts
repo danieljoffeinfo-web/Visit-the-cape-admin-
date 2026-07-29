@@ -38,13 +38,30 @@ export type FleetBookingNotes = {
     endDate: string
     days: number
     seatsBooked: number
-    /** Rate per day agreed at booking time. Total = dailyRate x days. */
+    /** Legacy: rate per day on bookings taken before amounts were typed in. */
     dailyRate?: number | null
+    /** Total agreed for the rental, VAT inclusive. */
     totalAmount: number
+    /** Upfront deposit required to confirm; deducted from the balance due. */
+    depositAmount?: number | null
     usageType?: FleetUsageType | null
     paymentReceived?: boolean | null
     notes?: string | null
   }
+  /** Invoice issued for this booking. Created in the admin, not in Xero. */
+  invoice?: {
+    number: string
+    issuedAt: string
+    dueDate: string
+    issuedByName?: string | null
+    issuedByEmail?: string | null
+  } | null
+}
+
+/** Balance still owing once any upfront deposit is taken off the total. */
+export function balanceDue(rental: { totalAmount: number; depositAmount?: number | null }) {
+  const deposit = Number(rental.depositAmount) || 0
+  return Math.max(0, (Number(rental.totalAmount) || 0) - deposit)
 }
 
 export function isFleetVehicle(product: { family?: string | null }) {

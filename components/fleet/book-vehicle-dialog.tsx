@@ -2,7 +2,7 @@
 
 import { addDays, differenceInCalendarDays, format, isBefore, parseISO } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
-import { buildSeatsLabel, FLEET_USAGE_TYPES, rentalTotal, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { buildSeatsLabel, FLEET_USAGE_TYPES, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { VehiclePreviewCard } from '@/components/fleet/vehicle-preview-card'
 import type { FleetVehicleCardData } from '@/components/fleet/vehicle-card'
 import { fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
@@ -26,7 +26,9 @@ type BookVehicleDialogProps = {
     bookingDays: string
     startDate: string
     endDate: string
-    dailyRate: string
+    amount: string
+    depositRequired: boolean
+    depositAmount: string
     seatsBooked: string
     sendInvoiceToXero: boolean
     firstName: string
@@ -66,9 +68,11 @@ export function BookVehicleDialog({
   const [bookingDays, setBookingDays] = useState('2')
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [endDate, setEndDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-  const [dailyRate, setDailyRate] = useState('')
+  const [amount, setAmount] = useState('')
+  const [depositRequired, setDepositRequired] = useState(false)
+  const [depositAmount, setDepositAmount] = useState('')
   const [seatsBooked, setSeatsBooked] = useState('')
-  const [sendInvoiceToXero, setSendInvoiceToXero] = useState(true)
+  const [sendInvoiceToXero, setSendInvoiceToXero] = useState(false)
   const [firstName, setFirstName] = useState('')
   const [surname, setSurname] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
@@ -86,9 +90,11 @@ export function BookVehicleDialog({
     setBookingDays('2')
     setStartDate(format(new Date(), 'yyyy-MM-dd'))
     setEndDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-    setDailyRate('')
+    setAmount('')
+    setDepositRequired(false)
+    setDepositAmount('')
     setSeatsBooked(vehicle ? String(vehicleSeats(vehicle) || 1) : '')
-    setSendInvoiceToXero(true)
+    setSendInvoiceToXero(false)
     setFirstName('')
     setSurname('')
     setAccountNumber('')
@@ -99,7 +105,11 @@ export function BookVehicleDialog({
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId) || null
   const rentalDays = useMemo(() => computeRentalDays(startDate, endDate), [startDate, endDate])
-  const totalAmount = rentalTotal(dailyRate, rentalDays)
+  const totalAmount = Math.max(0, Number(amount) || 0)
+  const deposit = depositRequired ? Math.max(0, Number(depositAmount) || 0) : 0
+  const balance = Math.max(0, totalAmount - deposit)
+  const depositTooBig = depositRequired && deposit > totalAmount && totalAmount > 0
+  const stepOneReady = totalAmount > 0 && !depositTooBig && (!depositRequired || deposit > 0)
   const conflicts = vehicleId ? conflictsForVehicle(vehicleId, startDate, endDate) : []
 
   if (!open) return null
@@ -133,7 +143,7 @@ export function BookVehicleDialog({
 
   function goNext() {
     if (step === 0 && !vehicleId) return
-    if (step === 1 && (conflicts.length > 0 || totalAmount <= 0)) return
+    if (step === 1 && (conflicts.length > 0 || !stepOneReady)) return
     setStep((s) => Math.min(s + 1, STEPS.length - 1))
   }
 
@@ -210,7 +220,9 @@ export function BookVehicleDialog({
               bookingDays,
               startDate,
               endDate,
-              dailyRate,
+              amount,
+              depositRequired,
+              depositAmount,
               seatsBooked,
               sendInvoiceToXero,
               firstName,
@@ -255,19 +267,58 @@ export function BookVehicleDialog({
                 <Field label="Days" type="number" value={bookingDays} onChange={handleBookingDaysChange} />
               </div>
 
-              <Field label="Rate per day (R)" type="number" value={dailyRate} onChange={setDailyRate} placeholder="2500" />
+              <Field label="Amount (R)" type="number" value={amount} onChange={setAmount} placeholder="50000" />
+
+              <fieldset style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: '12px 14px', margin: 0 }}>
+                <legend style={{ ...fieldLabel, padding: '0 6px' }}>Upfront deposit required?</legend>
+                <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
+                  {[
+                    { value: true, label: 'Yes' },
+                    { value: false, label: 'No' },
+                  ].map((option) => (
+                    <label key={option.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: theme.text, cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="depositRequired"
+                        checked={depositRequired === option.value}
+                        onChange={() => {
+                          setDepositRequired(option.value)
+                          if (!option.value) setDepositAmount('')
+                        }}
+                        style={{ accentColor: theme.bronze, cursor: 'pointer' }}
+                      />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+
+                {depositRequired && (
+                  <div style={{ marginTop: 12 }}>
+                    <Field label="Deposit amount (R)" type="number" value={depositAmount} onChange={setDepositAmount} placeholder="10000" />
+                  </div>
+                )}
+              </fieldset>
 
               <div style={{ padding: '12px 14px', borderRadius: 8, background: theme.bronzeBg, border: `1px solid ${theme.bronzeBorder}` }}>
-                <div style={{ ...fieldLabel, marginBottom: 4 }}>Booking total</div>
-                <div style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 24, color: theme.text }}>
-                  {totalAmount > 0 ? money(totalAmount) : '—'}
-                </div>
-                <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>
-                  {totalAmount > 0
-                    ? `${money(Number(dailyRate))} × ${rentalDays} day${rentalDays === 1 ? '' : 's'}`
-                    : 'Enter a rate per day to work out the total.'}
-                </div>
+                <Totals label="Total (VAT inclusive)" value={totalAmount > 0 ? money(totalAmount) : '—'} strong />
+                {deposit > 0 && (
+                  <>
+                    <Totals label="Upfront payment" value={money(deposit)} accent />
+                    <Totals label="Balance" value={money(balance)} strong />
+                  </>
+                )}
+                {totalAmount <= 0 && (
+                  <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>
+                    Type the agreed amount for this booking.
+                  </div>
+                )}
               </div>
+
+              {depositTooBig && (
+                <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(196,92,74,0.08)', border: '1px solid rgba(196,92,74,0.22)', color: theme.danger, fontSize: 13 }}>
+                  The deposit cannot be more than the total amount.
+                </div>
+              )}
 
               {selectedVehicle && (
                 <div style={{ fontSize: 12, color: theme.textMuted, padding: '10px 12px', background: theme.surfaceMuted, borderRadius: 8, border: `1px solid ${theme.border}` }}>
@@ -292,19 +343,19 @@ export function BookVehicleDialog({
                 <Field label="Customer first name" value={firstName} onChange={setFirstName} />
                 <Field label="Customer surname" value={surname} onChange={setSurname} />
               </div>
-              <Field label="Email" type="email" value={email} onChange={setEmail} />
+              <Field label="Email (optional)" type="email" value={email} onChange={setEmail} />
               <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-2">
-                <Field label="Phone" value={phone} onChange={setPhone} />
-                <Field label="Account number" value={accountNumber} onChange={setAccountNumber} />
+                <Field label="Phone (optional)" value={phone} onChange={setPhone} />
+                <Field label="Account number (optional)" value={accountNumber} onChange={setAccountNumber} />
               </div>
               <Field label="Booking notes" value={notes} onChange={setNotes} placeholder="Collection point, driver notes, etc." />
 
               <fieldset style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: '12px 14px', margin: 0 }}>
-                <legend style={{ ...fieldLabel, padding: '0 6px' }}>Send invoice to Xero?</legend>
+                <legend style={{ ...fieldLabel, padding: '0 6px' }}>Also create this invoice in Xero?</legend>
                 <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
                   {[
-                    { value: true, label: 'Yes' },
                     { value: false, label: 'No' },
+                    { value: true, label: 'Yes' },
                   ].map((option) => (
                     <label key={option.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: theme.text, cursor: 'pointer' }}>
                       <input
@@ -320,8 +371,8 @@ export function BookVehicleDialog({
                 </div>
                 <p style={{ fontSize: 12, color: theme.textMuted, margin: '8px 0 0' }}>
                   {sendInvoiceToXero
-                    ? 'An invoice will be raised in Xero for this booking.'
-                    : 'The booking is saved without creating a Xero invoice.'}
+                    ? 'The invoice is also raised in Xero.'
+                    : 'The invoice is created here only — nothing is sent to Xero.'}
                 </p>
               </fieldset>
 
@@ -330,6 +381,10 @@ export function BookVehicleDialog({
                 {' · '}
                 {format(parseISO(startDate), 'd MMM')} → {format(parseISO(endDate), 'd MMM yyyy')}
                 {totalAmount > 0 ? ` · ${money(totalAmount)}` : ''}
+                {deposit > 0 ? ` · ${money(deposit)} upfront, ${money(balance)} balance` : ''}
+                <div style={{ marginTop: 6 }}>
+                  The invoice is generated on save. You can download it, and a copy is emailed to you.
+                </div>
               </div>
             </>
           )}
@@ -343,7 +398,7 @@ export function BookVehicleDialog({
             {step < STEPS.length - 1 ? (
               <button
                 type="submit"
-                disabled={(step === 0 && !vehicleId) || (step === 1 && totalAmount <= 0)}
+                disabled={(step === 0 && !vehicleId) || (step === 1 && !stepOneReady)}
                 style={primaryButton}
               >
                 Continue
@@ -363,8 +418,18 @@ export function BookVehicleDialog({
   )
 }
 
+function Totals({ label, value, strong, accent }: { label: string; value: string; strong?: boolean; accent?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, padding: '3px 0' }}>
+      <span style={{ fontSize: 13, fontWeight: strong ? 700 : 600, color: accent ? theme.bronzeDark : theme.text }}>{label}</span>
+      <span style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: strong ? 20 : 17, color: accent ? theme.bronzeDark : theme.text }}>{value}</span>
+    </div>
+  )
+}
+
 function Field({ label, value, onChange, placeholder, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
-  const required = label.includes('Email') || label.includes('first name') || label.includes('surname')
+  // Only the customer's name is mandatory — email and account number are not.
+  const required = label.includes('first name') || label.includes('surname')
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={fieldLabel}>{label}</span>

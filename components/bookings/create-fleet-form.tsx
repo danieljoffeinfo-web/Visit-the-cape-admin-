@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { addDays, format } from 'date-fns'
 import { toast } from 'sonner'
 import { differenceInCalendarDays, parseISO } from 'date-fns'
-import { FLEET_USAGE_TYPES, isFleetVehicle, rentalTotal, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { FLEET_USAGE_TYPES, isFleetVehicle, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { VehicleImageThumb } from '@/components/fleet/vehicle-image-upload'
 import { cardStyle, fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
@@ -36,7 +36,8 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
     usageType: 'tour',
     startDate: format(new Date(), 'yyyy-MM-dd'),
     endDate: format(addDays(new Date(), 1), 'yyyy-MM-dd'),
-    dailyRate: '',
+    amount: '',
+    depositAmount: '',
     seatsBooked: '1',
     firstName: '',
     surname: '',
@@ -44,7 +45,8 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
     phone: '',
     notes: '',
   })
-  const [sendInvoiceToXero, setSendInvoiceToXero] = useState(true)
+  const [sendInvoiceToXero, setSendInvoiceToXero] = useState(false)
+  const [depositRequired, setDepositRequired] = useState(false)
 
   useEffect(() => {
     fetch('/api/fleet/vehicles', { cache: 'no-store' })
@@ -65,15 +67,22 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
 
   const selectedVehicle = vehicles.find((vehicle) => vehicle.id === form.vehicleId) || null
   const rentalDays = rentalDaysBetween(form.startDate, form.endDate)
-  const totalAmount = rentalTotal(form.dailyRate, rentalDays)
+  const totalAmount = Math.max(0, Number(form.amount) || 0)
+  const deposit = depositRequired ? Math.max(0, Number(form.depositAmount) || 0) : 0
+  const balance = Math.max(0, totalAmount - deposit)
 
   async function submit() {
-    if (!form.vehicleId || !form.firstName || !form.surname || !form.email || !form.dailyRate) {
-      toast.error('Complete vehicle, customer, and rate fields')
+    // Email is optional — only the vehicle, customer name and amount are needed.
+    if (!form.vehicleId || !form.firstName || !form.surname || !form.amount) {
+      toast.error('Complete vehicle, customer name, and amount')
       return
     }
     if (totalAmount <= 0) {
-      toast.error('Check the rate per day and the booking dates')
+      toast.error('Enter the booking amount')
+      return
+    }
+    if (depositRequired && (deposit <= 0 || deposit > totalAmount)) {
+      toast.error('Check the upfront deposit amount')
       return
     }
 
@@ -84,14 +93,20 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          dailyRate: Number(form.dailyRate),
+          amount: totalAmount,
+          depositRequired,
+          depositAmount: depositRequired ? deposit : null,
           seatsBooked: Number(form.seatsBooked) || 1,
           sendInvoiceToXero,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create fleet booking')
-      toast.success(sendInvoiceToXero ? 'Fleet booking created' : 'Fleet booking created without a Xero invoice')
+      toast.success(
+        data.invoiceEmailed
+          ? `Fleet booking created. Invoice ${data.invoiceNumber} emailed to you.`
+          : `Fleet booking created. Invoice ${data.invoiceNumber} ready to download.`,
+      )
       onSaved()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create fleet booking')
@@ -138,12 +153,12 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
             <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Rate per day (ZAR) *</label>
-            <input type="number" value={form.dailyRate} onChange={(e) => setForm({ ...form, dailyRate: e.target.value })} style={inputStyle} placeholder="2500" />
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Amount (ZAR) *</label>
+            <input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} placeholder="50000" />
             <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>
               {totalAmount > 0
-                ? `Total ${money(totalAmount)} · ${rentalDays} day${rentalDays === 1 ? '' : 's'}`
-                : 'Total is the rate per day × booked days.'}
+                ? `${money(totalAmount)} over ${rentalDays} day${rentalDays === 1 ? '' : 's'}${deposit > 0 ? ` · ${money(deposit)} upfront, ${money(balance)} balance` : ''}`
+                : 'Type the agreed amount for this booking.'}
             </div>
           </div>
           <div>
@@ -155,7 +170,31 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
             </select>
           </div>
           <div>
-            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Send invoice to Xero</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Upfront deposit required</label>
+            <select
+              value={depositRequired ? 'yes' : 'no'}
+              onChange={(e) => {
+                const next = e.target.value === 'yes'
+                setDepositRequired(next)
+                if (!next) setForm((current) => ({ ...current, depositAmount: '' }))
+              }}
+              style={inputStyle}
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+            {depositRequired && (
+              <input
+                type="number"
+                value={form.depositAmount}
+                onChange={(e) => setForm({ ...form, depositAmount: e.target.value })}
+                style={{ ...inputStyle, marginTop: 8 }}
+                placeholder="Deposit amount, e.g. 10000"
+              />
+            )}
+          </div>
+          <div>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Also create in Xero</label>
             <select
               value={sendInvoiceToXero ? 'yes' : 'no'}
               onChange={(e) => setSendInvoiceToXero(e.target.value === 'yes')}
@@ -174,7 +213,7 @@ export function CreateFleetForm({ saving, onSaved, onCancel }: { saving?: boolea
             <input value={form.surname} onChange={(e) => setForm({ ...form, surname: e.target.value })} style={inputStyle} />
           </div>
           <div>
-            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Email *</label>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Email</label>
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} style={inputStyle} />
           </div>
           <div>

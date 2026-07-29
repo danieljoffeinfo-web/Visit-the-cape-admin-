@@ -59,29 +59,26 @@ async function buildFleetPdf(bookingId: string, link: InvoiceLinkRow | null) {
   if (!details) return null
 
   const amount = Number(booking.amount || details.rental.totalAmount || 0)
-  const invoiceNumber = link?.xero_invoice_number || `FLEET-${booking.id.slice(0, 8).toUpperCase()}`
-  const invoiceStatus = link?.status || 'Draft copy'
-  const createdAt = booking.created_at
-    ? new Date(booking.created_at).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10)
+  // Prefer the number issued when the booking was made so a re-download always
+  // reproduces the same invoice the admin already has by email.
+  const invoiceNumber =
+    details.invoice?.number || link?.xero_invoice_number || `FLEET-${booking.id.slice(0, 8).toUpperCase()}`
+  const createdAt = details.invoice?.issuedAt || booking.created_at || new Date().toISOString()
 
   const pdfBuffer = await buildFleetInvoicePdf({
     bookingId: booking.id,
     createdAt,
     invoiceNumber,
-    invoiceStatus,
     vehicleName: details.vehicle.title,
-    registrationNumber: details.vehicle.registrationNumber || '—',
+    registrationNumber: details.vehicle.registrationNumber || '',
     customerName: fullCustomerName(details),
-    accountNumber: details.customer.accountNumber || '—',
-    phone: details.customer.phone || '—',
-    email: details.customer.email || '—',
+    accountNumber: details.customer.accountNumber || null,
     startDate: details.rental.startDate,
     endDate: details.rental.endDate,
     days: details.rental.days,
-    seatsBooked: details.rental.seatsBooked,
     usageType: details.rental.usageType || 'tour',
     amount,
+    depositAmount: details.rental.depositAmount ?? null,
     notes: details.rental.notes || '',
   })
 

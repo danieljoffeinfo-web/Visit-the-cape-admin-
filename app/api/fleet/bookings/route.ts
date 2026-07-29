@@ -2,13 +2,16 @@ import { Invoice } from 'xero-node'
 import { NextRequest, NextResponse } from 'next/server'
 import { differenceInCalendarDays, isValid, parseISO } from 'date-fns'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { buildSeatsLabel, normalizeUsageType, parseFleetBookingNotes, rentalTotal, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { balanceDue, buildSeatsLabel, normalizeUsageType, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { getFleetVehicleForBooking } from '@/lib/fleet-db'
 import { getAuthedXeroClient } from '@/lib/xero'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
 import { getApprovedAdminUser } from '@/lib/auth-server'
 import { logActivityServer } from '@/lib/activity-log-server'
 import { revalidateFleetAvailabilityOnWebsite } from '@/lib/revalidate-fleet'
+import { buildFleetInvoicePdf } from '@/lib/invoice-pdf'
+import { emailInvoiceToCreator } from '@/lib/invoice-email'
+import { nextInvoiceNumber } from '@/lib/invoice-numbers'
 
 export async function GET(request: NextRequest) {
   const admin = await getApprovedAdminUser()
@@ -105,14 +108,17 @@ export async function POST(request: NextRequest) {
       email,
       startDate,
       endDate,
-      dailyRate,
+      amount,
+      depositRequired,
+      depositAmount,
       seatsBooked,
       usageType,
       notes,
       sendInvoiceToXero,
     } = body
 
-    if (!vehicleId || !firstName || !surname || !email || !startDate || !endDate || dailyRate === undefined || dailyRate === null) {
+    // Email and account number are optional — only the name and dates are needed.
+    if (!vehicleId || !firstName || !surname || !startDate || !endDate || amount === undefined || amount === null) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -123,19 +129,24 @@ export async function POST(request: NextRequest) {
     }
 
     const rentalDays = differenceInCalendarDays(end, start) + 1
-    const ratePerDay = Number(dailyRate)
-    if (!Number.isFinite(ratePerDay) || ratePerDay <= 0) {
-      return NextResponse.json({ error: 'Rate per day must be greater than zero' }, { status: 400 })
+
+    // The amount is typed in per booking rather than derived from a day rate.
+    const totalAmount = Number(amount)
+    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
+      return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
     }
 
-    // The rate is agreed per booking; the total always follows rate x days.
-    const totalAmount = rentalTotal(ratePerDay, rentalDays)
-    if (totalAmount <= 0) {
-      return NextResponse.json({ error: 'Booking total must be greater than zero' }, { status: 400 })
+    const wantsDeposit = Boolean(depositRequired)
+    const deposit = wantsDeposit ? Number(depositAmount) : 0
+    if (wantsDeposit && (!Number.isFinite(deposit) || deposit <= 0)) {
+      return NextResponse.json({ error: 'Enter the upfront deposit amount' }, { status: 400 })
+    }
+    if (wantsDeposit && deposit > totalAmount) {
+      return NextResponse.json({ error: 'Deposit cannot be more than the total amount' }, { status: 400 })
     }
 
-    // Default to raising an invoice so existing callers keep working.
-    const wantsXeroInvoice = sendInvoiceToXero === undefined ? true : Boolean(sendInvoiceToXero)
+    // Invoices are generated in the admin. Xero is opt-in and off by default.
+    const wantsXeroInvoice = Boolean(sendInvoiceToXero)
     const bookingUsageType = normalizeUsageType(usageType)
 
     const { data: vehicle, error: vehicleError } = await getFleetVehicleForBooking(vehicleId)
@@ -166,14 +177,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'This vehicle is already booked for some of those dates' }, { status: 409 })
     }
 
+    const customerName = `${String(firstName).trim()} ${String(surname).trim()}`.trim()
+    const customerEmail = email ? String(email).trim() : ''
+    const customerAccount = accountNumber ? String(accountNumber).trim() : null
+    const invoiceNumber = await nextInvoiceNumber()
+    const issuedAt = new Date().toISOString()
+
     const bookingNotes = {
       kind: 'fleet-booking' as const,
       customer: {
         firstName: String(firstName).trim(),
         surname: String(surname).trim(),
-        accountNumber: accountNumber ? String(accountNumber).trim() : null,
+        accountNumber: customerAccount,
         phone: phone ? String(phone).trim() : null,
-        email: String(email).trim(),
+        email: customerEmail,
       },
       vehicle: {
         id: vehicle.id,
@@ -187,11 +204,18 @@ export async function POST(request: NextRequest) {
         endDate,
         days: rentalDays,
         seatsBooked: bookedSeats,
-        dailyRate: ratePerDay,
         totalAmount,
+        depositAmount: deposit > 0 ? deposit : null,
         usageType: bookingUsageType,
         paymentReceived: false,
         notes: notes ? String(notes).trim() : null,
+      },
+      invoice: {
+        number: invoiceNumber,
+        issuedAt,
+        dueDate: endDate,
+        issuedByName: admin.full_name,
+        issuedByEmail: admin.email,
       },
     }
 
@@ -201,8 +225,8 @@ export async function POST(request: NextRequest) {
         product_id: vehicle.id,
         booking_type: 'fleet',
         status: 'confirmed',
-        name: `${String(firstName).trim()} ${String(surname).trim()}`.trim(),
-        email: String(email).trim(),
+        name: customerName,
+        email: customerEmail || null,
         phone: phone ? String(phone).trim() : null,
         passengers: bookedSeats,
         amount: totalAmount,
@@ -216,36 +240,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save booking' }, { status: 500 })
     }
 
-    const { count: customerBookingCount } = await supabaseAdmin
-      .from('tour_bookings')
-      .select('id', { count: 'exact', head: true })
-      .eq('email', String(email).trim())
+    // The customers table is keyed on email, so only track customers we can key.
+    let customerBookingCount: number | null = null
+    if (customerEmail) {
+      const { count } = await supabaseAdmin
+        .from('tour_bookings')
+        .select('id', { count: 'exact', head: true })
+        .eq('email', customerEmail)
+      customerBookingCount = count ?? null
 
-    await supabaseAdmin.from('customers').upsert({
-      name: `${String(firstName).trim()} ${String(surname).trim()}`.trim(),
-      email: String(email).trim(),
-      phone: phone ? String(phone).trim() : null,
-      total_bookings: customerBookingCount || 1,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'email' })
+      await supabaseAdmin.from('customers').upsert({
+        name: customerName,
+        email: customerEmail,
+        phone: phone ? String(phone).trim() : null,
+        total_bookings: customerBookingCount || 1,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'email' })
+    }
 
+    // Xero is opt-in. By default the invoice exists only in the admin, where it
+    // can be downloaded and is emailed to whoever created the booking.
     const invoiceResult = wantsXeroInvoice
       ? await createXeroInvoiceForBooking({
-          contactName: `${String(firstName).trim()} ${String(surname).trim()}`.trim(),
-          contactEmail: String(email).trim(),
-          description: `${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''} rental · ${usageTypeLabel(bookingUsageType)} · ${startDate} to ${endDate} · ${rentalDays} day${rentalDays === 1 ? '' : 's'} @ ${ratePerDay}/day`,
+          contactName: customerName,
+          contactEmail: customerEmail || null,
+          description: `${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''} rental · ${usageTypeLabel(bookingUsageType)} · ${startDate} to ${endDate} · ${rentalDays} day${rentalDays === 1 ? '' : 's'}`,
           amount: totalAmount,
           dueDate: endDate,
           bookingId: insertedBooking.id,
           bookingType: 'fleet',
-          reference: accountNumber ? String(accountNumber).trim() : insertedBooking.id,
+          reference: customerAccount || invoiceNumber,
         })
       : { connected: false as const, invoice: null }
 
-    if (invoiceResult.invoice) {
+    if (invoiceResult.invoice && customerEmail) {
       await supabaseAdmin.from('customers').upsert({
-        name: `${String(firstName).trim()} ${String(surname).trim()}`.trim(),
-        email: String(email).trim(),
+        name: customerName,
+        email: customerEmail,
         phone: phone ? String(phone).trim() : null,
         total_bookings: customerBookingCount || 1,
         xero_contact_id: invoiceResult.invoice.contact?.contactID || null,
@@ -253,6 +284,46 @@ export async function POST(request: NextRequest) {
         xero_total_invoiced: totalAmount,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'email' })
+    }
+
+    // Generate the invoice PDF and email a copy to the admin who booked it.
+    let invoiceEmail: { sent: boolean; reason?: string } = { sent: false, reason: 'not attempted' }
+    try {
+      const pdf = await buildFleetInvoicePdf({
+        bookingId: insertedBooking.id,
+        createdAt: issuedAt,
+        invoiceNumber,
+        vehicleName: vehicle.title,
+        registrationNumber: vehicleRegistration(vehicle),
+        customerName,
+        accountNumber: customerAccount,
+        startDate,
+        endDate,
+        days: rentalDays,
+        usageType: bookingUsageType,
+        amount: totalAmount,
+        depositAmount: deposit > 0 ? deposit : null,
+        notes: notes ? String(notes).trim() : null,
+      })
+
+      invoiceEmail = await emailInvoiceToCreator({
+        admin,
+        pdf,
+        invoiceNumber,
+        subjectLine: `Invoice ${invoiceNumber} — ${vehicle.title} rental for ${customerName}`,
+        summaryLines: [
+          `Customer: ${customerName}`,
+          `Vehicle: ${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''}`,
+          `Use: ${usageTypeLabel(bookingUsageType)}`,
+          `Rental period: ${startDate} to ${endDate} (${rentalDays} day${rentalDays === 1 ? '' : 's'})`,
+        ],
+        total: totalAmount,
+        depositAmount: deposit > 0 ? deposit : null,
+      })
+    } catch (error) {
+      // A booking is already saved at this point — never fail it over an invoice.
+      console.error('Fleet invoice generation error:', error)
+      invoiceEmail = { sent: false, reason: 'Invoice could not be generated' }
     }
 
     await logActivityServer({
@@ -265,11 +336,14 @@ export async function POST(request: NextRequest) {
         vehicleId: vehicle.id,
         startDate,
         endDate,
-        dailyRate: ratePerDay,
         rentalDays,
         totalAmount,
+        depositAmount: deposit > 0 ? deposit : null,
+        balanceDue: balanceDue({ totalAmount, depositAmount: deposit }),
         usageType: bookingUsageType,
+        invoiceNumber,
         sentToXero: wantsXeroInvoice,
+        invoiceEmailed: invoiceEmail.sent,
       },
     })
 
@@ -286,9 +360,14 @@ export async function POST(request: NextRequest) {
         startDate,
         endDate,
         rentalDays,
-        dailyRate: ratePerDay,
         totalAmount,
+        depositAmount: deposit > 0 ? deposit : null,
+        balanceDue: balanceDue({ totalAmount, depositAmount: deposit }),
       },
+      invoiceNumber,
+      invoiceEmailed: invoiceEmail.sent,
+      invoiceEmailError: invoiceEmail.sent ? null : invoiceEmail.reason || null,
+      invoiceDownloadUrl: `/api/xero/invoice-pdf?booking_id=${insertedBooking.id}&kind=fleet`,
       invoice: invoiceResult.invoice,
       xeroConnected: invoiceResult.connected,
       invoiceRequested: wantsXeroInvoice,
