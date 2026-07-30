@@ -109,7 +109,11 @@ export function parseFleetBookingNotes(value?: string | null): FleetBookingNotes
   try {
     const parsed = JSON.parse(value) as FleetBookingNotes
     if (parsed?.kind !== 'fleet-booking') return null
-    if (!parsed.customer?.email || !parsed.vehicle?.id || !parsed.rental?.startDate || !parsed.rental?.endDate) return null
+    // Email is optional on a booking, so it must NOT be part of this check.
+    // Requiring it made email-less bookings unparseable, which hid them from the
+    // invoice viewer, the fleet dashboard, availability and — critically —
+    // double-booking conflict detection.
+    if (!parsed.vehicle?.id || !parsed.rental?.startDate || !parsed.rental?.endDate) return null
     return parsed
   } catch {
     return null

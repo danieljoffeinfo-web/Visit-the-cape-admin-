@@ -180,7 +180,6 @@ export async function POST(request: NextRequest) {
     const customerName = `${String(firstName).trim()} ${String(surname).trim()}`.trim()
     const customerEmail = email ? String(email).trim() : ''
     const customerAccount = accountNumber ? String(accountNumber).trim() : null
-    const invoiceNumber = await nextInvoiceNumber()
     const issuedAt = new Date().toISOString()
 
     const bookingNotes = {
@@ -210,13 +209,7 @@ export async function POST(request: NextRequest) {
         paymentReceived: false,
         notes: notes ? String(notes).trim() : null,
       },
-      invoice: {
-        number: invoiceNumber,
-        issuedAt,
-        dueDate: endDate,
-        issuedByName: admin.full_name,
-        issuedByEmail: admin.email,
-      },
+      // `invoice` is attached after the insert succeeds — see below.
     }
 
     const { data: insertedBooking, error: bookingError } = await supabaseAdmin
@@ -244,6 +237,28 @@ export async function POST(request: NextRequest) {
         { error: bookingError?.message ? `Failed to save booking: ${bookingError.message}` : 'Failed to save booking' },
         { status: 500 },
       )
+    }
+
+    // Allocate the invoice number only now that a row definitely exists — doing
+    // it earlier meant a rejected insert still burned a number, leaving gaps in
+    // the INV-#### series.
+    const invoiceNumber = await nextInvoiceNumber()
+    const invoiceMeta = {
+      number: invoiceNumber,
+      issuedAt,
+      dueDate: endDate,
+      issuedByName: admin.full_name,
+      issuedByEmail: admin.email,
+    }
+
+    const { error: invoiceStampError } = await supabaseAdmin
+      .from('tour_bookings')
+      .update({ notes: JSON.stringify({ ...bookingNotes, invoice: invoiceMeta }) })
+      .eq('id', insertedBooking.id)
+
+    if (invoiceStampError) {
+      // The booking is saved and usable; only the stored number is missing.
+      console.error('Fleet booking invoice stamp error:', invoiceStampError)
     }
 
     // The customers table is keyed on email, so only track customers we can key.
