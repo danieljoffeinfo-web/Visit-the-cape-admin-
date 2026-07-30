@@ -136,6 +136,31 @@ export async function updateEnquiryStatus(id: string, status: string, extra?: Re
   return normalizeEnquiry(withTourType(data as Record<string, unknown>))
 }
 
+/** Permanently remove an enquiry from whichever project owns it. */
+export async function deleteEnquiry(id: string) {
+  const db = getEnquiriesDb()
+  if (!db) {
+    throw new Error('Enquiries come from an external API and cannot be deleted here')
+  }
+
+  const { error } = await db.client.from('enquiries').delete().eq('id', id)
+  if (error) throw error
+
+  // Reply history lives in the admin project and is not FK-linked, so clear it
+  // explicitly or it is orphaned.
+  await supabaseAdmin.from('enquiry_replies').delete().eq('enquiry_id', id)
+}
+
+/** Delete every enquiry from the owning project. Used by the clear-all-data flow. */
+export async function deleteAllEnquiries() {
+  const db = getEnquiriesDb()
+  if (!db) return { cleared: false, source: 'external-api' as const }
+
+  const { error } = await db.client.from('enquiries').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  if (error) throw error
+  return { cleared: true, source: db.source }
+}
+
 /**
  * Reply audit trail. Always stored in the admin project even when the enquiry
  * itself lives in the content project, so `enquiry_id` is a plain reference

@@ -46,6 +46,7 @@ export function BookingsPanel({
   const [invoiceLinks, setInvoiceLinks] = useState<Record<string, InvoiceLink>>({})
   const [xeroConnected, setXeroConnected] = useState(false)
   const [raising, setRaising] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [invoiceBooking, setInvoiceBooking] = useState<UnifiedBooking | null>(null)
 
   useEffect(() => {
@@ -138,6 +139,28 @@ export function BookingsPanel({
       toast.error(error instanceof Error ? error.message : 'Failed to create booking')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function deleteBooking(booking: UnifiedBooking) {
+    const label = booking.customer_name || booking.booking_reference || 'this row'
+    if (!confirm(`Permanently delete ${label}? This cannot be undone.`)) return
+
+    setDeletingId(booking.raw_id)
+    try {
+      const res = await fetch('/api/bookings', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: booking.raw_id, kind: booking.kind }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to delete')
+      toast.success('Deleted')
+      loadBookings()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to delete')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -235,9 +258,11 @@ export function BookingsPanel({
           xeroConnected={xeroConnected}
           invoiceLinks={invoiceLinks}
           onCancel={cancelBooking}
+          onDelete={deleteBooking}
           onRaiseInvoice={raiseInvoice}
           onViewInvoice={setInvoiceBooking}
           raisingId={raising}
+          deletingId={deletingId}
           emptyMessage={
             activeTab === 'private'
               ? 'No private enquiries yet'

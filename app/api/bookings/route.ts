@@ -9,7 +9,7 @@ import {
   sortBookings,
   type BookingTab,
 } from '@/lib/bookings'
-import { fetchEnquiriesFromSource } from '@/lib/enquiries-server'
+import { deleteEnquiry, fetchEnquiriesFromSource } from '@/lib/enquiries-server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 async function fetchAllBookings() {
@@ -212,4 +212,67 @@ export async function PATCH(request: NextRequest) {
   })
 
   return NextResponse.json({ booking: normalizeTagAlongRow(data) })
+}
+
+/**
+ * Permanently delete a booking or enquiry from the bookings hub.
+ *
+ * Distinct from PATCH status=cancelled, which keeps the row for the record.
+ * Fleet rows also clear their invoice link; the Xero invoice itself is left
+ * alone, since accounting records should not vanish because a row was tidied up.
+ */
+export async function DELETE(request: NextRequest) {
+  const admin = await getApprovedAdminUser()
+  if (!admin) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  let body: { id?: string; kind?: string } = {}
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Booking id and kind required' }, { status: 400 })
+  }
+
+  const id = String(body.id || '').trim()
+  const kind = String(body.kind || '').trim()
+
+  if (!id || !kind) {
+    return NextResponse.json({ error: 'Booking id and kind required' }, { status: 400 })
+  }
+
+  try {
+    if (kind === 'private') {
+      await deleteEnquiry(id)
+    } else if (kind === 'fleet') {
+      const { error } = await supabaseAdmin
+        .from('tour_bookings')
+        .delete()
+        .eq('id', id)
+        .eq('booking_type', 'fleet')
+      if (error) throw error
+      await supabaseAdmin.from('xero_invoice_links').delete().eq('booking_id', id)
+    } else if (kind === 'tour' || kind === 'internal') {
+      const { error } = await supabaseAdmin.from('tag_along_bookings').delete().eq('id', id)
+      if (error) throw error
+      await supabaseAdmin.from('xero_invoice_links').delete().eq('booking_id', id)
+    } else {
+      return NextResponse.json({ error: `Cannot delete booking of type "${kind}"` }, { status: 400 })
+    }
+
+    await logActivityServer({
+      admin,
+      action: 'Deleted booking',
+      entityType: kind === 'private' ? 'enquiry' : `${kind}_booking`,
+      entityId: id,
+      entityLabel: id,
+      metadata: { kind, permanent: true },
+    })
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Failed to delete booking'
+    console.error('Booking delete error:', error)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logActivityServer } from '@/lib/activity-log-server'
 import { getApprovedAdminUser } from '@/lib/auth-server'
+import { deleteAllEnquiries, getEnquiriesSource } from '@/lib/enquiries-server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const CONFIRM_PHRASE = 'DELETE ALL DATA'
@@ -47,11 +48,22 @@ export async function POST(request: NextRequest) {
     'customers',
     'tag_along_tours',
     'tour_departures',
-    'enquiries',
   ]
 
   for (const table of tables) {
     results[table] = await clearTable(table)
+  }
+
+  // Enquiries are owned by the website/content project, not this one. Clearing
+  // the admin copy left the inbox and the unread badge untouched.
+  try {
+    const enquiryResult = await deleteAllEnquiries()
+    results[`enquiries (${enquiryResult.source})`] = enquiryResult.cleared
+      ? 'cleared'
+      : 'skipped — owned by an external API'
+  } catch (error) {
+    results[`enquiries (${getEnquiriesSource()})`] =
+      error instanceof Error ? error.message : 'failed'
   }
 
   const { error: productErr } = await supabaseAdmin.from('tour_products').delete().neq('family', 'fleet')

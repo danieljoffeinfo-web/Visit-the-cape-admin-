@@ -26,9 +26,11 @@ type BookingsTableProps = {
   xeroConnected?: boolean
   invoiceLinks?: Record<string, BookingInvoiceLink>
   onCancel?: (booking: UnifiedBooking) => void
+  onDelete?: (booking: UnifiedBooking) => void
   onRaiseInvoice?: (booking: UnifiedBooking) => void
   onViewInvoice?: (booking: UnifiedBooking) => void
   raisingId?: string | null
+  deletingId?: string | null
   emptyMessage?: string
 }
 
@@ -72,9 +74,11 @@ export function BookingsTable({
   xeroConnected,
   invoiceLinks = {},
   onCancel,
+  onDelete,
   onRaiseInvoice,
   onViewInvoice,
   raisingId,
+  deletingId,
   emptyMessage = 'No bookings yet',
 }: BookingsTableProps) {
   if (loading) {
@@ -182,13 +186,31 @@ export function BookingsTable({
                     <span style={{ color: theme.textMuted, fontSize: 12 }}>—</span>
                   )}
                 </td>
-                <td style={{ padding: '10px 12px' }} onClick={(event) => event.stopPropagation()}>
+                <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }} onClick={(event) => event.stopPropagation()}>
                   {canCancel && onCancel && (
                     <button
                       onClick={() => onCancel(b)}
-                      style={{ fontSize: 11, color: theme.danger, background: 'none', border: 'none', cursor: 'pointer', fontFamily: theme.bodyFont }}
+                      style={{ fontSize: 11, color: theme.textMuted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: theme.bodyFont, marginRight: 10 }}
                     >
                       Cancel
+                    </button>
+                  )}
+                  {onDelete && (
+                    <button
+                      onClick={() => onDelete(b)}
+                      disabled={deletingId === b.raw_id}
+                      title="Permanently remove this row"
+                      style={{
+                        fontSize: 11,
+                        color: theme.danger,
+                        background: 'none',
+                        border: 'none',
+                        cursor: deletingId === b.raw_id ? 'not-allowed' : 'pointer',
+                        fontFamily: theme.bodyFont,
+                        opacity: deletingId === b.raw_id ? 0.5 : 1,
+                      }}
+                    >
+                      {deletingId === b.raw_id ? 'Deleting…' : 'Delete'}
                     </button>
                   )}
                 </td>
