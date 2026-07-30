@@ -226,7 +226,8 @@ export async function POST(request: NextRequest) {
         booking_type: 'fleet',
         status: 'confirmed',
         name: customerName,
-        email: customerEmail || null,
+        // tour_bookings.email is NOT NULL, so an omitted email stores as ''.
+        email: customerEmail,
         phone: phone ? String(phone).trim() : null,
         passengers: bookedSeats,
         amount: totalAmount,
@@ -237,7 +238,12 @@ export async function POST(request: NextRequest) {
 
     if (bookingError || !insertedBooking) {
       console.error('Fleet booking insert error:', bookingError)
-      return NextResponse.json({ error: 'Failed to save booking' }, { status: 500 })
+      // Surface the database reason — a bare "Failed to save booking" makes
+      // constraint violations impossible to diagnose from the UI.
+      return NextResponse.json(
+        { error: bookingError?.message ? `Failed to save booking: ${bookingError.message}` : 'Failed to save booking' },
+        { status: 500 },
+      )
     }
 
     // The customers table is keyed on email, so only track customers we can key.
