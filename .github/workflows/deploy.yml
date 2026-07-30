@@ -12,6 +12,11 @@ concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+env:
+  # Not secrets — plain identifiers for the dft-admin project.
+  VERCEL_ORG_ID: team_eCbNLKm2ZVG4tK6WSXq7vzbr
+  VERCEL_PROJECT_ID: prj_In2t9T3T6ggKw4zsauzxfMtkZFOV
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -24,6 +29,15 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Check the deploy token is present
+        run: |
+          if [ -z "${VERCEL_TOKEN}" ]; then
+            echo "::error::VERCEL_TOKEN secret is not set. Add it under Settings > Secrets and variables > Actions, then re-run."
+            exit 1
+          fi
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
@@ -31,15 +45,11 @@ jobs:
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Build
         run: vercel build --prod --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Deploy to production
         run: |
@@ -49,5 +59,3 @@ jobs:
           echo "$url" >> "$GITHUB_STEP_SUMMARY"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
