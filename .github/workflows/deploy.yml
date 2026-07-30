@@ -3,9 +3,11 @@ name: Deploy to Vercel
 # Vercel's own Git integration stopped firing for this repo, so production
 # deploys are driven from here instead. Runs on GitHub's runners, so it works
 # regardless of which client pushed the commit.
+# Manual only. This deliberately does NOT run on push: without a VERCEL_TOKEN
+# secret it fails on every commit and buries real failures in false alarms.
+# Add the secret (Settings > Secrets and variables > Actions), then either run
+# it from the Actions tab or re-enable the push trigger below.
 on:
-  push:
-    branches: [main]
   workflow_dispatch: {}
 
 concurrency:
