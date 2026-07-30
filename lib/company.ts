@@ -10,6 +10,8 @@ export const COMPANY = {
     bank: 'Standard Bank',
     branchCode: '000410',
     accountNumber: '041921194',
+    /** Standard Bank South Africa — needed by international payers. */
+    swift: 'SBZAZAJJ',
   },
   registeredOffice: [
     'Unit 3, 18 Fifth Street, Montague Gardens',

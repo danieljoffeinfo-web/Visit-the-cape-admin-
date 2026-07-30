@@ -222,9 +222,11 @@ export async function buildVtcInvoicePdf(input: VtcInvoiceInput): Promise<Buffer
   // ---- Footer geometry, pinned to the page bottom -----------------------
   // Fixed so a long description can never push the footer off the page or let
   // the payment box overlap it.
-  const FOOTER_RULE_Y = 96
-  const FOOTER_LABEL_Y = 77
-  const FOOTER_LINES_Y = 57
+  // Raised by one line (14.5pt) over the original 96/77/57 to fit the SWIFT
+  // line: five lines from 57 would put the last baseline at -1, off the page.
+  const FOOTER_RULE_Y = 111
+  const FOOTER_LABEL_Y = 92
+  const FOOTER_LINES_Y = 72
 
   // ---- Payment instructions, sitting just above the footer --------------
   if (hasDeposit) {
@@ -272,6 +274,7 @@ export async function buildVtcInvoicePdf(input: VtcInvoiceInput): Promise<Buffer
     `Bank: ${COMPANY.banking.bank}`,
     `Branch Code: ${COMPANY.banking.branchCode}`,
     `Account Number: ${COMPANY.banking.accountNumber}`,
+    `SWIFT: ${COMPANY.banking.swift}`,
   ]
   const officeLines = [
     ...COMPANY.registeredOffice,
