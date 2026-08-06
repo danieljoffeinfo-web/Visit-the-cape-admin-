@@ -1,20 +1,50 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logActivityServer } from '@/lib/activity-log-server'
+import {
+  addOnBookingTotal,
+  summariseAddOnLines,
+  type AddOnBookingNotes,
+  type AddOnLine,
+} from '@/lib/add-ons'
 import { generateBookingReference, getApprovedAdminUser } from '@/lib/auth-server'
+import type { AdminUser } from '@/lib/auth-types'
 import {
   filterBookingsByTab,
   normalizeEnquiryRow,
   normalizeFleetRow,
+  normalizePrivateTourBookingRow,
   normalizeTagAlongRow,
   sortBookings,
   type BookingTab,
 } from '@/lib/bookings'
+import { bookingsDb } from '@/lib/bookings-db'
+import { getContentSupabaseAdmin } from '@/lib/content-supabase-admin'
 import { deleteEnquiry, fetchEnquiriesFromSource } from '@/lib/enquiries-server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
+/** Shape of the rows the website's PayGate flow writes. */
+type WebsiteBookingRow = Parameters<typeof normalizePrivateTourBookingRow>[0]
+
+async function fetchWebsiteBookings(): Promise<{ data: WebsiteBookingRow[] }> {
+  try {
+    const { data, error } = await getContentSupabaseAdmin()
+      .from('private_tour_bookings')
+      .select(
+        'id,booking_reference,tour_name,tour_date,passengers,amount_cents,customer_name,customer_email,payment_status,created_at',
+      )
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (error) throw error
+    return { data: (data || []) as WebsiteBookingRow[] }
+  } catch (error) {
+    console.error('Website bookings fetch error:', error)
+    return { data: [] }
+  }
+}
+
 async function fetchAllBookings() {
-  const [tagAlongRes, enquiries, fleetRes, invoicesRes] = await Promise.all([
-    supabaseAdmin.from('tag_along_bookings').select('*').order('created_at', { ascending: false }).limit(200),
+  const [tagAlongRes, enquiries, fleetRes, invoicesRes, websiteRes] = await Promise.all([
+    bookingsDb().from('tag_along_bookings').select('*').order('created_at', { ascending: false }).limit(200),
     // Private enquiries come from whichever project owns them — same source the
     // Enquiries inbox reads, so both tabs show the same rows.
     fetchEnquiriesFromSource().catch((error) => {
@@ -28,6 +58,11 @@ async function fetchAllBookings() {
       .order('created_at', { ascending: false })
       .limit(200),
     supabaseAdmin.from('xero_invoice_links').select('booking_id,status'),
+    // Private tours paid for on the website. Nothing in the dashboard read this
+    // table, so a customer could pay through PayGate and the booking existed
+    // only in the database. Soft-failed: a schema difference here must not take
+    // the whole bookings hub down with it.
+    fetchWebsiteBookings(),
   ])
 
   if (tagAlongRes.error) throw tagAlongRes.error
@@ -45,8 +80,9 @@ async function fetchAllBookings() {
   const fleet = (fleetRes.data || []).map((row) =>
     normalizeFleetRow(row, invoiceMap[row.id] || null),
   )
+  const website = websiteRes.data.map(normalizePrivateTourBookingRow)
 
-  return sortBookings([...tagAlong, ...privateRows, ...fleet])
+  return sortBookings([...tagAlong, ...privateRows, ...fleet, ...website])
 }
 
 export async function GET(request: NextRequest) {
@@ -68,6 +104,91 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Book one or more add-on adventures for a customer.
+ *
+ * It writes the same `tag_along_bookings` row a tour booking writes, tagged
+ * `booking_type: 'addon'`, with the chosen experiences as JSON in `notes`. That
+ * is what lets it inherit the whole existing pipeline — the bookings table, the
+ * invoice PDF, the Xero link, the revenue chart — instead of growing a second
+ * one alongside it.
+ *
+ * The total is computed here from quantity × unit price rather than taken from
+ * the request, so what is invoiced is always what the line items add up to. The
+ * unit price itself does come from the form: several add-ons are quoted per
+ * enquiry, and letting the person on the phone type the agreed number is the
+ * entire point.
+ */
+async function createAddOnBooking(admin: AdminUser, body: Record<string, unknown>) {
+  const customerName = String(body.customerName || '').trim()
+  const customerEmail = String(body.customerEmail || '').trim()
+  const bookingDate = String(body.tourDate || '').trim()
+
+  if (!customerName || !customerEmail || !bookingDate) {
+    return NextResponse.json({ error: 'Name, email and date are required' }, { status: 400 })
+  }
+
+  const rawLines = Array.isArray(body.lines) ? body.lines : []
+  const lines: AddOnLine[] = rawLines.flatMap((entry) => {
+    const line = entry as Record<string, unknown>
+    const name = String(line.name || '').trim()
+    if (!name) return []
+    const quantity = Math.max(1, Math.round(Number(line.quantity) || 1))
+    const unitAmount = Math.max(0, Number(line.unitAmount) || 0)
+    return [{ slug: String(line.slug || ''), name, quantity, unitAmount }]
+  })
+
+  if (lines.length === 0) {
+    return NextResponse.json({ error: 'Choose at least one add-on' }, { status: 400 })
+  }
+
+  const total = addOnBookingTotal(lines)
+  const bookingReference = generateBookingReference('ADDON')
+  const notes: AddOnBookingNotes = {
+    kind: 'addon',
+    lines,
+    note: body.notes ? String(body.notes) : null,
+    invoice: { number: bookingReference, issuedAt: new Date().toISOString().slice(0, 10) },
+  }
+
+  const row = {
+    name: customerName,
+    email: customerEmail,
+    phone: body.customerPhone ? String(body.customerPhone) : null,
+    tour_name: summariseAddOnLines(lines),
+    tour_date: bookingDate,
+    tour_id: null,
+    passengers: body.guestsCount ? parseInt(String(body.guestsCount), 10) : 1,
+    amount: total,
+    notes: JSON.stringify(notes),
+    booking_reference: bookingReference,
+    source: 'internal',
+    booking_type: 'addon',
+    status: body.status ? String(body.status) : 'confirmed',
+    payment_status: body.paymentStatus ? String(body.paymentStatus) : 'pending',
+    created_by_user_id: admin.id,
+    created_by_name: admin.full_name,
+    created_by_color: admin.color,
+  }
+
+  const { data, error } = await bookingsDb().from('tag_along_bookings').insert(row).select('*').single()
+  if (error) {
+    console.error('Add-on booking create error:', error)
+    return NextResponse.json({ error: 'Failed to create add-on booking' }, { status: 500 })
+  }
+
+  await logActivityServer({
+    admin,
+    action: 'Created add-on booking',
+    entityType: 'addon_booking',
+    entityId: data.id,
+    entityLabel: `${customerName} — ${row.tour_name}`,
+    newValue: row,
+  })
+
+  return NextResponse.json({ booking: normalizeTagAlongRow(data) })
+}
+
 export async function POST(request: NextRequest) {
   const admin = await getApprovedAdminUser()
   if (!admin) {
@@ -76,6 +197,10 @@ export async function POST(request: NextRequest) {
 
   const type = request.nextUrl.searchParams.get('type')
   const body = await request.json()
+
+  if (type === 'addon') {
+    return createAddOnBooking(admin, body)
+  }
 
   if (type !== 'tour' && type !== 'internal') {
     return NextResponse.json({ error: 'Invalid booking type' }, { status: 400 })
@@ -123,7 +248,7 @@ export async function POST(request: NextRequest) {
     created_by_color: admin.color,
   }
 
-  const { data, error } = await supabaseAdmin.from('tag_along_bookings').insert(row).select('*').single()
+  const { data, error } = await bookingsDb().from('tag_along_bookings').insert(row).select('*').single()
   if (error) {
     console.error('Booking create error:', error)
     return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 })
@@ -161,7 +286,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Private enquiries are read-only in bookings hub' }, { status: 400 })
   }
 
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await bookingsDb()
     .from('tag_along_bookings')
     .select('*')
     .eq('id', id)
@@ -181,7 +306,7 @@ export async function PATCH(request: NextRequest) {
   if (updates.amount !== undefined) allowed.amount = parseFloat(String(updates.amount))
   allowed.updated_at = new Date().toISOString()
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await bookingsDb()
     .from('tag_along_bookings')
     .update(allowed)
     .eq('id', id)
@@ -253,7 +378,7 @@ export async function DELETE(request: NextRequest) {
       if (error) throw error
       await supabaseAdmin.from('xero_invoice_links').delete().eq('booking_id', id)
     } else if (kind === 'tour' || kind === 'internal') {
-      const { error } = await supabaseAdmin.from('tag_along_bookings').delete().eq('id', id)
+      const { error } = await bookingsDb().from('tag_along_bookings').delete().eq('id', id)
       if (error) throw error
       await supabaseAdmin.from('xero_invoice_links').delete().eq('booking_id', id)
     } else {

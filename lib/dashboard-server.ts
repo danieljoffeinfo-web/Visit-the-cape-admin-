@@ -1,4 +1,5 @@
 import { addDays, format } from 'date-fns'
+import { bookingsDb } from '@/lib/bookings-db'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { fetchUnreadEnquiries } from '@/lib/enquiries-server'
 import { getFleetStatusForDashboard } from '@/lib/fleet-status'
@@ -114,7 +115,7 @@ async function getUpcomingDeparturesNext7Days(): Promise<DepartureRow[]> {
 async function getRevenueLast7Days(): Promise<RevenueDay[]> {
   const weekAgo = format(addDays(new Date(), -6), 'yyyy-MM-dd')
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await bookingsDb()
     .from('tag_along_bookings')
     .select('amount, created_at, status')
     .gte('created_at', `${weekAgo}T00:00:00`)

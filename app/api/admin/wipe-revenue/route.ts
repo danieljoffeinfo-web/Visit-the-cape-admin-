@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { logActivityServer } from '@/lib/activity-log-server'
 import { getApprovedAdminUser } from '@/lib/auth-server'
+import { bookingsDb, getBookingsSource } from '@/lib/bookings-db'
 import { deleteAllEnquiries, getEnquiriesSource } from '@/lib/enquiries-server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
@@ -8,6 +9,19 @@ const CONFIRM_PHRASE = 'DELETE ALL DATA'
 
 async function clearTable(table: string) {
   const { error } = await supabaseAdmin.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000')
+  return error ? error.message : 'cleared'
+}
+
+/**
+ * Bookings live in whichever project `getBookingsDb()` resolves to — the
+ * content one in production. Clearing the admin project's copy left the real
+ * rows in place, which is the same trap enquiries fell into.
+ */
+async function clearBookings() {
+  const { error } = await bookingsDb()
+    .from('tag_along_bookings')
+    .delete()
+    .neq('id', '00000000-0000-0000-0000-000000000000')
   return error ? error.message : 'cleared'
 }
 
@@ -43,7 +57,6 @@ export async function POST(request: NextRequest) {
     'enquiry_replies',
     'xero_invoice_links',
     'activity_logs',
-    'tag_along_bookings',
     'tour_bookings',
     'customers',
     'tag_along_tours',
@@ -53,6 +66,8 @@ export async function POST(request: NextRequest) {
   for (const table of tables) {
     results[table] = await clearTable(table)
   }
+
+  results[`tag_along_bookings (${getBookingsSource()})`] = await clearBookings()
 
   // Enquiries are owned by the website/content project, not this one. Clearing
   // the admin copy left the inbox and the unread badge untouched.

@@ -7,7 +7,17 @@ export async function POST(request: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { contactName, contactEmail, description, amount, dueDate, bookingId, bookingType, reference } = body
+  const {
+    contactName,
+    contactEmail,
+    description,
+    amount,
+    dueDate,
+    bookingId,
+    bookingType,
+    reference,
+    lineItems,
+  } = body
 
   try {
     const result = await createXeroInvoiceForBooking({
@@ -19,6 +29,7 @@ export async function POST(request: NextRequest) {
       bookingId,
       bookingType,
       reference,
+      lineItems,
     })
 
     if (!result.connected) {

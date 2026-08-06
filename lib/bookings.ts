@@ -1,7 +1,8 @@
+import { parseAddOnBookingNotes, summariseAddOnLines, type AddOnLine } from '@/lib/add-ons'
 import { parseFleetBookingNotes } from '@/lib/fleet'
 
-export type BookingKind = 'tour' | 'internal' | 'fleet' | 'private'
-export type BookingTab = 'all' | 'tours' | 'internal' | 'fleet' | 'private'
+export type BookingKind = 'tour' | 'internal' | 'fleet' | 'private' | 'addon' | 'website'
+export type BookingTab = 'all' | 'tours' | 'internal' | 'fleet' | 'private' | 'addons' | 'website'
 
 export type UnifiedBooking = {
   id: string
@@ -22,6 +23,9 @@ export type UnifiedBooking = {
   message?: string | null
   created_at: string
   raw_id: string
+  /** Present on add-on bookings: what was chosen, and at what price. Carried on
+   *  the row so raising the Xero invoice can itemise it without a second read. */
+  addOnLines?: AddOnLine[]
 }
 
 type TagAlongRow = {
@@ -41,6 +45,7 @@ type TagAlongRow = {
   created_by_color?: string | null
   amount?: number | null
   vehicle_name?: string | null
+  notes?: string | null
   created_at: string
 }
 
@@ -70,16 +75,32 @@ export function isInternalTagAlong(row: TagAlongRow) {
   return row.source === 'internal' || row.booking_type === 'internal'
 }
 
+/** One paid private booking from the website's PayGate flow. */
+type PrivateTourBookingRow = {
+  id: string
+  booking_reference?: string | null
+  tour_name?: string | null
+  tour_date?: string | null
+  passengers?: number | null
+  amount_cents?: number | null
+  customer_name?: string | null
+  customer_email?: string | null
+  payment_status?: string | null
+  created_at: string
+}
+
 export function normalizeTagAlongRow(row: TagAlongRow): UnifiedBooking {
   const internal = isInternalTagAlong(row)
+  const kind: BookingKind = row.booking_type === 'addon' ? 'addon' : internal ? 'internal' : 'tour'
+  const addOn = kind === 'addon' ? parseAddOnBookingNotes(row.notes) : null
   return {
-    id: `tour-${row.id}`,
+    id: `${kind}-${row.id}`,
     raw_id: row.id,
-    kind: internal ? 'internal' : 'tour',
+    kind,
     booking_reference: row.booking_reference,
     customer_name: row.name,
     customer_email: row.email,
-    tour_or_vehicle: row.tour_name || row.vehicle_name || '—',
+    tour_or_vehicle: addOn ? summariseAddOnLines(addOn.lines) : row.tour_name || row.vehicle_name || '—',
     date: row.tour_date || '',
     guests: row.passengers || 0,
     source: row.source || 'website',
@@ -90,6 +111,7 @@ export function normalizeTagAlongRow(row: TagAlongRow): UnifiedBooking {
     created_by_color: row.created_by_color,
     amount: row.amount,
     created_at: row.created_at,
+    ...(addOn ? { addOnLines: addOn.lines } : {}),
   }
 }
 
@@ -106,6 +128,35 @@ export function normalizeEnquiryRow(row: EnquiryRow): UnifiedBooking {
     source: 'website',
     status: 'enquiry',
     message: row.message,
+    created_at: row.created_at,
+  }
+}
+
+/**
+ * A private tour paid for on the website.
+ *
+ * These rows were being written by the public site and read by nobody — the
+ * dashboard had no query against `private_tour_bookings` at all, so a customer
+ * could pay and the booking would exist only in the database. Amounts are
+ * stored in cents by the PayGate flow; every other booking in the hub is in
+ * rands, so convert here rather than teaching the table two units.
+ */
+export function normalizePrivateTourBookingRow(row: PrivateTourBookingRow): UnifiedBooking {
+  const paid = (row.payment_status || '').toLowerCase() === 'paid'
+  return {
+    id: `website-${row.id}`,
+    raw_id: row.id,
+    kind: 'website',
+    booking_reference: row.booking_reference,
+    customer_name: row.customer_name || '—',
+    customer_email: row.customer_email || '',
+    tour_or_vehicle: row.tour_name || 'Private tour',
+    date: row.tour_date || '',
+    guests: row.passengers || 0,
+    source: 'website',
+    status: paid ? 'confirmed' : 'awaiting payment',
+    payment_status: row.payment_status || 'pending',
+    amount: row.amount_cents != null ? row.amount_cents / 100 : null,
     created_at: row.created_at,
   }
 }
@@ -150,14 +201,18 @@ export function filterBookingsByTab(rows: UnifiedBooking[], tab: BookingTab) {
   if (tab === 'internal') return rows.filter((r) => r.kind === 'internal')
   if (tab === 'fleet') return rows.filter((r) => r.kind === 'fleet')
   if (tab === 'private') return rows.filter((r) => r.kind === 'private')
+  if (tab === 'addons') return rows.filter((r) => r.kind === 'addon')
+  if (tab === 'website') return rows.filter((r) => r.kind === 'website')
   return rows
 }
 
 export const BOOKING_TABS: { id: BookingTab; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'tours', label: 'Tours' },
+  { id: 'addons', label: 'Add-Ons' },
   { id: 'internal', label: 'Internal' },
   { id: 'fleet', label: 'Fleet' },
+  { id: 'website', label: 'Website' },
   { id: 'private', label: 'Private' },
 ]
 
@@ -174,7 +229,10 @@ export function bookingHasViewableInvoice(
 ) {
   if (link) return true
   if (booking.invoice_status) return true
-  return booking.kind === 'fleet'
+  /* Fleet and add-on bookings always have an invoice to show, because the
+     dashboard generates one from the booking itself rather than waiting for
+     Xero. Everything else needs a link or a status first. */
+  return booking.kind === 'fleet' || booking.kind === 'addon'
 }
 
 export function invoiceLabelForBooking(

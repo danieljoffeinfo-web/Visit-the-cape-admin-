@@ -13,17 +13,27 @@ import { InvoiceViewerDialog } from '@/components/bookings/invoice-viewer-dialog
 import { CreateTourForm, emptyTourForm } from '@/components/bookings/create-tour-form'
 import { CreateInternalForm, emptyInternalForm } from '@/components/bookings/create-internal-form'
 import { CreateFleetForm } from '@/components/bookings/create-fleet-form'
+import { CreateAddOnForm } from '@/components/bookings/create-addon-form'
 
 type InvoiceLink = BookingInvoiceLink
 
 const TAB_CREATE_LABEL: Partial<Record<BookingTab, string>> = {
   tours: '+ New Tour Booking',
+  addons: '+ New Add-On Booking',
   internal: '+ New Internal Booking',
   fleet: '+ New Fleet Booking',
 }
 
 function parseTab(value: string | null): BookingTab {
-  if (value === 'tours' || value === 'internal' || value === 'fleet' || value === 'private' || value === 'all') {
+  if (
+    value === 'tours' ||
+    value === 'addons' ||
+    value === 'internal' ||
+    value === 'fleet' ||
+    value === 'website' ||
+    value === 'private' ||
+    value === 'all'
+  ) {
     return value
   }
   return 'all'
@@ -190,6 +200,14 @@ export function BookingsPanel({
   }
 
   async function raiseInvoice(booking: UnifiedBooking) {
+    const dated = booking.date ? ` (${format(new Date(booking.date), 'd MMM yyyy')})` : ''
+    const description =
+      booking.kind === 'private'
+        ? `Private Enquiry — ${booking.tour_or_vehicle}`
+        : booking.kind === 'addon'
+          ? `Add-On Adventures — ${booking.tour_or_vehicle}${dated}`
+          : `Tag-Along Tour — ${booking.tour_or_vehicle}${dated}`
+
     setRaising(booking.raw_id)
     try {
       const res = await fetch('/api/xero/create-invoice', {
@@ -198,14 +216,21 @@ export function BookingsPanel({
         body: JSON.stringify({
           contactName: booking.customer_name,
           contactEmail: booking.customer_email,
-          description:
-            booking.kind === 'private'
-              ? `Private Enquiry — ${booking.tour_or_vehicle}`
-              : `Tag-Along Tour — ${booking.tour_or_vehicle}${booking.date ? ` (${format(new Date(booking.date), 'd MMM yyyy')})` : ''}`,
+          description,
           amount: booking.amount || 0,
           dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
           bookingId: booking.raw_id,
-          bookingType: booking.kind === 'private' ? 'private' : 'tagalong',
+          bookingType:
+            booking.kind === 'private' ? 'private' : booking.kind === 'addon' ? 'addon' : 'tagalong',
+          reference: booking.booking_reference || undefined,
+          /* One Xero line per experience, so the invoice in the accounts
+             matches the PDF the customer was sent. Sending a single lump would
+             leave the two disagreeing about a booking they both describe. */
+          lineItems: booking.addOnLines?.map((line) => ({
+            description: line.quantity > 1 ? `${line.name} × ${line.quantity}` : line.name,
+            quantity: line.quantity,
+            unitAmount: line.unitAmount,
+          })),
         }),
       })
       if (!res.ok) throw new Error()
@@ -247,6 +272,13 @@ export function BookingsPanel({
       {showCreate && activeTab === 'internal' && (
         <CreateInternalForm form={internalForm} setForm={setInternalForm} saving={saving} onSubmit={createInternal} onCancel={() => setShowCreate(false)} />
       )}
+      {showCreate && activeTab === 'addons' && (
+        <CreateAddOnForm
+          saving={saving}
+          onSaved={() => { setShowCreate(false); loadBookings() }}
+          onCancel={() => setShowCreate(false)}
+        />
+      )}
       {showCreate && activeTab === 'fleet' && (
         <CreateFleetForm saving={saving} onSaved={() => { setShowCreate(false); loadBookings() }} onCancel={() => setShowCreate(false)} />
       )}
@@ -268,7 +300,11 @@ export function BookingsPanel({
               ? 'No private enquiries yet'
               : activeTab === 'fleet'
                 ? 'No fleet bookings yet'
-                : 'No bookings in this view yet'
+                : activeTab === 'addons'
+                  ? 'No add-on bookings yet'
+                  : activeTab === 'website'
+                    ? 'No bookings taken on the website yet'
+                    : 'No bookings in this view yet'
           }
         />
       </div>

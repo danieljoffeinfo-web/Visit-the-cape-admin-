@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApprovedAdminUser } from '@/lib/auth-server'
+import { parseAddOnBookingNotes } from '@/lib/add-ons'
 import {
+  buildAddOnInvoicePdf,
   buildFleetInvoicePdf,
   buildTourInvoicePdf,
   fullCustomerName,
   parseFleetBookingNotes,
 } from '@/lib/invoice-pdf'
+import { bookingsDb } from '@/lib/bookings-db'
+import { getEnquiriesDb } from '@/lib/enquiries-server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getAuthedXeroClient } from '@/lib/xero'
 
@@ -85,8 +89,55 @@ async function buildFleetPdf(bookingId: string, link: InvoiceLinkRow | null) {
   return { pdfBuffer, invoiceNumber }
 }
 
+/**
+ * Add-on booking invoice.
+ *
+ * The chosen experiences and the prices they were sold at are JSON inside the
+ * booking's `notes` column, so this reads the same row a tour booking reads and
+ * branches on what it finds there. A row tagged `addon` whose notes will not
+ * parse falls through to the tour invoice rather than 404ing — a one-line
+ * invoice is a better outcome than none.
+ */
+async function buildAddOnPdf(bookingId: string, link: InvoiceLinkRow | null) {
+  const { data: booking, error } = await bookingsDb()
+    .from('tag_along_bookings')
+    .select('id,name,email,tour_date,passengers,notes,booking_reference,created_at')
+    .eq('id', bookingId)
+    .maybeSingle()
+
+  if (error || !booking) return null
+
+  const details = parseAddOnBookingNotes(booking.notes)
+  if (!details) return null
+
+  const invoiceNumber =
+    details.invoice?.number ||
+    link?.xero_invoice_number ||
+    booking.booking_reference ||
+    `ADDON-${booking.id.slice(0, 8).toUpperCase()}`
+  const createdAt =
+    details.invoice?.issuedAt ||
+    (booking.created_at
+      ? new Date(booking.created_at).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10))
+
+  const pdfBuffer = await buildAddOnInvoicePdf({
+    bookingId: booking.id,
+    createdAt,
+    invoiceNumber,
+    customerName: booking.name,
+    customerEmail: booking.email,
+    bookingDate: booking.tour_date || '',
+    guests: booking.passengers || 0,
+    lines: details.lines,
+    reference: booking.booking_reference,
+  })
+
+  return { pdfBuffer, invoiceNumber }
+}
+
 async function buildTagAlongPdf(bookingId: string, link: InvoiceLinkRow | null, title: string) {
-  const { data: booking, error } = await supabaseAdmin
+  const { data: booking, error } = await bookingsDb()
     .from('tag_along_bookings')
     .select('id,name,email,phone,tour_name,tour_date,passengers,amount,notes,booking_reference,invoice_status,created_at')
     .eq('id', bookingId)
@@ -122,33 +173,47 @@ async function buildTagAlongPdf(bookingId: string, link: InvoiceLinkRow | null, 
 }
 
 async function buildPrivatePdf(bookingId: string, link: InvoiceLinkRow | null) {
-  const { data: enquiry, error } = await supabaseAdmin
+  /* Enquiries belong to whichever project `getEnquiriesDb` names — the content
+     one in production, where the columns differ from the admin project's copy
+     (`experience`, and no date or passengers). Selecting the admin column list
+     against it returned an error, so every private-enquiry invoice 404'd.
+     Select everything and read defensively instead. */
+  const db = getEnquiriesDb()
+  if (!db) return null
+
+  const { data: row, error } = await db.client
     .from('enquiries')
-    .select('id,name,email,tour_type,message,date,passengers,created_at')
+    .select('*')
     .eq('id', bookingId)
     .maybeSingle()
 
-  if (error || !enquiry) return null
+  if (error || !row) return null
 
-  const invoiceNumber = link?.xero_invoice_number || `ENQ-${enquiry.id.slice(0, 8).toUpperCase()}`
+  const enquiry = row as Record<string, unknown>
+  const value = (key: string) => (enquiry[key] == null ? '' : String(enquiry[key]))
+
+  const id = value('id')
+  const invoiceNumber = link?.xero_invoice_number || `ENQ-${id.slice(0, 8).toUpperCase()}`
   const invoiceStatus = link?.status || 'Draft copy'
   const createdAt = enquiry.created_at
-    ? new Date(enquiry.created_at).toISOString().slice(0, 10)
+    ? new Date(value('created_at')).toISOString().slice(0, 10)
     : new Date().toISOString().slice(0, 10)
 
   const pdfBuffer = await buildTourInvoicePdf({
-    bookingId: enquiry.id,
+    bookingId: id,
     createdAt,
     invoiceNumber,
     invoiceStatus,
     title: 'Private enquiry invoice',
-    customerName: enquiry.name,
-    customerEmail: enquiry.email,
-    tourName: enquiry.tour_type || 'Private enquiry',
-    tourDate: enquiry.date || '',
-    guests: enquiry.passengers || 0,
-    amount: 0,
-    notes: enquiry.message,
+    customerName: value('name'),
+    customerEmail: value('email'),
+    // The website writes `experience`; the admin project's copy calls it
+    // `tour_type`. Accept either rather than depending on which one answered.
+    tourName: value('tour_type') || value('experience') || 'Private enquiry',
+    tourDate: value('date'),
+    guests: Number(enquiry.passengers) || 0,
+    amount: Number(enquiry.amount) || 0,
+    notes: value('message'),
   })
 
   return { pdfBuffer, invoiceNumber }
@@ -187,7 +252,11 @@ export async function GET(request: NextRequest) {
       generated = await buildFleetPdf(bookingId, link as InvoiceLinkRow | null)
     }
 
-    if (!generated && (kind === 'tour' || kind === 'internal' || !kind)) {
+    if (!generated && (kind === 'addon' || !kind)) {
+      generated = await buildAddOnPdf(bookingId, link as InvoiceLinkRow | null)
+    }
+
+    if (!generated && (kind === 'tour' || kind === 'internal' || kind === 'addon' || !kind)) {
       const title = kind === 'internal' ? 'Internal booking invoice' : 'Tour booking invoice'
       generated = await buildTagAlongPdf(bookingId, link as InvoiceLinkRow | null, title)
     }

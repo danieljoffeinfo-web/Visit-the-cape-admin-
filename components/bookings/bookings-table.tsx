@@ -15,8 +15,10 @@ const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
 
 const kindLabel: Record<UnifiedBooking['kind'], string> = {
   tour: 'Tour',
+  addon: 'Add-On',
   internal: 'Internal',
   fleet: 'Fleet',
+  website: 'Website',
   private: 'Private',
 }
 
@@ -118,6 +120,13 @@ export function BookingsTable({
             const invoiceLabel = invoiceLabelForBooking(b, link)
             const sc = STATUS_COLORS[invoiceLabel.toUpperCase()] || STATUS_COLORS.DRAFT
             const canViewInvoice = bookingHasViewableInvoice(b, link)
+            /* Only until the invoice exists in Xero — after that the link is the
+               record, and a second press would raise a duplicate. */
+            const canRaiseInvoice =
+              Boolean(onRaiseInvoice) &&
+              Boolean(xeroConnected) &&
+              !link?.xero_invoice_id &&
+              (b.kind === 'tour' || b.kind === 'private' || b.kind === 'addon')
             const canCancel = b.kind !== 'private' && b.status !== 'cancelled' && (b.kind !== 'tour' || b.source !== 'website')
 
             return (
@@ -159,32 +168,39 @@ export function BookingsTable({
                   <StatusBadge status={b.status} />
                 </td>
                 <td style={{ padding: '10px 12px' }} onClick={(event) => event.stopPropagation()}>
-                  {canViewInvoice ? (
-                    <InvoiceBadge
-                      label={invoiceLabel}
-                      colors={sc}
-                      onClick={onViewInvoice ? () => onViewInvoice(b) : undefined}
-                    />
-                  ) : onRaiseInvoice && xeroConnected && (b.kind === 'tour' || b.kind === 'private') ? (
-                    <button
-                      disabled={raisingId === b.raw_id}
-                      onClick={() => onRaiseInvoice(b)}
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: 12,
-                        borderRadius: 4,
-                        border: `1px solid ${theme.bronzeBorder}`,
-                        background: theme.surface,
-                        color: theme.bronzeDark,
-                        cursor: 'pointer',
-                        fontFamily: theme.bodyFont,
-                      }}
-                    >
-                      {raisingId === b.raw_id ? '…' : 'Raise Invoice'}
-                    </button>
-                  ) : (
-                    <span style={{ color: theme.textMuted, fontSize: 12 }}>—</span>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    {canViewInvoice && (
+                      <InvoiceBadge
+                        label={invoiceLabel}
+                        colors={sc}
+                        onClick={onViewInvoice ? () => onViewInvoice(b) : undefined}
+                      />
+                    )}
+                    {/* An add-on booking already has an invoice PDF the moment it
+                        is created, so the badge alone would leave no way to push
+                        it to Xero. Both are offered until a Xero link exists. */}
+                    {canRaiseInvoice && (
+                      <button
+                        disabled={raisingId === b.raw_id}
+                        onClick={() => onRaiseInvoice?.(b)}
+                        style={{
+                          padding: '4px 10px',
+                          fontSize: 12,
+                          borderRadius: 4,
+                          border: `1px solid ${theme.bronzeBorder}`,
+                          background: theme.surface,
+                          color: theme.bronzeDark,
+                          cursor: 'pointer',
+                          fontFamily: theme.bodyFont,
+                        }}
+                      >
+                        {raisingId === b.raw_id ? '…' : canViewInvoice ? 'Create in Xero' : 'Raise Invoice'}
+                      </button>
+                    )}
+                    {!canViewInvoice && !canRaiseInvoice && (
+                      <span style={{ color: theme.textMuted, fontSize: 12 }}>—</span>
+                    )}
+                  </div>
                 </td>
                 <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }} onClick={(event) => event.stopPropagation()}>
                   {canCancel && onCancel && (

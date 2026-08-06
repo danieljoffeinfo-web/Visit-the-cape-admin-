@@ -1,4 +1,5 @@
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib'
+import { addOnBookingTotal, addOnLineTotal, type AddOnLine } from '@/lib/add-ons'
 import { COMPANY, INVOICE_COLORS } from '@/lib/company'
 import { balanceDue, fullCustomerName, parseFleetBookingNotes, usageTypeLabel } from '@/lib/fleet'
 import { invoiceLogoBytes } from '@/lib/invoice-logo'
@@ -77,6 +78,40 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number) {
   return lines.length ? lines : ['—']
 }
 
+/*
+ * The standard PDF fonts cannot draw curly quotes, en dashes or ellipses, and
+ * pdf-lib drops them rather than complaining — "Jenny’s African Groaning Table"
+ * printed as "Jennys African Groaning Table" on a real invoice. Every string
+ * that reaches the page goes through here first, so the substitution happens
+ * once instead of at each of the thirty-odd drawText calls.
+ */
+const TYPOGRAPHIC: [RegExp, string][] = [
+  [/[‘’‚‛]/g, "'"],
+  [/[“”„‟]/g, '"'],
+  [/[–—−]/g, '-'],
+  [/…/g, '...'],
+  [/ /g, ' '],
+]
+
+function safeText<T extends string | null | undefined>(value: T): T {
+  if (typeof value !== 'string') return value
+  let out = value
+  for (const [pattern, replacement] of TYPOGRAPHIC) out = out.replace(pattern, replacement)
+  return out as T
+}
+
+function sanitiseInvoiceText(input: VtcInvoiceInput): VtcInvoiceInput {
+  return {
+    ...input,
+    invoiceNumber: safeText(input.invoiceNumber),
+    billToName: safeText(input.billToName),
+    billToSubtitle: safeText(input.billToSubtitle),
+    reference: safeText(input.reference),
+    referenceNote: safeText(input.referenceNote),
+    lineItems: input.lineItems.map((item) => ({ ...item, description: safeText(item.description) })),
+  }
+}
+
 export type InvoiceLineItem = {
   description: string
   amount: number
@@ -100,7 +135,8 @@ export type VtcInvoiceInput = {
  * reference, line-item table, totals with upfront payment and balance, payment
  * instructions, then banking and registered-office details.
  */
-export async function buildVtcInvoicePdf(input: VtcInvoiceInput): Promise<Buffer> {
+export async function buildVtcInvoicePdf(rawInput: VtcInvoiceInput): Promise<Buffer> {
+  const input = sanitiseInvoiceText(rawInput)
   const pdf = await PDFDocument.create()
   const page = pdf.addPage([PAGE_W, PAGE_H])
   const font = await pdf.embedFont(StandardFonts.Helvetica)
@@ -363,6 +399,51 @@ export async function buildTourInvoicePdf(input: {
       : null,
     lineItems: [{ description: input.tourName, amount: input.amount }],
     total: input.amount,
+    depositAmount: input.depositAmount,
+  })
+}
+
+/**
+ * Add-on booking invoice — the same approved layout, one line per experience.
+ *
+ * This is the first invoice in the system with more than one line item, which
+ * is why it exists as its own builder rather than reusing the tour one: a
+ * customer who books skydiving for two and a seal snorkel for one should see
+ * three lines they can check against what they agreed to, not a single
+ * "Add-on adventures" total they have to take on trust.
+ */
+export async function buildAddOnInvoicePdf(input: {
+  bookingId: string
+  createdAt: string
+  invoiceNumber: string
+  customerName: string
+  customerEmail?: string | null
+  bookingDate: string
+  guests: number
+  lines: AddOnLine[]
+  reference?: string | null
+  depositAmount?: number | null
+}) {
+  const lineItems: InvoiceLineItem[] = input.lines.map((line) => ({
+    description:
+      line.quantity > 1
+        ? `${line.name} × ${line.quantity} @ ${formatMoney(line.unitAmount)}`
+        : line.name,
+    amount: addOnLineTotal(line),
+  }))
+
+  return buildVtcInvoicePdf({
+    invoiceNumber: input.invoiceNumber,
+    invoiceDate: input.createdAt,
+    dueDate: input.bookingDate || input.createdAt,
+    billToName: input.customerName || '—',
+    billToSubtitle: input.customerEmail || null,
+    reference: 'Add-on adventures',
+    referenceNote: input.bookingDate
+      ? `Date: ${formatLongDate(input.bookingDate)}${input.guests ? ` · ${input.guests} guest${input.guests === 1 ? '' : 's'}` : ''}`
+      : null,
+    lineItems,
+    total: addOnBookingTotal(input.lines),
     depositAmount: input.depositAmount,
   })
 }
