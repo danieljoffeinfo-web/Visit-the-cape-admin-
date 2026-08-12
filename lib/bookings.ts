@@ -182,7 +182,12 @@ export function normalizeFleetRow(
     guests: notes?.rental.seatsBooked || row.passengers || 0,
     source: 'internal',
     status: row.status || 'confirmed',
-    payment_status: invoiceStatus?.toUpperCase() === 'PAID' ? 'paid' : 'pending',
+    payment_status:
+      invoiceStatus?.toUpperCase() === 'PAID'
+        ? 'paid'
+        : row.status === 'cancelled' || notes?.rental.operationalStatus === 'cancelled'
+          ? 'cancelled'
+          : notes?.rental.operationalStatus || (notes?.rental.paymentReceived ? 'paid' : 'pending'),
     invoice_status: invoiceStatus || null,
     amount: row.amount ?? notes?.rental.totalAmount ?? null,
     created_at: row.created_at,

@@ -61,12 +61,12 @@ export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClos
       className={`admin-sidebar${mobileOpen ? ' admin-sidebar--open' : ''}`}
       aria-hidden={mobileOpen === false ? undefined : mobileOpen ? false : undefined}
     >
-      <div style={{ padding: '26px 20px 22px', borderBottom: '1px solid rgba(255,255,255,0.10)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+      <div style={{ padding: '24px 20px 20px', borderBottom: `1px solid ${theme.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div>
-          <div style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 24, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#ffffff', lineHeight: 1 }}>
+          <div style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 22, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.bronze, lineHeight: 1 }}>
             Visit The Cape
           </div>
-          <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)', marginTop: 6, fontFamily: theme.utilityFont }}>
+          <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: theme.textFaint, marginTop: 4 }}>
             Operations desk
           </div>
         </div>
@@ -80,9 +80,9 @@ export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClos
               width: 36,
               height: 36,
               borderRadius: 8,
-              border: '1px solid rgba(255,255,255,0.18)',
-              background: 'rgba(255,255,255,0.06)',
-              color: '#ffffff',
+              border: `1px solid ${theme.border}`,
+              background: theme.surface,
+              color: theme.textMuted,
               cursor: 'pointer',
               flexShrink: 0,
             }}
@@ -93,11 +93,11 @@ export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClos
         )}
       </div>
 
-      <nav style={{ flex: 1, padding: '16px 10px', overflowY: 'auto' }} aria-label="Admin sections">
+      <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }} aria-label="Admin sections">
         {navItems.map((group, gi) => (
           <div key={gi}>
             {group.section && (
-              <div style={{ padding: '12px 12px 6px', fontSize: 9, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.42)', fontWeight: 600, fontFamily: theme.utilityFont }}>
+              <div style={{ padding: '8px 16px 4px', fontSize: 9, letterSpacing: '0.2em', textTransform: 'uppercase', color: theme.textFaint, fontWeight: 500 }}>
                 {group.section}
               </div>
             )}
@@ -111,16 +111,17 @@ export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClos
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
-                    padding: '10px 12px',
+                    padding: '10px 20px',
                     width: '100%',
                     cursor: 'pointer',
-                    color: isActive ? '#ffffff' : 'rgba(255,255,255,0.70)',
-                    background: isActive ? 'rgba(255,255,255,0.10)' : 'transparent',
+                    color: isActive ? theme.bronzeDark : theme.textMuted,
+                    background: isActive ? theme.bronzeBg : 'transparent',
                     border: 'none',
-                    borderRadius: 7,
-                    boxShadow: isActive ? 'inset 3px 0 0 #d36b4d' : 'none',
-                    fontSize: 14,
-                    fontWeight: isActive ? 700 : 500,
+                    borderLeftWidth: 3,
+                    borderLeftStyle: 'solid',
+                    borderLeftColor: isActive ? theme.bronze : 'transparent',
+                    fontSize: 13.5,
+                    fontWeight: isActive ? 600 : 400,
                     fontFamily: theme.bodyFont,
                     transition: 'background 0.15s, color 0.15s',
                     textAlign: 'left',
@@ -135,20 +136,20 @@ export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClos
         ))}
       </nav>
 
-      <div style={{ padding: '16px 20px 18px', borderTop: '1px solid rgba(255,255,255,0.10)' }}>
+      <div style={{ padding: '16px 20px', borderTop: `1px solid ${theme.border}` }}>
         {admin && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
             <UserColorDot color={admin.color} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#ffffff' }}>{admin.full_name}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.46)', textTransform: 'uppercase', letterSpacing: '0.08em', fontFamily: theme.utilityFont }}>{admin.role}</div>
+              <div style={{ fontSize: 12, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: theme.text }}>{admin.full_name}</div>
+              <div style={{ fontSize: 10, color: theme.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{admin.role}</div>
             </div>
           </div>
         )}
         {onSignOut && (
           <button
             onClick={onSignOut}
-            style={{ width: '100%', padding: '8px 0 0 24px', background: 'none', border: 'none', color: 'rgba(255,255,255,0.56)', cursor: 'pointer', fontSize: 12, fontFamily: theme.bodyFont, textAlign: 'left' }}
+            style={{ width: '100%', padding: '6px 0', background: 'none', border: 'none', color: theme.textFaint, cursor: 'pointer', fontSize: 11, fontFamily: theme.bodyFont, textAlign: 'left' }}
           >
             Sign out
           </button>

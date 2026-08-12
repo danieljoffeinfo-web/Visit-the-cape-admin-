@@ -366,7 +366,13 @@ export async function PATCH(request: NextRequest) {
   if (updates.tourName !== undefined) allowed.tour_name = String(updates.tourName).trim()
   if (updates.tourDate !== undefined) allowed.tour_date = String(updates.tourDate) || null
   if (updates.status !== undefined) allowed.status = updates.status
-  if (updates.payment_status !== undefined) allowed.payment_status = updates.payment_status
+  if (updates.payment_status !== undefined) {
+    const paymentStatus = String(updates.payment_status).toLowerCase()
+    if (!['pending', 'paid', 'cancelled'].includes(paymentStatus)) {
+      return NextResponse.json({ error: 'Payment status must be pending, paid or cancelled' }, { status: 400 })
+    }
+    allowed.payment_status = paymentStatus
+  }
   if (updates.invoice_status !== undefined) allowed.invoice_status = updates.invoice_status
   if (updates.vehicle_name !== undefined) allowed.vehicle_name = updates.vehicle_name
   if (updates.notes !== undefined) allowed.notes = updates.notes

@@ -132,20 +132,20 @@
 }
 
 :root {
-  --bronze: #d36b4d;
-  --bronze-lt: #e59a82;
-  --bronze-dk: #a84932;
-  --vtc-bg: #f3f6f4;
+  --bronze: #b8956a;
+  --bronze-lt: #d4b896;
+  --bronze-dk: #8a6e4a;
+  --vtc-bg: #f7f4ef;
   --vtc-surface: #ffffff;
-  --vtc-surface-muted: #e8efec;
-  --vtc-text: #12303a;
-  --vtc-text-muted: rgba(18, 48, 58, 0.64);
-  --vtc-border: rgba(18, 48, 58, 0.10);
-  --ink: #12303a;
+  --vtc-surface-muted: #f0ebe3;
+  --vtc-text: #2c2620;
+  --vtc-text-muted: rgba(44, 38, 32, 0.55);
+  --vtc-border: rgba(44, 38, 32, 0.10);
+  --ink: #2c2620;
   --ink2: #ffffff;
-  --ink3: #e8efec;
-  --parchment: #f3f6f4;
-  --dft-muted: rgba(18, 48, 58, 0.64);
-  --dft-muted2: rgba(18, 48, 58, 0.10);
-  --dft-muted3: rgba(18, 48, 58, 0.05);
+  --ink3: #f0ebe3;
+  --parchment: #f7f4ef;
+  --dft-muted: rgba(44, 38, 32, 0.55);
+  --dft-muted2: rgba(44, 38, 32, 0.10);
+  --dft-muted3: rgba(44, 38, 32, 0.05);
 }

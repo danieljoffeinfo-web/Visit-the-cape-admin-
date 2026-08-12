@@ -3,7 +3,7 @@
 import { format } from 'date-fns'
 import type { BookingInvoiceLink, UnifiedBooking } from '@/lib/bookings'
 import { bookingHasViewableInvoice, invoiceLabelForBooking } from '@/lib/bookings'
-import { SourceBadge, StatusBadge } from '@/components/user-badge'
+import { SourceBadge } from '@/components/user-badge'
 import { RowMenu } from '@/components/ui/row-menu'
 import { theme } from '@/lib/theme'
 
@@ -34,9 +34,11 @@ type BookingsTableProps = {
   onViewInvoice?: (booking: UnifiedBooking) => void
   onSendInvoice?: (booking: UnifiedBooking) => void
   onEdit?: (booking: UnifiedBooking) => void
+  onPaymentStatusChange?: (booking: UnifiedBooking, status: 'pending' | 'paid' | 'cancelled') => void
   raisingId?: string | null
   sendingId?: string | null
   deletingId?: string | null
+  statusUpdatingId?: string | null
   emptyMessage?: string
 }
 
@@ -107,9 +109,11 @@ export function BookingsTable({
   onViewInvoice,
   onSendInvoice,
   onEdit,
+  onPaymentStatusChange,
   raisingId,
   sendingId,
   deletingId,
+  statusUpdatingId,
   emptyMessage = 'No bookings yet',
 }: BookingsTableProps) {
   if (loading) {
@@ -129,7 +133,7 @@ export function BookingsTable({
       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
-            {['Type', 'Reference', 'Source', 'Customer', 'Tour / Vehicle', 'Date', 'Guests', 'Amount', 'Status', ''].map(
+            {['Type', 'Reference', 'Source', 'Customer', 'Tour / Vehicle', 'Date', 'Guests', 'Amount', 'Payment', ''].map(
               (h, i) => (
                 <th key={`${h}-${i}`} style={HEAD}>
                   {h}
@@ -142,7 +146,6 @@ export function BookingsTable({
           {bookings.map((b) => {
             const link = invoiceLinks[b.raw_id]
             const invoiceLabel = invoiceLabelForBooking(b, link)
-            const hasInvoiceState = Boolean(link?.status || b.invoice_status)
             const sc = STATUS_COLORS[invoiceLabel.toUpperCase()] || STATUS_COLORS.DRAFT
             const canViewInvoice = bookingHasViewableInvoice(b, link)
             /* Only until the invoice exists in Xero — after that the link is the
@@ -157,6 +160,20 @@ export function BookingsTable({
             /* Nothing to send without both an invoice and somewhere to send it. */
             const canSend = Boolean(onSendInvoice) && canViewInvoice && Boolean(b.customer_email)
             const busy = sendingId === b.raw_id || deletingId === b.raw_id
+            const xeroPaid = String(link?.status || b.invoice_status || '').toUpperCase() === 'PAID'
+            const operationalStatus: 'pending' | 'paid' | 'cancelled' =
+              xeroPaid
+                ? 'paid'
+                : b.status === 'cancelled' || b.payment_status === 'cancelled'
+                  ? 'cancelled'
+                  : b.payment_status === 'paid'
+                    ? 'paid'
+                    : 'pending'
+            const canChangePayment =
+              Boolean(onPaymentStatusChange) &&
+              b.kind !== 'private' &&
+              b.kind !== 'website' &&
+              !xeroPaid
 
             return (
               <tr
@@ -194,29 +211,46 @@ export function BookingsTable({
                     beside on a screen whose whole subject is money. */}
                 <td style={{ ...CELL, fontWeight: 700, whiteSpace: 'nowrap' }}>{money(b.amount)}</td>
                 <td style={{ padding: '14px 12px' }}>
-                  <StatusBadge status={b.status} />
-                  {/* Only a real invoice STATE — PAID, AUTHORISED, OVERDUE.
-                      invoiceLabelForBooking falls back to the words "View
-                      invoice" when there is none, which is a button label, not
-                      a status, and printing it here put a meaningless pill
-                      beside CONFIRMED on every row that had an invoice. */}
-                  {hasInvoiceState && (
+                  {canChangePayment ? (
+                    <select
+                      aria-label={`Payment status for ${b.customer_name}`}
+                      value={operationalStatus}
+                      disabled={statusUpdatingId === b.raw_id}
+                      onChange={(event) => onPaymentStatusChange?.(
+                        b,
+                        event.target.value as 'pending' | 'paid' | 'cancelled',
+                      )}
+                      style={{
+                        padding: '6px 28px 6px 9px',
+                        borderRadius: 6,
+                        border: `1px solid ${theme.borderStrong}`,
+                        background: theme.surface,
+                        color: operationalStatus === 'paid' ? theme.success : operationalStatus === 'cancelled' ? theme.danger : theme.bronzeDark,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        fontFamily: theme.bodyFont,
+                      }}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="paid">Paid</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  ) : (
                     <span
                       style={{
                         display: 'inline-block',
-                        marginLeft: 8,
                         padding: '3px 9px',
                         borderRadius: 12,
                         fontSize: 11,
                         fontWeight: 600,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase',
-                        background: sc.bg,
-                        color: sc.color,
+                        background: operationalStatus === 'paid' ? STATUS_COLORS.PAID.bg : operationalStatus === 'cancelled' ? STATUS_COLORS.OVERDUE.bg : sc.bg,
+                        color: operationalStatus === 'paid' ? STATUS_COLORS.PAID.color : operationalStatus === 'cancelled' ? STATUS_COLORS.OVERDUE.color : sc.color,
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {invoiceLabel}
+                      {b.kind === 'private' ? 'Enquiry' : xeroPaid ? 'Paid in Xero' : operationalStatus}
                     </span>
                   )}
                 </td>

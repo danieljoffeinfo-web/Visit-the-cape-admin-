@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
 import { UserColorBadge } from '@/components/user-badge'
-import { theme } from '@/lib/theme'
 import type { AdminUser } from '@/lib/auth-types'
 import styles from './demo.module.css'
 
@@ -38,9 +37,9 @@ const titles: Record<Panel, string> = {
 }
 
 const sampleBookings = [
-  ['Fleet', 'VTC-1048', 'Gavin Reid', 'Mercedes Sprinter', '19 Nov 2026', 'R 5 000', 'Confirmed'],
-  ['Tour', 'VTC-1047', 'Amina Patel', 'Cape Peninsula Private Tour', '22 Aug 2026', 'R 8 400', 'Confirmed'],
-  ['Experience', 'VTC-1046', 'Luca Meyer', 'Ocean Water Biking', '18 Aug 2026', 'R 3 200', 'Pending'],
+  ['Fleet', 'VTC-1048', 'Gavin Reid', 'Mercedes Sprinter', '19 Nov 2026', 'R 5 000'],
+  ['Tour', 'VTC-1047', 'Amina Patel', 'Cape Peninsula Private Tour', '22 Aug 2026', 'R 8 400'],
+  ['Experience', 'VTC-1046', 'Luca Meyer', 'Ocean Water Biking', '18 Aug 2026', 'R 3 200'],
 ]
 
 export default function DemoPage() {
@@ -102,7 +101,7 @@ function HomeDemo({ onChange }: { onChange: (panel: Panel) => void }) {
           <span>Messages to answer</span><strong>3</strong><small>Open the inbox and reply</small>
         </button>
         <button className={styles.attentionCard} onClick={() => onChange('accounting')}>
-          <span>Money to collect</span><strong>R 24 750</strong><small>Approved Xero invoices that are not paid yet</small>
+          <span>Payments outstanding</span><strong>R 24 750</strong><small>Invoices still waiting for payment</small>
         </button>
       </div>
 
@@ -149,13 +148,14 @@ function HomeDemo({ onChange }: { onChange: (panel: Panel) => void }) {
 }
 
 function BookingsDemo() {
+  const [statuses, setStatuses] = useState<Array<'pending' | 'paid' | 'cancelled'>>(['paid', 'pending', 'cancelled'])
   return (
     <div>
       <div className={styles.pageHeading}><div><h1>Bookings</h1><p>Every confirmed tour, vehicle and experience in one place.</p></div><button>New booking</button></div>
       <div className={styles.tabs}><b>All</b><span>Tours</span><span>Experiences</span><span>Internal</span><span>Website</span></div>
       <section className={styles.card}>
-        <div className={styles.tableWrap}><table className={styles.table}><thead><tr>{['Type','Reference','Customer','Tour / vehicle','Date','Amount','Status',''].map((h) => <th key={h}>{h}</th>)}</tr></thead>
-          <tbody>{sampleBookings.map((row) => <tr key={row[1]}>{row.map((value, index) => <td key={value}>{index === 6 ? <span className={styles.status}>{value}</span> : value}</td>)}<td><button className={styles.openButton}>Open booking</button><button className={styles.moreButton} aria-label="More actions">•••</button></td></tr>)}</tbody>
+        <div className={styles.tableWrap}><table className={styles.table}><thead><tr>{['Type','Reference','Customer','Tour / vehicle','Date','Amount','Payment',''].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+          <tbody>{sampleBookings.map((row, rowIndex) => <tr key={row[1]}>{row.map((value) => <td key={value}>{value}</td>)}<td><select aria-label={`Payment status for ${row[2]}`} className={styles.statusSelect} value={statuses[rowIndex]} onChange={(event) => setStatuses((current) => current.map((status, index) => index === rowIndex ? event.target.value as 'pending' | 'paid' | 'cancelled' : status))}><option value="pending">Pending</option><option value="paid">Paid</option><option value="cancelled">Cancelled</option></select></td><td><button className={styles.openButton}>Open booking</button><button className={styles.moreButton} aria-label="More actions">•••</button></td></tr>)}</tbody>
         </table></div>
       </section>
     </div>

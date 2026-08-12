@@ -160,7 +160,7 @@ export function DashboardPanel({
       onClick: () => onNavigate('enquiries'),
     },
     {
-      label: 'Money to collect',
+      label: 'Payments outstanding',
       value: loading
         ? '—'
         : invoices.fallback === 'connect'
@@ -172,7 +172,7 @@ export function DashboardPanel({
         ? 'Connect Xero to see unpaid invoices'
         : invoices.fallback === 'no_data'
           ? 'Xero data is unavailable'
-          : 'Approved Xero invoices that are not paid yet',
+          : 'Invoices still waiting for payment',
       urgent: (invoices.total || 0) > 0,
       onClick: () => onNavigate('accounting'),
     },
@@ -195,8 +195,7 @@ export function DashboardPanel({
     <div className="dashboard-root">
       <style>{`
         .dashboard-root { max-width: 100%; overflow-x: hidden; }
-        .dashboard-briefing { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; padding: 26px 28px; border-radius: 12px; margin-bottom: 18px; background: #12303a; color: white; position: relative; overflow: hidden; }
-        .dashboard-briefing::after { content: ''; position: absolute; right: -42px; bottom: -70px; width: 220px; height: 150px; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; box-shadow: 0 0 0 28px rgba(255,255,255,.04), 0 0 0 56px rgba(255,255,255,.025); }
+        .dashboard-briefing { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; padding: 26px 28px; border-radius: 12px; margin-bottom: 18px; background: ${theme.surface}; color: ${theme.text}; border: 1px solid ${theme.border}; box-shadow: 0 1px 3px rgba(44,38,32,.04); }
         .dashboard-pulse { display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
         .dashboard-operations { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 24px; }
         .dashboard-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
@@ -219,11 +218,11 @@ export function DashboardPanel({
 
       <section className="dashboard-briefing" aria-labelledby="briefing-title">
         <div style={{ position: 'relative', zIndex: 1 }}>
-          <div style={{ fontFamily: theme.utilityFont, fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'rgba(255,255,255,.56)', marginBottom: 8 }}>Daily briefing</div>
+          <div style={{ fontFamily: theme.utilityFont, fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: theme.bronzeDark, marginBottom: 8 }}>Daily briefing</div>
           <h1 id="briefing-title" style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 36, letterSpacing: '0.02em', margin: 0, lineHeight: 1 }}>Good day, {firstName}.</h1>
-          <p style={{ margin: '8px 0 0', color: 'rgba(255,255,255,.70)', fontSize: 14 }}>Here is what needs your attention today.</p>
+          <p style={{ margin: '8px 0 0', color: theme.textMuted, fontSize: 14 }}>Here is what needs your attention today.</p>
         </div>
-        <div style={{ position: 'relative', zIndex: 1, fontFamily: theme.utilityFont, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#ffffff', paddingBottom: 3 }}>{today}</div>
+        <div style={{ position: 'relative', zIndex: 1, fontFamily: theme.utilityFont, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, paddingBottom: 3 }}>{today}</div>
       </section>
 
       {/* Pulse Bar */}

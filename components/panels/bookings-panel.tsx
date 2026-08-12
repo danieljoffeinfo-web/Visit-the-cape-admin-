@@ -63,6 +63,7 @@ export function BookingsPanel({
   const [raising, setRaising] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [sendingId, setSendingId] = useState<string | null>(null)
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [invoiceBooking, setInvoiceBooking] = useState<UnifiedBooking | null>(null)
   const [editingBooking, setEditingBooking] = useState<UnifiedBooking | null>(null)
 
@@ -257,6 +258,51 @@ export function BookingsPanel({
     }
   }
 
+  async function changePaymentStatus(
+    booking: UnifiedBooking,
+    paymentStatus: 'pending' | 'paid' | 'cancelled',
+  ) {
+    const link = invoiceLinks[booking.raw_id]
+    if (paymentStatus === 'paid' && link?.xero_invoice_id) {
+      const proceed = confirm(
+        'Mark this booking as paid in the admin? This does not record a payment in Xero. Xero will remain the official accounting record.',
+      )
+      if (!proceed) return
+    }
+    if (paymentStatus === 'cancelled') {
+      const proceed = confirm('Mark this booking as cancelled? It will remain in the list as a record.')
+      if (!proceed) return
+    }
+
+    setStatusUpdatingId(booking.raw_id)
+    try {
+      const res = booking.kind === 'fleet'
+        ? await fetch('/api/fleet/bookings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: booking.raw_id, operationalStatus: paymentStatus }),
+          })
+        : await fetch('/api/bookings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: booking.raw_id,
+              kind: booking.kind,
+              payment_status: paymentStatus,
+              status: paymentStatus === 'cancelled' ? 'cancelled' : 'confirmed',
+            }),
+          })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to update payment status')
+      toast.success(`Booking marked ${paymentStatus}`)
+      await loadBookings()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to update payment status')
+    } finally {
+      setStatusUpdatingId(null)
+    }
+  }
+
   async function raiseInvoice(booking: UnifiedBooking) {
     const dated = booking.date ? ` (${format(new Date(booking.date), 'd MMM yyyy')})` : ''
     const description =
@@ -350,9 +396,11 @@ export function BookingsPanel({
           onViewInvoice={setInvoiceBooking}
           onSendInvoice={sendInvoice}
           onEdit={setEditingBooking}
+          onPaymentStatusChange={changePaymentStatus}
           raisingId={raising}
           sendingId={sendingId}
           deletingId={deletingId}
+          statusUpdatingId={statusUpdatingId}
           emptyMessage={
             activeTab === 'addons'
               ? 'No add-on bookings yet'
