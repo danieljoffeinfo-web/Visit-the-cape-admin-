@@ -109,6 +109,7 @@ function sanitiseInvoiceText(input: VtcInvoiceInput): VtcInvoiceInput {
     invoiceNumber: safeText(input.invoiceNumber),
     billToName: safeText(input.billToName),
     billToSubtitle: safeText(input.billToSubtitle),
+    billToLines: (input.billToLines || []).map((line) => safeText(line)),
     reference: safeText(input.reference),
     referenceNote: safeText(input.referenceNote),
     lineItems: input.lineItems.map((item) => ({ ...item, description: safeText(item.description) })),
@@ -126,6 +127,15 @@ export type VtcInvoiceInput = {
   dueDate: string
   billToName: string
   billToSubtitle?: string | null
+  /**
+   * Extra lines under the bill-to name: the person's name when billing a
+   * company, their address, a VAT number.
+   *
+   * A single subtitle was enough while an invoice only ever billed a person by
+   * name. A company needs its registered address and VAT number on the
+   * document, and those do not fit on one line.
+   */
+  billToLines?: (string | null | undefined)[]
   reference?: string | null
   referenceNote?: string | null
   lineItems: InvoiceLineItem[]
@@ -180,9 +190,23 @@ export async function buildVtcInvoicePdf(rawInput: VtcInvoiceInput): Promise<Buf
 
   ctx.y -= 27
   page.drawText(input.billToName || '—', { x: M, y: ctx.y, size: 14, font: bold, color: C.text })
-  if (input.billToSubtitle) {
-    ctx.y -= 19
-    page.drawText(input.billToSubtitle, { x: M, y: ctx.y, size: 10.5, font, color: C.muted })
+
+  /* The bill-to column stops where the invoice meta begins, so an address wraps
+     rather than running under the invoice number on the right. */
+  const billToWidth = metaLabelX - M - 18
+  const billToLines = [input.billToSubtitle, ...(input.billToLines || [])]
+    .map((line) => (line == null ? '' : String(line).trim()))
+    .filter(Boolean)
+    /* An address arrives as one string with newlines in it, because that is how
+       it was typed into the client record. */
+    .flatMap((line) => line.split(/\r?\n/))
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => wrap(line, font, 10.5, billToWidth))
+
+  for (const line of billToLines) {
+    ctx.y -= 15
+    page.drawText(line, { x: M, y: ctx.y, size: 10.5, font, color: C.muted })
   }
 
   ctx.y = Math.min(ctx.y, metaY) - 20
@@ -347,6 +371,8 @@ export async function buildFleetInvoicePdf(input: {
   amount: number
   depositAmount?: number | null
   notes?: string | null
+  /** Resolved from the client record; falls back to the name below. */
+  billTo?: { billToName: string; billToLines: string[] } | null
 }) {
   const registration = input.registrationNumber ? ` - ${input.registrationNumber}` : ''
   const reference = `${input.vehicleName} rental${registration}`
@@ -357,8 +383,9 @@ export async function buildFleetInvoicePdf(input: {
     invoiceDate: input.createdAt,
     // The rental end date is when the balance falls due.
     dueDate: input.endDate,
-    billToName: input.customerName || '—',
+    billToName: input.billTo?.billToName || input.customerName || '—',
     billToSubtitle: input.accountNumber ? `Account ${input.accountNumber}` : null,
+    billToLines: input.billTo?.billToLines,
     reference,
     referenceNote: period,
     lineItems: [
@@ -389,13 +416,17 @@ export async function buildTourInvoicePdf(input: {
   amount: number
   depositAmount?: number | null
   notes?: string | null
+  billTo?: { billToName: string; billToLines: string[] } | null
 }) {
   return buildVtcInvoicePdf({
     invoiceNumber: input.invoiceNumber,
     invoiceDate: input.createdAt,
     dueDate: input.tourDate || input.createdAt,
-    billToName: input.customerName || '—',
-    billToSubtitle: input.customerEmail || null,
+    billToName: input.billTo?.billToName || input.customerName || '—',
+    /* The email already appears in the resolved block, so it is only a subtitle
+       when there is no client record to draw one from. */
+    billToSubtitle: input.billTo ? null : input.customerEmail || null,
+    billToLines: input.billTo?.billToLines,
     reference: input.tourName,
     referenceNote: input.tourDate
       ? `Tour date: ${formatLongDate(input.tourDate)}${input.guests ? ` · ${input.guests} guest${input.guests === 1 ? '' : 's'}` : ''}`
@@ -426,6 +457,7 @@ export async function buildAddOnInvoicePdf(input: {
   lines: AddOnLine[]
   reference?: string | null
   depositAmount?: number | null
+  billTo?: { billToName: string; billToLines: string[] } | null
 }) {
   const lineItems: InvoiceLineItem[] = input.lines.map((line) => ({
     description:
@@ -439,8 +471,9 @@ export async function buildAddOnInvoicePdf(input: {
     invoiceNumber: input.invoiceNumber,
     invoiceDate: input.createdAt,
     dueDate: input.bookingDate || input.createdAt,
-    billToName: input.customerName || '—',
-    billToSubtitle: input.customerEmail || null,
+    billToName: input.billTo?.billToName || input.customerName || '—',
+    billToSubtitle: input.billTo ? null : input.customerEmail || null,
+    billToLines: input.billTo?.billToLines,
     reference: 'Add-on adventures',
     referenceNote: input.bookingDate
       ? `Date: ${formatLongDate(input.bookingDate)}${input.guests ? ` · ${input.guests} guest${input.guests === 1 ? '' : 's'}` : ''}`

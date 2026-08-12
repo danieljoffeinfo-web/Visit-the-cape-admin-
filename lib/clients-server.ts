@@ -81,3 +81,67 @@ export async function listClients(): Promise<Client[]> {
   if (error) throw error
   return (data || []) as Client[]
 }
+
+
+/**
+ * The billing block for an invoice, from the client record.
+ *
+ * Matched on email, which is the link that already existed: every booking
+ * stores the customer's address and every client record is keyed on it. No
+ * column had to be added to a booking to join the two.
+ *
+ * Resolved when the invoice is rendered rather than snapshotted when the
+ * booking is taken, so correcting a VAT number typed wrong once fixes every
+ * invoice for that client instead of only the next one.
+ *
+ * Falls back to the name the booking carries whenever there is no client on
+ * file, no email to match on, or the lookup fails — an invoice that bills a
+ * person by name is the behaviour this replaces, so degrading to it is safe.
+ */
+export async function billingDetailsFor(input: {
+  email?: string | null
+  fallbackName: string
+  /** Shown under the name when there is nothing better, as it was before. */
+  fallbackSubtitle?: string | null
+}): Promise<{ billToName: string; billToLines: string[] }> {
+  const email = String(input.email || '').trim()
+  const plain = {
+    billToName: input.fallbackName || '—',
+    billToLines: [input.fallbackSubtitle || ''].filter(Boolean),
+  }
+  if (!email) return plain
+
+  try {
+    const { data } = await supabaseAdmin
+      .from('customers')
+      .select('name,email,business_name,vat_number,address')
+      .ilike('email', email)
+      .maybeSingle()
+
+    if (!data) return plain
+
+    const client = data as Pick<
+      Client,
+      'name' | 'email' | 'business_name' | 'vat_number' | 'address'
+    >
+    const business = String(client.business_name || '').trim()
+
+    /* Billing a company: the company is the customer, and the person who made
+       the booking becomes the attention line beneath it. Billing a person: the
+       name stands alone, exactly as before. */
+    const lines = [
+      business ? `Attn: ${input.fallbackName || client.name}` : null,
+      client.address || null,
+      client.vat_number ? `VAT No. ${client.vat_number}` : null,
+      client.email || null,
+    ].filter((line): line is string => Boolean(line && String(line).trim()))
+
+    return {
+      billToName: business || client.name || input.fallbackName || '—',
+      billToLines: lines,
+    }
+  } catch (error) {
+    console.error('Billing details lookup failed:', error)
+    return plain
+  }
+}

@@ -7,6 +7,7 @@ import {
 } from '@/lib/invoice-pdf'
 import { parseAddOnBookingNotes } from '@/lib/add-ons'
 import { bookingsDb } from '@/lib/bookings-db'
+import { billingDetailsFor } from '@/lib/clients-server'
 import { getEnquiriesDb } from '@/lib/enquiries-server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { getAuthedXeroClient } from '@/lib/xero'
@@ -67,6 +68,11 @@ async function buildFleetPdf(bookingId: string, link: InvoiceLinkRow | null) {
     details.invoice?.number || link?.xero_invoice_number || `FLEET-${booking.id.slice(0, 8).toUpperCase()}`
   const createdAt = details.invoice?.issuedAt || booking.created_at || new Date().toISOString()
 
+  const billTo = await billingDetailsFor({
+    email: details.customer.email,
+    fallbackName: fullCustomerName(details),
+  })
+
   const pdfBuffer = await buildFleetInvoicePdf({
     bookingId: booking.id,
     createdAt,
@@ -82,6 +88,7 @@ async function buildFleetPdf(bookingId: string, link: InvoiceLinkRow | null) {
     amount,
     depositAmount: details.rental.depositAmount ?? null,
     notes: details.rental.notes || '',
+    billTo,
   })
 
   return { pdfBuffer, invoiceNumber }
@@ -119,6 +126,11 @@ async function buildAddOnPdf(bookingId: string, link: InvoiceLinkRow | null) {
       ? new Date(booking.created_at).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10))
 
+  const billTo = await billingDetailsFor({
+    email: booking.email,
+    fallbackName: booking.name,
+  })
+
   const pdfBuffer = await buildAddOnInvoicePdf({
     bookingId: booking.id,
     createdAt,
@@ -129,6 +141,7 @@ async function buildAddOnPdf(bookingId: string, link: InvoiceLinkRow | null) {
     guests: booking.passengers || 0,
     lines: details.lines,
     reference: booking.booking_reference,
+    billTo,
   })
 
   return { pdfBuffer, invoiceNumber }
@@ -150,12 +163,18 @@ async function buildTagAlongPdf(bookingId: string, link: InvoiceLinkRow | null, 
     ? new Date(booking.created_at).toISOString().slice(0, 10)
     : new Date().toISOString().slice(0, 10)
 
+  const billTo = await billingDetailsFor({
+    email: booking.email,
+    fallbackName: booking.name,
+  })
+
   const pdfBuffer = await buildTourInvoicePdf({
     bookingId: booking.id,
     createdAt,
     invoiceNumber,
     invoiceStatus,
     title,
+    billTo,
     customerName: booking.name,
     customerEmail: booking.email,
     customerPhone: booking.phone,
