@@ -6,7 +6,6 @@ const PANEL_LABELS: Record<string, string> = {
   calendar: 'Calendar',
   fleet: 'Fleet Manager',
   enquiries: 'Enquiries',
-  tours: 'Tours & Pricing',
 }
 
 export function PlaceholderPanel({ id }: { id: string }) {

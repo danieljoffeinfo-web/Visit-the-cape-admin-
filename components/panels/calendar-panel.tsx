@@ -20,7 +20,7 @@ import { cardStyle, pageTitle, sectionTitle, theme } from '@/lib/theme'
 
 type CalendarEvent = {
   id: string
-  kind: 'fleet' | 'tour'
+  kind: 'fleet' | 'tour' | 'addon'
   title: string
   subtitle: string
   start: string
@@ -52,6 +52,17 @@ const TOUR_EVENT_COLOR: EventColor = {
   text: '#3a5f9e',
   accent: '#7aa9ff',
   soft: 'rgba(122,169,255,0.08)',
+}
+
+/* Experiences get their own colour rather than sharing the departure blue.
+   A vehicle, a departure and an experience are three different things to have
+   to arrange on a given day, and the sheet is read at a glance. */
+const ADDON_EVENT_COLOR: EventColor = {
+  bg: 'rgba(93,168,140,0.16)',
+  border: 'rgba(93,168,140,0.32)',
+  text: '#2f6b53',
+  accent: '#5da88c',
+  soft: 'rgba(93,168,140,0.08)',
 }
 
 export function CalendarPanel() {
@@ -119,6 +130,7 @@ export function CalendarPanel() {
   const monthStats = useMemo(() => {
     const fleetEvents = monthEvents.filter((event) => event.kind === 'fleet')
     const serviceEvents = monthEvents.filter((event) => event.kind === 'tour')
+    const addOnEvents = monthEvents.filter((event) => event.kind === 'addon')
     const vehicleCounts = new Map<string, { label: string; count: number; palette: EventColor }>()
 
     for (const event of fleetEvents) {
@@ -130,6 +142,7 @@ export function CalendarPanel() {
     return {
       fleetCount: fleetEvents.length,
       serviceCount: serviceEvents.length,
+      addOnCount: addOnEvents.length,
       totalCount: monthEvents.length,
       vehicleLegend: Array.from(vehicleCounts.values()).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)),
     }
@@ -177,6 +190,7 @@ export function CalendarPanel() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <LegendPill label="Fleet vehicle" palette={FLEET_EVENT_COLORS[0]} />
               <LegendPill label="Service departure" palette={TOUR_EVENT_COLOR} />
+              <LegendPill label="Experience" palette={ADDON_EVENT_COLOR} />
             </div>
           </div>
 
@@ -280,7 +294,7 @@ export function CalendarPanel() {
                       <div style={{ color: event.palette.text, fontSize: 12, marginTop: 4 }}>{event.label}</div>
                     </div>
                     <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: event.palette.text, background: event.palette.bg, border: `1px solid ${event.palette.border}`, borderRadius: 999, padding: '4px 8px', flexShrink: 0 }}>
-                      {event.kind === 'fleet' ? 'Vehicle' : 'Service'}
+                      {event.kind === 'fleet' ? 'Vehicle' : event.kind === 'addon' ? 'Experience' : 'Service'}
                     </span>
                   </div>
                   <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>{event.meta}</div>
@@ -297,6 +311,7 @@ export function CalendarPanel() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, marginBottom: 14 }}>
               <StatCard label="Fleet" value={String(monthStats.fleetCount)} accent={theme.bronzeDark} />
               <StatCard label="Service" value={String(monthStats.serviceCount)} accent="#4a6fa5" />
+              <StatCard label="Experiences" value={String(monthStats.addOnCount)} accent={ADDON_EVENT_COLOR.text} />
               <StatCard label="Total" value={String(monthStats.totalCount)} accent={theme.success} />
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
@@ -346,7 +361,7 @@ export function CalendarPanel() {
                         ? ` \u2192 ${format(event.endDate, 'EEE d MMM')}`
                         : ''}
                     </td>
-                    <td>{event.kind === 'fleet' ? 'Fleet' : 'Departure'}</td>
+                    <td>{event.kind === 'fleet' ? 'Fleet' : event.kind === 'addon' ? 'Experience' : 'Departure'}</td>
                     <td>{event.label}</td>
                     <td>{event.subtitle || '\u2014'}</td>
                   </tr>
@@ -373,11 +388,13 @@ function getEventMeta(event: CalendarEvent) {
 }
 
 function getEventColorKey(event: CalendarEvent) {
+  if (event.kind === 'addon') return `addon:${event.id}`
   if (event.kind !== 'fleet') return `tour:${event.id}`
   return `fleet:${getEventLabel(event).toLowerCase()}`
 }
 
 function getEventColor(event: CalendarEvent): EventColor {
+  if (event.kind === 'addon') return ADDON_EVENT_COLOR
   if (event.kind !== 'fleet') return TOUR_EVENT_COLOR
   const key = getEventColorKey(event)
   const hash = key.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)

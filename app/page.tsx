@@ -27,8 +27,8 @@ const EnquiriesPanel = dynamic(
   () => import('@/components/panels/enquiries-panel').then((m) => ({ default: m.EnquiriesPanel })),
   { loading: () => <PanelLoader /> },
 )
-const ToursPanel = dynamic(
-  () => import('@/components/panels/tours-panel').then((m) => ({ default: m.ToursPanel })),
+const ExperiencesPanel = dynamic(
+  () => import('@/components/panels/experiences-panel').then((m) => ({ default: m.ExperiencesPanel })),
   { loading: () => <PanelLoader /> },
 )
 const FleetPanel = dynamic(
@@ -58,7 +58,7 @@ const ContentLibraryPanel = dynamic(
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
-  | 'tours' | 'fleet' | 'accounting' | 'clients' | 'settings'
+  | 'experiences' | 'fleet' | 'accounting' | 'clients' | 'settings'
   | 'activity-logs' | 'content-library'
 
 const PANEL_STORAGE_KEY = 'vtc_active_panel'
@@ -68,7 +68,7 @@ const PANEL_TITLES: Record<Panel, string> = {
   bookings: 'Bookings',
   calendar: 'Calendar',
   enquiries: 'Enquiries',
-  tours: 'Tours & Pricing',
+  experiences: 'Experiences',
   fleet: 'Fleet Manager',
   accounting: 'Accounting',
   clients: 'Clients',
@@ -81,6 +81,9 @@ function resolveInitialPanel(raw: string | null): Panel {
   if (raw === 'tour-bookings' || raw === 'internal-bookings') return 'bookings'
   /* CRM was renamed to Clients; keep old links and stored sessions working. */
   if (raw === 'crm') return 'clients'
+  /* Tours & Pricing has been withdrawn pending a restructure. A stored session
+     still pointing at it would otherwise land on a blank panel. */
+  if (raw === 'tours') return 'dashboard'
   if (raw && raw in PANEL_TITLES) return raw as Panel
   return 'dashboard'
 }
@@ -236,7 +239,7 @@ function AdminApp() {
           {panel === 'bookings' && <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />}
           {panel === 'calendar' && <CalendarPanel />}
           {panel === 'enquiries' && <EnquiriesPanel />}
-          {panel === 'tours' && <ToursPanel />}
+          {panel === 'experiences' && <ExperiencesPanel />}
           {panel === 'fleet' && <FleetPanel onNavigate={navigate} />}
           {panel === 'accounting' && <AccountingPanel />}
           {panel === 'clients' && <ClientsPanel />}

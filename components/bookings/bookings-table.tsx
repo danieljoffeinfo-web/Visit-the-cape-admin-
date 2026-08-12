@@ -208,6 +208,28 @@ export function BookingsTable({
                   </div>
                 </td>
                 <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }} onClick={(event) => event.stopPropagation()}>
+                  {/* The whole row already opens the booking, but nothing said
+                      so — the only labelled actions were Cancel and Delete, so
+                      editing looked like something the dashboard could not do.
+                      Same destination, spelled out. */}
+                  {onEdit && (
+                    <button
+                      onClick={() => onEdit(b)}
+                      title="Open and amend this booking"
+                      style={{
+                        fontSize: 11,
+                        color: theme.bronzeDark,
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontFamily: theme.bodyFont,
+                        fontWeight: 700,
+                        marginRight: 10,
+                      }}
+                    >
+                      Edit
+                    </button>
+                  )}
                   {canCancel && onCancel && (
                     <button
                       onClick={() => onCancel(b)}

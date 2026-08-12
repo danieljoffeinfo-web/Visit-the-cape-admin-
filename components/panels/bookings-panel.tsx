@@ -13,16 +13,17 @@ import { InvoiceViewerDialog } from '@/components/bookings/invoice-viewer-dialog
 import { EditBookingDialog } from '@/components/bookings/edit-booking-dialog'
 import { CreateTourForm, emptyTourForm } from '@/components/bookings/create-tour-form'
 import { CreateInternalForm, emptyInternalForm } from '@/components/bookings/create-internal-form'
-import { CreateFleetForm } from '@/components/bookings/create-fleet-form'
 import { CreateAddOnForm } from '@/components/bookings/create-addon-form'
 
 type InvoiceLink = BookingInvoiceLink
 
+/* No fleet entry: a vehicle is booked out from Fleet Manager, against the
+   vehicle it belongs to and its existing bookings, which is the only place the
+   clash check can run. */
 const TAB_CREATE_LABEL: Partial<Record<BookingTab, string>> = {
   tours: '+ New Tour Booking',
   addons: '+ New Add-On Booking',
   internal: '+ New Internal Booking',
-  fleet: '+ New Fleet Booking',
 }
 
 function parseTab(value: string | null): BookingTab {
@@ -30,13 +31,16 @@ function parseTab(value: string | null): BookingTab {
     value === 'tours' ||
     value === 'addons' ||
     value === 'internal' ||
-    value === 'fleet' ||
     value === 'website' ||
-    value === 'private' ||
     value === 'all'
   ) {
     return value
   }
+  /* Covers the retired 'fleet' and 'private' tabs, which links and bookmarks
+     may still point at. Both now live under views that still exist, so an old
+     link lands somewhere sensible rather than on an error. */
+  if (value === 'fleet') return 'internal'
+  if (value === 'private') return 'website'
   return 'all'
 }
 
@@ -288,9 +292,6 @@ export function BookingsPanel({
           onCancel={() => setShowCreate(false)}
         />
       )}
-      {showCreate && activeTab === 'fleet' && (
-        <CreateFleetForm saving={saving} onSaved={() => { setShowCreate(false); loadBookings() }} onCancel={() => setShowCreate(false)} />
-      )}
 
       <div style={cardStyle}>
         <BookingsTable
@@ -306,14 +307,14 @@ export function BookingsPanel({
           raisingId={raising}
           deletingId={deletingId}
           emptyMessage={
-            activeTab === 'private'
-              ? 'No private enquiries yet'
-              : activeTab === 'fleet'
-                ? 'No fleet bookings yet'
-                : activeTab === 'addons'
-                  ? 'No add-on bookings yet'
-                  : activeTab === 'website'
-                    ? 'No bookings taken on the website yet'
+            activeTab === 'addons'
+              ? 'No add-on bookings yet'
+              : activeTab === 'website'
+                ? 'Nothing has come off the website yet'
+                : activeTab === 'internal'
+                  ? 'Nothing booked in-house yet'
+                  : activeTab === 'tours'
+                    ? 'No tour bookings yet'
                     : 'No bookings in this view yet'
           }
         />

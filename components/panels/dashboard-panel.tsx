@@ -119,7 +119,6 @@ export function DashboardPanel({
 }) {
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
-  const [seatsRemaining, setSeatsRemaining] = useState(0)
   const [invoices, setInvoices] = useState<OutstandingInvoices>({ connected: false, total: null, fallback: 'no_data' })
   const [departures, setDepartures] = useState<DepartureRow[]>([])
   const [enquiries, setEnquiries] = useState<EnquiryRow[]>([])
@@ -140,7 +139,6 @@ export function DashboardPanel({
       if (!res.ok) throw new Error(data.error || 'Failed to load dashboard')
 
       setUnreadCount(data.unreadCount ?? 0)
-      setSeatsRemaining(data.seatsRemaining ?? 0)
       setInvoices(data.invoices ?? { connected: false, total: null, fallback: 'no_data' })
       setDepartures(data.departures ?? [])
       setEnquiries(data.unreadEnquiries ?? [])
@@ -175,13 +173,6 @@ export function DashboardPanel({
       onClick: () => onNavigate('enquiries'),
     },
     {
-      label: 'Seats Remaining',
-      value: loading ? '—' : String(seatsRemaining),
-      sub: 'Next 30 days',
-      urgent: false,
-      onClick: () => onNavigate('tours'),
-    },
-    {
       label: 'Outstanding Invoices',
       value: loading
         ? '—'
@@ -201,11 +192,13 @@ export function DashboardPanel({
   ]
 
   const quickActions = [
-    { icon: '✏', label: 'Edit Website Tours', desc: 'Update descriptions, itinerary and pricing on visitthecape.co.za', to: 'tours' as const },
     { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' as const },
     { icon: '📋', label: 'New Internal Booking', desc: 'Create a booking from the admin dashboard', to: 'bookings' as const, tab: 'internal' as BookingTab, action: 'create' },
     { icon: '🎫', label: 'New Tour Booking', desc: 'Create a manual tour booking on request', to: 'bookings' as const, tab: 'tours' as BookingTab, action: 'create' },
-    { icon: '🚐', label: 'New Fleet Booking', desc: 'Book a vehicle for a tour or rental', to: 'bookings' as const, tab: 'fleet' as BookingTab, action: 'create' },
+    /* Both of these book against live availability, so they open the section
+       that knows it rather than a create form in the bookings hub. */
+    { icon: '🚐', label: 'Book Out a Vehicle', desc: 'Hire a vehicle out for a tour or rental', to: 'fleet' as const },
+    { icon: '🎟', label: 'Book an Experience', desc: 'Book an add-on adventure for a customer', to: 'experiences' as const },
     { icon: '📜', label: 'View Activity Logs', desc: 'See who changed what and when', to: 'activity-logs' as const },
     { icon: '₤', label: 'Accounting', desc: 'Invoices, payments and reports', to: 'accounting' as const },
   ]
@@ -285,7 +278,7 @@ export function DashboardPanel({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
             <h3 style={sectionTitle}>Today&apos;s Schedule + Next 7 Days</h3>
             <button
-              onClick={() => onNavigate('tours')}
+              onClick={() => onNavigate('bookings', { tab: 'tours', action: 'create' })}
               style={{
                 padding: '5px 12px',
                 borderRadius: 4,
@@ -307,7 +300,7 @@ export function DashboardPanel({
             <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>
               No departures scheduled.{' '}
               <button
-                onClick={() => onNavigate('tours')}
+                onClick={() => onNavigate('bookings', { tab: 'tours', action: 'create' })}
                 style={{
                   background: 'none',
                   border: 'none',

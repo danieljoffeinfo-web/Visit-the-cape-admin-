@@ -6,7 +6,7 @@ import { theme } from '@/lib/theme'
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
-  | 'tours' | 'fleet' | 'accounting' | 'clients' | 'settings'
+  | 'experiences' | 'fleet' | 'accounting' | 'clients' | 'settings'
   | 'activity-logs' | 'content-library'
 
 interface SidebarProps {
@@ -31,8 +31,8 @@ const navItems = [
   {
     section: 'Operations',
     items: [
-      { id: 'tours', label: 'Tours & Pricing', icon: <MapIcon /> },
       { id: 'fleet', label: 'Fleet Manager', icon: <CarIcon /> },
+      { id: 'experiences', label: 'Experiences', icon: <MapIcon /> },
       { id: 'content-library', label: 'Content Library', icon: <MediaIcon /> },
       { id: 'accounting', label: 'Accounting', icon: <ChartIcon /> },
     ],

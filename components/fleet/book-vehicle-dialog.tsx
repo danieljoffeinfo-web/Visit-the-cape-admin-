@@ -2,10 +2,13 @@
 
 import { addDays, differenceInCalendarDays, format, isBefore, parseISO } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
-import { clientPrefill, searchClients, type Client } from '@/lib/clients'
+import { clientPrefill, type Client } from '@/lib/clients'
 import { buildSeatsLabel, FLEET_USAGE_TYPES, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { VehiclePreviewCard } from '@/components/fleet/vehicle-preview-card'
 import type { FleetVehicleCardData } from '@/components/fleet/vehicle-card'
+import { ClientPicker } from '@/components/ui/client-picker'
+import { DateField } from '@/components/ui/date-field'
+import { SelectMenu } from '@/components/ui/select-menu'
 import { fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
 type BookingConflict = {
@@ -84,7 +87,6 @@ export function BookVehicleDialog({
      the radio pair reads the same as the Xero one below it. */
   const [existingClient, setExistingClient] = useState<'no' | 'yes'>('no')
   const [clients, setClients] = useState<Client[]>([])
-  const [clientQuery, setClientQuery] = useState('')
   const [clientId, setClientId] = useState('')
 
   /* Loaded once when the dialog opens rather than when Yes is picked, so the
@@ -128,14 +130,8 @@ export function BookVehicleDialog({
     setEmail('')
     setNotes('')
     setExistingClient('no')
-    setClientQuery('')
     setClientId('')
   }, [open, initialVehicleId, vehicles])
-
-  const matchingClients = useMemo(
-    () => searchClients(clients, clientQuery).slice(0, 8),
-    [clients, clientQuery],
-  )
 
   function chooseClient(client: Client) {
     const prefill = clientPrefill(client)
@@ -281,16 +277,16 @@ export function BookVehicleDialog({
         >
           {step === 0 && (
             <>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={fieldLabel}>Vehicle</span>
-                <select value={vehicleId} onChange={(e) => handleVehicleChange(e.target.value)} style={inputStyle}>
-                  {vehicles.map((vehicle) => (
-                    <option key={vehicle.id} value={vehicle.id}>
-                      {vehicle.title} · {vehicleRegistration(vehicle) || 'No reg'}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <SelectMenu
+                label="Vehicle"
+                value={vehicleId}
+                onChange={handleVehicleChange}
+                options={vehicles.map((vehicle) => ({
+                  value: vehicle.id,
+                  label: vehicle.title,
+                  hint: vehicleRegistration(vehicle) || 'No reg',
+                }))}
+              />
 
               {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} />}
             </>
@@ -301,13 +297,19 @@ export function BookVehicleDialog({
               {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} compact />}
 
               <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-2">
-                <SelectField label="Vehicle use" value={usageType} onChange={setUsageType} options={FLEET_USAGE_TYPES.map((o) => ({ value: o.value, label: o.label }))} />
+                <SelectMenu
+                  label="Vehicle use"
+                  value={usageType}
+                  onChange={setUsageType}
+                  options={FLEET_USAGE_TYPES.map((o) => ({ value: o.value, label: o.label }))}
+                />
                 <Field label="Seats booked" type="number" value={seatsBooked} onChange={setSeatsBooked} />
               </div>
 
               <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-3">
-                <Field label="Start date" type="date" value={startDate} onChange={handleStartDateChange} />
-                <Field label="End date" type="date" value={endDate} onChange={handleEndDateChange} />
+                <DateField label="Start date" value={startDate} onChange={handleStartDateChange} />
+                {/* A rental cannot end before it starts, so those days are not offered. */}
+                <DateField label="End date" value={endDate} onChange={handleEndDateChange} min={startDate} />
                 <Field label="Days" type="number" value={bookingDays} onChange={handleBookingDaysChange} />
               </div>
 
@@ -383,91 +385,14 @@ export function BookVehicleDialog({
             <>
               {selectedVehicle && <VehiclePreviewCard vehicle={selectedVehicle} compact />}
 
-              <fieldset
-                style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: '12px 14px', margin: 0 }}
-              >
-                <legend style={{ ...fieldLabel, padding: '0 6px' }}>Is this an existing client?</legend>
-                <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
-                  {(['no', 'yes'] as const).map((option) => (
-                    <label
-                      key={option}
-                      style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: theme.text, cursor: 'pointer' }}
-                    >
-                      <input
-                        type="radio"
-                        name="existingClient"
-                        checked={existingClient === option}
-                        onChange={() => {
-                          setExistingClient(option)
-                          /* Switching back to a new client clears the link but
-                             leaves the typed details alone — they may have been
-                             half-corrected already, and blanking them would be
-                             the more annoying of the two guesses. */
-                          if (option === 'no') setClientId('')
-                        }}
-                        style={{ accentColor: theme.bronze, cursor: 'pointer' }}
-                      />
-                      {option === 'no' ? 'New client' : 'Existing client'}
-                    </label>
-                  ))}
-                </div>
-
-                {existingClient === 'yes' && (
-                  <div style={{ marginTop: 10 }}>
-                    <input
-                      value={clientQuery}
-                      onChange={(e) => setClientQuery(e.target.value)}
-                      placeholder="Search by name, email, phone or account number"
-                      style={{ ...inputStyle, width: '100%' }}
-                    />
-                    <div style={{ marginTop: 8, display: 'grid', gap: 6, maxHeight: 190, overflowY: 'auto' }}>
-                      {clients.length === 0 && (
-                        <p style={{ fontSize: 12, color: theme.textMuted, margin: 0 }}>
-                          No clients on file yet. They are added automatically as bookings are
-                          taken, or you can add one under Clients.
-                        </p>
-                      )}
-                      {clients.length > 0 && matchingClients.length === 0 && (
-                        <p style={{ fontSize: 12, color: theme.textMuted, margin: 0 }}>
-                          Nobody matches that search.
-                        </p>
-                      )}
-                      {matchingClients.map((client) => {
-                        const active = clientId === client.id
-                        return (
-                          <button
-                            key={client.id}
-                            type="button"
-                            onClick={() => chooseClient(client)}
-                            style={{
-                              textAlign: 'left',
-                              padding: '8px 10px',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                              border: `1px solid ${active ? theme.bronzeBorder : theme.border}`,
-                              background: active ? theme.bronzeBg : 'transparent',
-                              fontFamily: theme.bodyFont,
-                            }}
-                          >
-                            <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: theme.text }}>
-                              {client.name}
-                              {active ? ' ✓' : ''}
-                            </span>
-                            <span style={{ display: 'block', fontSize: 12, color: theme.textMuted }}>
-                              {[client.email, client.phone, client.account_number].filter(Boolean).join(' · ')}
-                              {client.total_bookings ? ` · ${client.total_bookings} booking${client.total_bookings === 1 ? '' : 's'}` : ''}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                    <p style={{ fontSize: 12, color: theme.textMuted, margin: '8px 0 0' }}>
-                      Picking someone fills in the fields below. You can still change any of them
-                      for this booking without altering their client record.
-                    </p>
-                  </div>
-                )}
-              </fieldset>
+              <ClientPicker
+                clients={clients}
+                mode={existingClient}
+                onModeChange={setExistingClient}
+                selectedId={clientId}
+                onChoose={chooseClient}
+                onClear={() => setClientId('')}
+              />
 
               <div style={{ display: 'grid', gap: 12 }} className="admin-form-grid-2">
                 <Field label="Customer first name" value={firstName} onChange={setFirstName} />
@@ -568,13 +493,3 @@ function Field({ label, value, onChange, placeholder, type = 'text' }: { label: 
   )
 }
 
-function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
-  return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={fieldLabel}>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle}>
-        {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    </label>
-  )
-}

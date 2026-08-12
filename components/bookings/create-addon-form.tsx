@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { AddOn, AddOnLine } from '@/lib/add-ons'
 import { addOnBookingTotal } from '@/lib/add-ons'
+import type { Client } from '@/lib/clients'
+import { ClientPicker } from '@/components/ui/client-picker'
+import { DateField } from '@/components/ui/date-field'
 import {
   cardStyle,
   fieldLabel,
@@ -52,16 +55,24 @@ export function CreateAddOnForm({
   saving,
   onSaved,
   onCancel,
+  /** Slug to arrive with already ticked, when opened from an experience card. */
+  initialSlug,
+  heading = 'New Add-On Booking',
 }: {
   saving?: boolean
   onSaved: () => void
   onCancel: () => void
+  initialSlug?: string
+  heading?: string
 }) {
   const [form, setForm] = useState(emptyAddOnForm)
   const [catalogue, setCatalogue] = useState<AddOn[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Record<string, Selection>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [clients, setClients] = useState<Client[]>([])
+  const [existingClient, setExistingClient] = useState<'no' | 'yes'>('no')
+  const [clientId, setClientId] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -70,7 +81,20 @@ export function CreateAddOnForm({
       .then((data) => {
         if (cancelled) return
         if (data.error) throw new Error(data.error)
-        setCatalogue(data.addOns || [])
+        const addOns: AddOn[] = data.addOns || []
+        setCatalogue(addOns)
+        /* Opened from a card, so that experience is the reason we are here.
+           Priced ones pre-fill; quote-on-request starts blank rather than at
+           zero, so a forgotten price reads as empty and not as free. */
+        const opened = initialSlug ? addOns.find((addOn) => addOn.slug === initialSlug) : null
+        if (opened) {
+          setSelected({
+            [opened.slug]: {
+              quantity: '1',
+              unitAmount: opened.price != null ? String(opened.price) : '',
+            },
+          })
+        }
       })
       .catch(() => {
         if (!cancelled) toast.error('Could not load the add-on catalogue')
@@ -81,7 +105,33 @@ export function CreateAddOnForm({
     return () => {
       cancelled = true
     }
+  }, [initialSlug])
+
+  /* Loaded up front rather than when Existing is picked, so choosing someone
+     costs no wait. A booking does not need this to succeed — the details can
+     always be typed. */
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/clients', { cache: 'no-store' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled && !data.error) setClients((data.clients || []) as Client[])
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  function chooseClient(client: Client) {
+    setClientId(client.id)
+    setForm((prev) => ({
+      ...prev,
+      customerName: client.name || prev.customerName,
+      customerEmail: client.email || prev.customerEmail,
+      customerPhone: client.phone || prev.customerPhone,
+    }))
+  }
 
   const lines: AddOnLine[] = useMemo(
     () =>
@@ -152,19 +202,31 @@ export function CreateAddOnForm({
     }
   }
 
+  /* Date is not in this list: it uses the console's own picker rather than
+     whatever calendar the browser happens to ship. */
   const fields = [
     { key: 'customerName', label: 'Customer Name *', type: 'text' },
     { key: 'customerEmail', label: 'Email *', type: 'email' },
     { key: 'customerPhone', label: 'Phone', type: 'tel' },
-    { key: 'tourDate', label: 'Date *', type: 'date' },
-    { key: 'guestsCount', label: 'Guests', type: 'number' },
+    { key: 'guestsCount', label: 'Total guests on the booking', type: 'number' },
   ] as const
 
   const busy = submitting || saving
 
   return (
     <div style={{ ...cardStyle, marginBottom: 20 }}>
-      <h3 style={{ ...sectionTitle, marginBottom: 16 }}>New Add-On Booking</h3>
+      <h3 style={{ ...sectionTitle, marginBottom: 16 }}>{heading}</h3>
+
+      <div style={{ marginBottom: 16 }}>
+        <ClientPicker
+          clients={clients}
+          mode={existingClient}
+          onModeChange={setExistingClient}
+          selectedId={clientId}
+          onChoose={chooseClient}
+          onClear={() => setClientId('')}
+        />
+      </div>
 
       <div
         style={{
@@ -185,6 +247,11 @@ export function CreateAddOnForm({
             />
           </div>
         ))}
+        <DateField
+          label="Date *"
+          value={form.tourDate}
+          onChange={(value) => setForm({ ...form, tourDate: value })}
+        />
       </div>
 
       <label style={{ display: 'block', ...fieldLabel, marginBottom: 8 }}>Add-On Adventures *</label>
@@ -239,7 +306,9 @@ export function CreateAddOnForm({
                 {active && (
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <div>
-                      <label style={{ display: 'block', ...fieldLabel, marginBottom: 2 }}>Qty</label>
+                      <label style={{ display: 'block', ...fieldLabel, marginBottom: 2 }}>
+                        Pax guests
+                      </label>
                       <input
                         type="number"
                         min={1}

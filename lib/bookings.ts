@@ -2,7 +2,7 @@ import { parseAddOnBookingNotes, summariseAddOnLines, type AddOnLine } from '@/l
 import { parseFleetBookingNotes } from '@/lib/fleet'
 
 export type BookingKind = 'tour' | 'internal' | 'fleet' | 'private' | 'addon' | 'website'
-export type BookingTab = 'all' | 'tours' | 'internal' | 'fleet' | 'private' | 'addons' | 'website'
+export type BookingTab = 'all' | 'tours' | 'addons' | 'internal' | 'website'
 
 export type UnifiedBooking = {
   id: string
@@ -211,14 +211,24 @@ export function isStaffCreated(row: UnifiedBooking) {
   return row.kind === 'internal' || row.kind === 'addon' || row.source === 'internal'
 }
 
+/**
+ * Five views, along one question each.
+ *
+ * Seven tabs described the same bookings more than once. Fleet and Internal
+ * were near-duplicates, since every vehicle hired out by the office is a fleet
+ * booking with an internal source; Private and Website both meant "this came
+ * off the site", one paid and one still an enquiry.
+ *
+ * What is left asks one thing at a time. Tours and Add-Ons are WHAT was
+ * booked. Internal and Website are WHERE it came from — the office, or the
+ * public site. A fleet rental is therefore Internal, and a private enquiry is
+ * Website, which is where someone looking for either would think to go.
+ */
 export function filterBookingsByTab(rows: UnifiedBooking[], tab: BookingTab) {
-  if (tab === 'all') return rows
   if (tab === 'tours') return rows.filter((r) => r.kind === 'tour')
   if (tab === 'internal') return rows.filter(isStaffCreated)
-  if (tab === 'fleet') return rows.filter((r) => r.kind === 'fleet')
-  if (tab === 'private') return rows.filter((r) => r.kind === 'private')
   if (tab === 'addons') return rows.filter((r) => r.kind === 'addon')
-  if (tab === 'website') return rows.filter((r) => r.kind === 'website')
+  if (tab === 'website') return rows.filter((r) => r.kind === 'website' || r.kind === 'private')
   return rows
 }
 
@@ -227,9 +237,7 @@ export const BOOKING_TABS: { id: BookingTab; label: string }[] = [
   { id: 'tours', label: 'Tours' },
   { id: 'addons', label: 'Add-Ons' },
   { id: 'internal', label: 'Internal' },
-  { id: 'fleet', label: 'Fleet' },
   { id: 'website', label: 'Website' },
-  { id: 'private', label: 'Private' },
 ]
 
 export type BookingInvoiceLink = {

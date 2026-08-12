@@ -14,25 +14,23 @@ export function VehiclePreviewCard({ vehicle, compact }: VehiclePreviewCardProps
   const seats = vehicleSeats(vehicle)
   const registration = vehicleRegistration(vehicle) || 'No registration'
 
+  /* Named, not pictured. This card is the running reminder of what is being
+     booked on the later steps, where the vehicle has already been chosen and
+     the photo has no decision left to inform. A full-width band holding one
+     small letterboxed van read as a stretched, empty box. */
   if (compact) {
     return (
       <div
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '10px 12px',
+          padding: '10px 14px',
           borderRadius: 8,
           border: `1px solid ${theme.border}`,
           background: theme.surfaceMuted,
         }}
       >
-        <VehiclePreviewImage imageUrl={vehicle.image_url} title={vehicle.title} height={52} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: theme.text }}>{vehicle.title}</div>
-          <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
-            {registration} · {buildSeatsLabel(seats || 0)}
-          </div>
+        <div style={{ fontWeight: 700, fontSize: 14, color: theme.text }}>{vehicle.title}</div>
+        <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
+          {registration} · {buildSeatsLabel(seats || 0)}
         </div>
       </div>
     )
