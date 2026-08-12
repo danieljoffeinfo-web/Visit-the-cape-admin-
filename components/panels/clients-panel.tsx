@@ -30,10 +30,22 @@ type Draft = {
   email: string
   phone: string
   accountNumber: string
+  businessName: string
+  vatNumber: string
+  address: string
   notes: string
 }
 
-const EMPTY: Draft = { name: '', email: '', phone: '', accountNumber: '', notes: '' }
+const EMPTY: Draft = {
+  name: '',
+  email: '',
+  phone: '',
+  accountNumber: '',
+  businessName: '',
+  vatNumber: '',
+  address: '',
+  notes: '',
+}
 
 export function ClientsPanel() {
   const [clients, setClients] = useState<Client[]>([])
@@ -120,11 +132,16 @@ export function ClientsPanel() {
   const td = { padding: '10px 12px', fontSize: 13, color: theme.text }
   const tdMuted = { ...td, color: theme.textMuted }
 
+  /* Only name and email are required — everything else is there for the
+     clients who need it. A form that demands a VAT number from a family
+     booking a day out is worse than one that does not ask. */
   const fields: { key: keyof Draft; label: string; type?: string }[] = [
     { key: 'name', label: 'Name *' },
     { key: 'email', label: 'Email *', type: 'email' },
-    { key: 'phone', label: 'Phone', type: 'tel' },
+    { key: 'phone', label: 'Phone' , type: 'tel' },
     { key: 'accountNumber', label: 'Account Number' },
+    { key: 'businessName', label: 'Business Name' },
+    { key: 'vatNumber', label: 'VAT Number' },
   ]
 
   return (
@@ -144,7 +161,7 @@ export function ClientsPanel() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name, email, phone, account"
+            placeholder="Search name, business, email, phone, VAT"
             style={{ ...inputStyle, width: 260 }}
           />
           <button onClick={() => setDraft({ ...EMPTY })} style={primaryButton}>
@@ -178,6 +195,17 @@ export function ClientsPanel() {
               </div>
             ))}
           </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Address</label>
+            <textarea
+              value={draft.address}
+              onChange={(e) => setDraft({ ...draft, address: e.target.value })}
+              rows={2}
+              style={{ ...inputStyle, width: '100%', resize: 'vertical' }}
+              placeholder="Street, suburb, city, postal code"
+            />
+          </div>
+
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Notes</label>
             <textarea
@@ -211,7 +239,7 @@ export function ClientsPanel() {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
-                  {['Name', 'Email', 'Phone', 'Account', 'Bookings', 'Added', xeroConnected ? 'Xero' : null, '']
+                  {['Name', 'Business', 'Email', 'Phone', 'Account', 'Bookings', 'Added', xeroConnected ? 'Xero' : null, '']
                     .filter((h) => h !== null)
                     .map((h, i) => (
                       <th key={`${h}-${i}`} style={th}>
@@ -223,7 +251,7 @@ export function ClientsPanel() {
               <tbody>
                 {visible.length === 0 && (
                   <tr>
-                    <td colSpan={8} style={{ padding: 24, textAlign: 'center', color: theme.textFaint }}>
+                    <td colSpan={9} style={{ padding: 24, textAlign: 'center', color: theme.textFaint }}>
                       {clients.length === 0
                         ? 'No clients yet. They are added automatically as bookings are taken, or you can add one now.'
                         : 'Nobody matches that search.'}
@@ -233,6 +261,12 @@ export function ClientsPanel() {
                 {visible.map((c) => (
                   <tr key={c.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
                     <td style={{ ...td, fontWeight: 600 }}>{c.name}</td>
+                    <td style={tdMuted}>
+                      {c.business_name || '—'}
+                      {c.vat_number ? (
+                        <span style={{ display: 'block', fontSize: 11 }}>VAT {c.vat_number}</span>
+                      ) : null}
+                    </td>
                     <td style={tdMuted}>{c.email}</td>
                     <td style={tdMuted}>{c.phone || '—'}</td>
                     <td style={tdMuted}>{c.account_number || '—'}</td>
@@ -261,6 +295,9 @@ export function ClientsPanel() {
                             email: c.email,
                             phone: c.phone || '',
                             accountNumber: c.account_number || '',
+                            businessName: c.business_name || '',
+                            vatNumber: c.vat_number || '',
+                            address: c.address || '',
                             notes: c.notes || '',
                           })
                         }

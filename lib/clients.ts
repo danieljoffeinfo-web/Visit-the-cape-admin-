@@ -14,6 +14,11 @@ export type Client = {
   email: string
   phone?: string | null
   account_number?: string | null
+  /* Optional, for clients invoicing through a company. Most bookings are
+     individuals, so nothing here is ever required. */
+  business_name?: string | null
+  vat_number?: string | null
+  address?: string | null
   notes?: string | null
   total_bookings: number
   xero_contact_id?: string | null
@@ -68,7 +73,7 @@ export function searchClients(clients: Client[], query: string) {
   const q = query.trim().toLowerCase()
   if (!q) return clients
   return clients.filter((c) =>
-    [c.name, c.email, c.phone, c.account_number]
+    [c.name, c.email, c.phone, c.account_number, c.business_name, c.vat_number]
       .filter(Boolean)
       .some((field) => String(field).toLowerCase().includes(q)),
   )

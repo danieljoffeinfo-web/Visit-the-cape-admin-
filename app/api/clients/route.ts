@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
       email,
       phone: String(body.phone || '').trim() || null,
       account_number: String(body.accountNumber || '').trim() || null,
+      business_name: String(body.businessName || '').trim() || null,
+      vat_number: String(body.vatNumber || '').trim() || null,
+      address: String(body.address || '').trim() || null,
       notes: String(body.notes || '').trim() || null,
       total_bookings: 0,
       xero_total_invoiced: 0,
@@ -95,6 +98,10 @@ export async function PATCH(request: NextRequest) {
   if (body.phone !== undefined) patch.phone = String(body.phone).trim() || null
   if (body.accountNumber !== undefined)
     patch.account_number = String(body.accountNumber).trim() || null
+  if (body.businessName !== undefined)
+    patch.business_name = String(body.businessName).trim() || null
+  if (body.vatNumber !== undefined) patch.vat_number = String(body.vatNumber).trim() || null
+  if (body.address !== undefined) patch.address = String(body.address).trim() || null
   if (body.notes !== undefined) patch.notes = String(body.notes).trim() || null
 
   /* Email is deliberately harder to change than the rest: it is the key every
