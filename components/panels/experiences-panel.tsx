@@ -9,12 +9,12 @@ import { CreateAddOnForm } from '@/components/bookings/create-addon-form'
 import { cardStyle, pageTitle, primaryButton, secondaryButton, theme } from '@/lib/theme'
 
 /**
- * Experiences — the add-on adventures, and booking them out.
+ * Experiences — the add-on adventures, and booking them for customers.
  *
  * The catalogue was only reachable as a list of checkboxes inside a booking
  * form, which meant there was nowhere to simply look at what is on offer or
  * how often any of it sells. This is the same relationship Fleet Manager has
- * with vehicles: the thing itself, with a Book out on it.
+ * with vehicles: the thing itself, with a clear booking action on it.
  *
  * Bookings still go through the add-on booking route, so an experience booked
  * here lands in the same table, on the same invoice template, with the same
@@ -167,7 +167,7 @@ export function ExperiencesPanel() {
                   onClick={() => setBooking({ slug: addOn.slug, name: addOn.name })}
                   style={{ ...primaryButton, width: '100%' }}
                 >
-                  Book out
+                  Book for a customer
                 </button>
               </div>
             )
@@ -226,7 +226,7 @@ export function ExperiencesPanel() {
 
       {!loading && catalogue.length > 0 && upcoming.length === 0 && (
         <div style={{ ...cardStyle, color: theme.textMuted, fontSize: 13 }}>
-          Nothing booked yet. Use Book out on an experience above, or{' '}
+          Nothing booked yet. Choose an experience above, or{' '}
           <button
             onClick={() => setBooking({})}
             style={{ ...secondaryButton, padding: '3px 9px', fontSize: 12 }}

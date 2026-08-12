@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       where = `Status=="${status}"`
     }
 
-    const [response, hidden] = await Promise.all([
+    const [response, summaryResponse, hidden] = await Promise.all([
       xero.accountingApi.getInvoices(
         tenantId,
         undefined,    // ifModifiedSince
@@ -37,6 +37,21 @@ export async function GET(request: NextRequest) {
         undefined,    // unitdp
         false         // summaryOnly
       ),
+      xero.accountingApi.getInvoices(
+        tenantId,
+        undefined,
+        undefined,
+        'DueDate DESC',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        1,
+        false,
+        false,
+        undefined,
+        false,
+      ),
       listHiddenInvoices(),
     ])
 
@@ -49,8 +64,22 @@ export async function GET(request: NextRequest) {
       return onlyHidden ? isHidden : !isHidden
     })
 
+    const summaryInvoices = summaryResponse.body.invoices || []
+    const summary = {
+      paid: summaryInvoices
+        .filter((invoice) => String(invoice.status) === 'PAID')
+        .reduce((total, invoice) => total + (invoice.total || 0), 0),
+      outstanding: summaryInvoices
+        .filter((invoice) => String(invoice.status) === 'AUTHORISED')
+        .reduce((total, invoice) => total + (invoice.amountDue || 0), 0),
+      overdue: summaryInvoices
+        .filter((invoice) => String(invoice.status) === 'OVERDUE')
+        .reduce((total, invoice) => total + (invoice.amountDue || 0), 0),
+    }
+
     return NextResponse.json({
       invoices,
+      summary,
       hiddenCount: all.reduce(
         (count, invoice) => count + (invoice.invoiceID && hidden.ids.has(invoice.invoiceID) ? 1 : 0),
         0,

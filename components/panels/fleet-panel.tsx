@@ -375,7 +375,7 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={pageTitle}>Fleet Manager</h1>
+        <h1 style={pageTitle}>Vehicles</h1>
           <p style={{ color: theme.textMuted, fontSize: 13, marginTop: 2 }}>
             Manage your vehicles, book rentals, and track fleet revenue.
           </p>

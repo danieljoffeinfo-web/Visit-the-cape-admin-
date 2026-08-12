@@ -105,6 +105,7 @@ export function ClientsPanel() {
   }
 
   async function addToXero(client: Client) {
+    if (!confirm(`Create ${client.name} as a customer in Xero? This does not create or send an invoice.`)) return
     try {
       const res = await fetch('/api/xero/contacts', {
         method: 'POST',
@@ -113,7 +114,7 @@ export function ClientsPanel() {
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Failed to create Xero contact')
-      toast.success(`${client.name} added to Xero`)
+      toast.success(`${client.name} is now available as a Xero customer`)
       load()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to create Xero contact')
@@ -156,7 +157,12 @@ export function ClientsPanel() {
           flexWrap: 'wrap',
         }}
       >
-        <h1 style={pageTitle}>Clients</h1>
+        <div>
+          <h1 style={pageTitle}>Clients</h1>
+          <p style={{ color: theme.textMuted, fontSize: 13, margin: '6px 0 0' }}>
+            Customer details for repeat bookings. Creating a Xero customer is optional and does not send anything.
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <input
             value={query}
@@ -239,7 +245,7 @@ export function ClientsPanel() {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 820 }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
-                  {['Name', 'Business', 'Email', 'Phone', 'Account', 'Bookings', 'Added', xeroConnected ? 'Xero' : null, '']
+                  {['Name', 'Business', 'Email', 'Phone', 'Account', 'Bookings', 'Added', xeroConnected ? 'Xero customer' : null, '']
                     .filter((h) => h !== null)
                     .map((h, i) => (
                       <th key={`${h}-${i}`} style={th}>
@@ -281,7 +287,7 @@ export function ClientsPanel() {
                             onClick={() => addToXero(c)}
                             style={{ ...secondaryButton, padding: '4px 10px', fontSize: 11 }}
                           >
-                            Add to Xero
+                            Create in Xero
                           </button>
                         )}
                       </td>

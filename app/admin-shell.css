@@ -23,11 +23,11 @@
 }
 
 .admin-sidebar {
-  width: 240px;
+  width: 248px;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--vtc-surface);
-  border-right: 1px solid var(--vtc-border);
+  background: #12303a;
+  border-right: none;
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -35,12 +35,12 @@
   left: 0;
   bottom: 0;
   z-index: 100;
-  box-shadow: 2px 0 12px rgba(44, 38, 32, 0.04);
+  box-shadow: 10px 0 32px rgba(18, 48, 58, 0.08);
   transition: transform 0.22s ease;
 }
 
 .admin-main {
-  margin-left: 240px;
+  margin-left: 248px;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -51,12 +51,12 @@
 }
 
 .admin-header {
-  min-height: 56px;
-  background: var(--vtc-surface);
+  min-height: 64px;
+  background: rgba(255, 255, 255, 0.92);
   border-bottom: 1px solid var(--vtc-border);
   display: flex;
   align-items: center;
-  padding: 0 28px;
+  padding: 0 32px;
   gap: 12px;
   position: sticky;
   top: 0;
@@ -81,8 +81,8 @@
 .admin-header__title {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: 20px;
-  letter-spacing: 0.05em;
+  font-size: 18px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   flex: 1;
   min-width: 0;
@@ -100,29 +100,19 @@
 }
 
 .admin-header__location {
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-family: 'IBM Plex Mono', monospace;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: rgba(184, 149, 106, 0.12);
-  color: #8a6e4a;
+  background: #e8efec;
+  color: rgba(18, 48, 58, 0.68);
   padding: 4px 10px;
   border-radius: 20px;
-  border: 1px solid rgba(184, 149, 106, 0.28);
-}
-
-.admin-header__logout {
-  padding: 5px 12px;
-  border-radius: 4px;
-  border: 1px solid var(--vtc-border);
-  background: transparent;
-  color: var(--vtc-text-muted);
-  cursor: pointer;
-  font-size: 12px;
-  font-family: 'Barlow', sans-serif;
+  border: 1px solid rgba(18, 48, 58, 0.08);
 }
 
 .admin-content {
-  padding: 28px;
+  padding: 32px;
   flex: 1;
   min-width: 0;
 }

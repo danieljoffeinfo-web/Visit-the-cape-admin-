@@ -1,24 +1,25 @@
-/** Visit The Cape admin — off-white shell with bronze accents */
+/** Visit The Cape admin — Atlantic operations palette. */
 export const theme = {
-  bg: '#f7f4ef',
+  bg: '#f3f6f4',
   surface: '#ffffff',
-  surfaceMuted: '#f0ebe3',
-  border: 'rgba(44, 38, 32, 0.10)',
-  borderStrong: 'rgba(44, 38, 32, 0.16)',
-  text: '#2c2620',
-  textMuted: 'rgba(44, 38, 32, 0.55)',
-  textFaint: 'rgba(44, 38, 32, 0.38)',
-  bronze: '#b8956a',
-  bronzeLight: '#d4b896',
-  bronzeDark: '#8a6e4a',
-  bronzeBg: 'rgba(184, 149, 106, 0.12)',
-  bronzeBorder: 'rgba(184, 149, 106, 0.28)',
-  success: '#3d8b63',
-  danger: '#c45c4a',
-  modalOverlay: 'rgba(44, 38, 32, 0.18)',
-  modalShadow: '0 16px 48px rgba(44, 38, 32, 0.12)',
+  surfaceMuted: '#e8efec',
+  border: 'rgba(18, 48, 58, 0.10)',
+  borderStrong: 'rgba(18, 48, 58, 0.18)',
+  text: '#12303a',
+  textMuted: 'rgba(18, 48, 58, 0.64)',
+  textFaint: 'rgba(18, 48, 58, 0.42)',
+  bronze: '#d36b4d',
+  bronzeLight: '#e59a82',
+  bronzeDark: '#a84932',
+  bronzeBg: 'rgba(211, 107, 77, 0.10)',
+  bronzeBorder: 'rgba(211, 107, 77, 0.30)',
+  success: '#557a63',
+  danger: '#b5453b',
+  modalOverlay: 'rgba(18, 48, 58, 0.24)',
+  modalShadow: '0 20px 60px rgba(18, 48, 58, 0.16)',
   headingFont: "'Barlow Condensed', sans-serif",
-  bodyFont: "'Barlow', sans-serif",
+  bodyFont: "'Source Sans 3', sans-serif",
+  utilityFont: "'IBM Plex Mono', monospace",
 } as const
 
 export const cardStyle = {
@@ -26,7 +27,7 @@ export const cardStyle = {
   border: `1px solid ${theme.border}`,
   borderRadius: 10,
   padding: '20px 24px',
-  boxShadow: '0 1px 3px rgba(44, 38, 32, 0.04)',
+  boxShadow: '0 1px 2px rgba(18, 48, 58, 0.04)',
 } as const
 
 export const inputStyle = {

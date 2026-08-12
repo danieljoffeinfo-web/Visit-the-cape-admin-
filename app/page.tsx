@@ -60,16 +60,16 @@ type Panel =
 const PANEL_STORAGE_KEY = 'vtc_active_panel'
 
 const PANEL_TITLES: Record<Panel, string> = {
-  dashboard: 'Dashboard',
+  dashboard: 'Home',
   bookings: 'Bookings',
   calendar: 'Calendar',
-  enquiries: 'Enquiries',
+  enquiries: 'Messages',
   experiences: 'Experiences',
-  fleet: 'Fleet Manager',
-  accounting: 'Accounting',
+  fleet: 'Vehicles',
+  accounting: 'Money',
   clients: 'Clients',
-  settings: 'Settings',
-  'activity-logs': 'Activity Logs',
+  settings: 'Connections',
+  'activity-logs': 'Activity history',
 }
 
 function resolveInitialPanel(raw: string | null): Panel {
@@ -188,6 +188,10 @@ function AdminApp() {
     )
   }
 
+  const activePanel = admin.role !== 'owner' && (panel === 'settings' || panel === 'activity-logs')
+    ? 'dashboard'
+    : panel
+
   return (
     <div className="admin-shell">
       <button
@@ -198,7 +202,7 @@ function AdminApp() {
         tabIndex={mobileNavOpen ? 0 : -1}
       />
       <Sidebar
-        active={panel}
+        active={activePanel}
         onChange={changePanel}
         admin={admin}
         onSignOut={signOut}
@@ -219,29 +223,26 @@ function AdminApp() {
               <line x1="2" y1="12" x2="14" y2="12" />
             </svg>
           </button>
-          <div className="admin-header__title">{PANEL_TITLES[panel]}</div>
+          <div className="admin-header__title">{PANEL_TITLES[activePanel]}</div>
           <div className="admin-header__meta">
             <span className="user-color-badge">
               <UserColorBadge name={admin.full_name} color={admin.color} />
             </span>
-            <div className="admin-header__location">Cape Town</div>
-            <button type="button" onClick={signOut} className="admin-header__logout">
-              Logout
-            </button>
+            <div className="admin-header__location">Cape Town · South Africa</div>
           </div>
         </div>
 
         <div className="admin-content">
-          {panel === 'dashboard' && <DashboardPanel onNavigate={navigate} />}
-          {panel === 'bookings' && <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />}
-          {panel === 'calendar' && <CalendarPanel />}
-          {panel === 'enquiries' && <EnquiriesPanel />}
-          {panel === 'experiences' && <ExperiencesPanel />}
-          {panel === 'fleet' && <FleetPanel onNavigate={navigate} />}
-          {panel === 'accounting' && <AccountingPanel />}
-          {panel === 'clients' && <ClientsPanel />}
-          {panel === 'settings' && <SettingsPanel />}
-          {panel === 'activity-logs' && <ActivityLogsPanel />}
+          {activePanel === 'dashboard' && <DashboardPanel onNavigate={navigate} userName={admin.full_name} />}
+          {activePanel === 'bookings' && <BookingsPanel initialTab={bookingsTab} initialAction={bookingsAction} />}
+          {activePanel === 'calendar' && <CalendarPanel />}
+          {activePanel === 'enquiries' && <EnquiriesPanel />}
+          {activePanel === 'experiences' && <ExperiencesPanel />}
+          {activePanel === 'fleet' && <FleetPanel onNavigate={navigate} />}
+          {activePanel === 'accounting' && <AccountingPanel />}
+          {activePanel === 'clients' && <ClientsPanel />}
+          {activePanel === 'settings' && <SettingsPanel />}
+          {activePanel === 'activity-logs' && <ActivityLogsPanel />}
         </div>
       </div>
     </div>

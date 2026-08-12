@@ -3,17 +3,14 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
-import { ClearDataDialog, useClearAdminData } from '@/components/admin/clear-data-dialog'
-import { cardStyle, dangerButton, pageTitle, secondaryButton, sectionTitle, theme } from '@/lib/theme'
+import { cardStyle, pageTitle, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
 type XeroToken = { tenant_id: string; org_name: string; expires_at: string; updated_at: string } | null
 
 export function SettingsPanel() {
   const [xeroToken, setXeroToken] = useState<XeroToken>(null)
   const [loadingXero, setLoadingXero] = useState(true)
-  const [showClearDialog, setShowClearDialog] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
-  const { clearing, clearAllData } = useClearAdminData()
   const searchParams = useSearchParams()
 
   useEffect(() => {
@@ -57,26 +54,19 @@ export function SettingsPanel() {
     }
   }
 
-  async function handleClearAllData() {
-    try {
-      const data = await clearAllData()
-      toast.success(`All admin data cleared. ${data.fleetPreserved ?? 0} fleet vehicles kept.`)
-      setShowClearDialog(false)
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to clear data')
-    }
-  }
-
   const card = cardStyle
 
   return (
     <div>
-      <h1 style={pageTitle}>Settings</h1>
+      <h1 style={pageTitle}>Connections</h1>
+      <p style={{ color: theme.textMuted, fontSize: 14, margin: '6px 0 24px', maxWidth: 650, lineHeight: 1.55 }}>
+        Owner-only connections for services used by the admin system. Day-to-day staff do not need this page.
+      </p>
 
       <div style={{ ...card, marginBottom: 20 }}>
-        <h2 style={{ ...sectionTitle, marginBottom: 16 }}>Xero Integration</h2>
+        <h2 style={{ ...sectionTitle, marginBottom: 10 }}>Xero</h2>
         <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 20 }}>
-          Connect your Xero account to sync invoices, payments, and reports with the Accounting tab.
+          Xero stores the official customer invoices and payment status shown on the Money page.
         </p>
 
         {loadingXero ? (
@@ -95,13 +85,11 @@ export function SettingsPanel() {
                 {disconnecting ? 'Disconnecting...' : 'Disconnect'}
               </button>
             </div>
-            <div style={{ display: 'flex', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <a href="/api/xero/connect" style={{ ...secondaryButton, display: 'inline-block', padding: '7px 16px', textDecoration: 'none', fontSize: 13 }}>
-                Re-authorise
+                Reconnect Xero
               </a>
-              <button onClick={() => { fetch('/api/xero/refresh', { method: 'POST' }).then(() => { toast.success('Token refreshed'); loadXeroStatus() }).catch(() => toast.error('Refresh failed')) }} style={{ padding: '7px 16px', borderRadius: 5, border: `1px solid ${theme.border}`, background: theme.surface, color: theme.textMuted, cursor: 'pointer', fontSize: 13, fontFamily: theme.bodyFont }}>
-                Refresh Token
-              </button>
+              <span style={{ color: theme.textFaint, fontSize: 12 }}>Use reconnect only if invoice data stops updating.</span>
             </div>
           </div>
         ) : (
@@ -111,51 +99,15 @@ export function SettingsPanel() {
               Not connected
             </div>
             <a href="/api/xero/connect" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 6, background: theme.bronze, color: '#ffffff', textDecoration: 'none', fontWeight: 700, fontSize: 14, fontFamily: theme.bodyFont }}>
-              Connect Xero Account
+              Connect Xero account
             </a>
             <p style={{ color: theme.textFaint, fontSize: 12, marginTop: 10 }}>
-              You&apos;ll be redirected to Xero to authorise access. Your credentials are stored securely.
+              You&apos;ll be redirected to Xero to approve the connection. No Xero password is stored here.
             </p>
           </div>
         )}
       </div>
 
-      <div style={{ ...card, marginBottom: 20, border: '1px solid rgba(196, 92, 74, 0.2)' }}>
-        <h2 style={{ ...sectionTitle, marginBottom: 16, color: theme.danger }}>Danger zone</h2>
-        <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 16, lineHeight: 1.6 }}>
-          Permanently clear all bookings, enquiries, customers, invoice links, activity logs, and content library.
-          Fleet vehicles, admin users, and your Xero connection are kept.
-        </p>
-        <p style={{ color: theme.textFaint, fontSize: 12, marginBottom: 16 }}>
-          Owner account only. You must type a confirmation phrase before anything is deleted.
-        </p>
-        <button type="button" onClick={() => setShowClearDialog(true)} disabled={clearing} style={dangerButton}>
-          Clear all admin data…
-        </button>
-      </div>
-
-      <ClearDataDialog
-        open={showClearDialog}
-        onClose={() => setShowClearDialog(false)}
-        onConfirm={handleClearAllData}
-        loading={clearing}
-      />
-
-      <div style={{ ...card, marginBottom: 20 }}>
-        <h2 style={{ ...sectionTitle, marginBottom: 16 }}>Supabase Database</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: theme.textMuted, fontSize: 13 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4caf84' }} />
-          Connected — ufcawaywfgzrhfbzxtgz.supabase.co
-        </div>
-      </div>
-
-      <div style={card}>
-        <h2 style={{ ...sectionTitle, marginBottom: 16 }}>About</h2>
-        <div style={{ color: theme.textMuted, fontSize: 13, lineHeight: 1.8 }}>
-          <div>Visit The Cape Admin Console</div>
-          <div style={{ color: theme.textFaint, marginTop: 4, fontSize: 12 }}>Cape Town Tour Operator Management System</div>
-        </div>
-      </div>
     </div>
   )
 }

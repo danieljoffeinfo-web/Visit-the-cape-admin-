@@ -221,42 +221,32 @@ export function BookingsTable({
                   )}
                 </td>
 
-                {/* Three things people do daily stay on the row. Everything
-                    else, including both irreversible actions, is one press
-                    further away. */}
+                {/* Keep one obvious booking action on the row. Invoice and
+                    destructive actions are grouped under a plain-language
+                    menu so the table stays calm and scan-friendly. */}
                 <td
                   style={{ padding: '12px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    {canViewInvoice && onViewInvoice && (
-                      <RowButton onClick={() => onViewInvoice(b)} title="Open the invoice">
-                        Invoice
-                      </RowButton>
-                    )}
-                    {!canViewInvoice && canRaiseInvoice && (
-                      <RowButton onClick={() => onRaiseInvoice?.(b)} disabled={raisingId === b.raw_id}>
-                        {raisingId === b.raw_id ? 'Raising…' : 'Raise invoice'}
-                      </RowButton>
-                    )}
-                    {canSend && (
-                      <RowButton
-                        primary
-                        onClick={() => onSendInvoice?.(b)}
-                        disabled={busy}
-                        title={`Email the invoice to ${b.customer_email}`}
-                      >
-                        {sendingId === b.raw_id ? 'Sending…' : 'Send'}
-                      </RowButton>
-                    )}
-                    {onEdit && <RowButton onClick={() => onEdit(b)}>Edit</RowButton>}
+                    {onEdit && <RowButton onClick={() => onEdit(b)}>Open booking</RowButton>}
 
                     <RowMenu
                       items={[
                         {
-                          label: 'Create in Xero',
+                          label: 'View invoice',
+                          onSelect: () => onViewInvoice?.(b),
+                          disabled: !canViewInvoice || !onViewInvoice,
+                        },
+                        {
+                          label: raisingId === b.raw_id ? 'Creating invoice…' : 'Create invoice in Xero',
                           onSelect: () => onRaiseInvoice?.(b),
-                          disabled: !canRaiseInvoice || !canViewInvoice,
+                          disabled: !canRaiseInvoice,
+                        },
+                        {
+                          label: sendingId === b.raw_id ? 'Emailing invoice…' : 'Email invoice to customer',
+                          onSelect: () => onSendInvoice?.(b),
+                          disabled: !canSend || busy,
                         },
                         {
                           label: 'Cancel booking',

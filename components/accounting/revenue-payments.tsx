@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { cardStyle, fieldLabel, inputStyle, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
+import { cardStyle, fieldLabel, primaryButton, secondaryButton, sectionTitle, theme } from '@/lib/theme'
 
 function formatZAR(amount: number) {
   return `R ${(amount || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -71,8 +71,6 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
   const [payments, setPayments] = useState<XeroPayment[]>([])
   const [filter, setFilter] = useState('ALL')
   const [loading, setLoading] = useState(false)
-  const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ contact: '', description: '', amount: '', dueDate: '' })
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showHidden, setShowHidden] = useState(false)
   const [hiddenCount, setHiddenCount] = useState(0)
@@ -100,40 +98,17 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
         toast.error('Run supabase/xero_hidden_invoices.sql to enable hiding invoices')
       }
 
-      const arr = invData
-      const totalRevenue = arr.filter(i => i.status === 'PAID').reduce((s, i) => s + (i.total || 0), 0)
-      const outstanding = arr.filter(i => i.status === 'AUTHORISED').reduce((s, i) => s + (i.amountDue || 0), 0)
       const paymentsWeek = Array.isArray(payData) ? payData.reduce((s, p) => s + (p.amount || 0), 0) : 0
-      const overdue = arr.filter(i => i.status === 'OVERDUE').reduce((s, i) => s + (i.amountDue || 0), 0)
-      setStats({ totalRevenue, outstanding, paymentsWeek, overdue })
+      setStats({
+        totalRevenue: Number(invPayload?.summary?.paid) || 0,
+        outstanding: Number(invPayload?.summary?.outstanding) || 0,
+        paymentsWeek,
+        overdue: Number(invPayload?.summary?.overdue) || 0,
+      })
     } catch {
       toast.error('Failed to load invoice data')
     } finally {
       setLoading(false)
-    }
-  }
-
-  async function deleteInvoice(inv: XeroInvoice) {
-    if (!inv.invoiceID) return
-
-    const label = inv.invoiceNumber || inv.invoiceID
-    if (!confirm(`Remove invoice ${label} from this list? It stays untouched in Xero and can be restored.`)) return
-
-    setDeletingId(inv.invoiceID)
-    try {
-      const res = await fetch(`/api/xero/invoices/${inv.invoiceID}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ invoiceNumber: inv.invoiceNumber, contactName: inv.contact?.name }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Failed to remove invoice')
-      toast.success(`Invoice ${label} removed from the list`)
-      loadData()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to remove invoice')
-    } finally {
-      setDeletingId(null)
     }
   }
 
@@ -155,43 +130,16 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
     }
   }
 
-  async function createInvoice() {
-    if (!form.contact || !form.amount || !form.dueDate) {
-      toast.error('Please fill all fields')
-      return
-    }
-    try {
-      const res = await fetch('/api/xero/create-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contactName: form.contact,
-          contactEmail: '',
-          description: form.description,
-          amount: form.amount,
-          dueDate: form.dueDate,
-        }),
-      })
-      if (!res.ok) throw new Error()
-      toast.success('Invoice created in Xero')
-      setShowModal(false)
-      setForm({ contact: '', description: '', amount: '', dueDate: '' })
-      loadData()
-    } catch {
-      toast.error('Failed to create invoice')
-    }
-  }
-
   if (!connected) return <XeroConnectBanner />
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
         {[
-          { label: 'Total Revenue MTD', value: formatZAR(stats.totalRevenue), color: theme.success },
-          { label: 'Outstanding Invoices', value: formatZAR(stats.outstanding), color: '#4a7fd4' },
-          { label: 'Payments This Week', value: formatZAR(stats.paymentsWeek), color: theme.bronzeDark },
-          { label: 'Overdue Amount', value: formatZAR(stats.overdue), color: theme.danger },
+          { label: 'Paid invoices', value: formatZAR(stats.totalRevenue), color: theme.success },
+          { label: 'Waiting for payment', value: formatZAR(stats.outstanding), color: '#4a7fd4' },
+          { label: 'Recent payments', value: formatZAR(stats.paymentsWeek), color: theme.bronzeDark },
+          { label: 'Overdue', value: formatZAR(stats.overdue), color: theme.danger },
         ].map((s) => (
           <div key={s.label} style={cardStyle}>
             <div style={{ ...fieldLabel, marginBottom: 8, fontWeight: 700 }}>{s.label}</div>
@@ -202,7 +150,7 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
 
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-          <h3 style={sectionTitle}>{showHidden ? 'Removed invoices' : 'Invoices'}</h3>
+          <h3 style={sectionTitle}>{showHidden ? 'Hidden from this dashboard' : 'Invoices'}</h3>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             {(['ALL', 'PAID', 'AUTHORISED', 'OVERDUE', 'DRAFT'] as const).map((s) => (
               <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>
@@ -211,18 +159,21 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
             ))}
             {(hiddenCount > 0 || showHidden) && (
               <FilterChip active={showHidden} onClick={() => setShowHidden((v) => !v)}>
-                {showHidden ? 'Back to invoices' : `Removed (${hiddenCount})`}
+                {showHidden ? 'Back to invoices' : `Hidden (${hiddenCount})`}
               </FilterChip>
             )}
-            <button onClick={() => setShowModal(true)} style={{ ...primaryButton, fontSize: 13, padding: '6px 14px' }}>
-              + Create Invoice
-            </button>
           </div>
         </div>
 
+        {!showHidden && (
+          <p style={{ color: theme.textMuted, fontSize: 12, margin: '-6px 0 14px' }}>
+            Create customer invoices from a booking so each invoice stays linked to the correct tour, vehicle or experience.
+          </p>
+        )}
+
         {showHidden && (
           <p style={{ color: theme.textMuted, fontSize: 13, margin: '0 0 14px' }}>
-            These are hidden from your invoice list only — every one of them is still intact in Xero.
+            These invoices are still in Xero and still count toward the totals above. Restore an invoice to show it in the main list again.
           </p>
         )}
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -249,7 +200,9 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
                   <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{formatZAR(inv.total || 0)}</td>
                   <td style={{ padding: '10px 12px', fontSize: 13, color: theme.textMuted }}>{inv.dueDate ? format(new Date(inv.dueDate), 'd MMM yyyy') : '—'}</td>
                   <td style={{ padding: '10px 12px' }}>
-                    <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', ...sc }}>{inv.status}</span>
+                    <span style={{ padding: '3px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', ...sc }}>
+                      {inv.status === 'AUTHORISED' ? 'Waiting for payment' : inv.status}
+                    </span>
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                     {showHidden ? (
@@ -266,23 +219,7 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
                       >
                         {deletingId === inv.invoiceID ? 'Restoring…' : 'Restore'}
                       </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => deleteInvoice(inv)}
-                        disabled={deletingId === inv.invoiceID}
-                        style={{
-                          ...secondaryButton,
-                          fontSize: 12,
-                          padding: '5px 10px',
-                          color: theme.danger,
-                          borderColor: 'rgba(196, 92, 74, 0.35)',
-                          opacity: deletingId === inv.invoiceID ? 0.6 : 1,
-                        }}
-                      >
-                        {deletingId === inv.invoiceID ? 'Removing…' : 'Delete'}
-                      </button>
-                    )}
+                    ) : null}
                   </td>
                 </tr>
               )
@@ -308,34 +245,6 @@ export function RevenuePayments({ connected }: { connected: boolean }) {
         ))}
       </div>
 
-      {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(44, 38, 32, 0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ ...cardStyle, width: 420, maxWidth: '92vw' }}>
-            <h2 style={{ ...sectionTitle, marginBottom: 20 }}>Create Invoice</h2>
-            {[
-              { label: 'Contact Name', key: 'contact', type: 'text', placeholder: 'John Smith' },
-              { label: 'Description', key: 'description', type: 'text', placeholder: 'Table Mountain Tour — 15 Jun' },
-              { label: 'Amount (ZAR)', key: 'amount', type: 'number', placeholder: '2500.00' },
-              { label: 'Due Date', key: 'dueDate', type: 'date', placeholder: '' },
-            ].map((f) => (
-              <div key={f.key} style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', ...fieldLabel, marginBottom: 5 }}>{f.label}</label>
-                <input
-                  type={f.type}
-                  placeholder={f.placeholder}
-                  value={form[f.key as keyof typeof form]}
-                  onChange={(e) => setForm((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                  style={inputStyle}
-                />
-              </div>
-            ))}
-            <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
-              <button onClick={() => setShowModal(false)} style={{ ...secondaryButton, flex: 1 }}>Cancel</button>
-              <button onClick={createInvoice} style={{ ...primaryButton, flex: 1 }}>Create</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
