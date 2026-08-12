@@ -356,6 +356,34 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
   }
 
+  /**
+   * The website owns the payment state of anything it took money for.
+   *
+   * The same question `isStaffCreated` asks on the client, asked again here.
+   * Hiding the control is presentation, not a rule: a tab left open from
+   * before this change, or a request made by hand, would still arrive. A tour
+   * paid for on the site is a `tour` row with a `website` source — it is only
+   * this check that separates it from a tour the office booked by phone.
+   *
+   * Scoped to the two payment fields on purpose. Correcting a misspelled name
+   * or a wrong date on a website booking is ordinary admin work and stays
+   * allowed; what is refused is contradicting PayGate about the money.
+   */
+  const staffCreated =
+    existing.booking_type === 'internal' ||
+    existing.booking_type === 'addon' ||
+    existing.source === 'internal'
+
+  if (!staffCreated && (updates.payment_status !== undefined || updates.status !== undefined)) {
+    return NextResponse.json(
+      {
+        error:
+          'This booking was paid for on the website, so its payment status is set there and cannot be changed here.',
+      },
+      { status: 409 },
+    )
+  }
+
   const allowed: Record<string, unknown> = {}
   /* Who and when, not just how much. Correcting a misspelled name or a wrong
      date used to mean cancelling the booking and taking it again. Absent means

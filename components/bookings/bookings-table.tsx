@@ -2,7 +2,7 @@
 
 import { format } from 'date-fns'
 import type { BookingInvoiceLink, UnifiedBooking } from '@/lib/bookings'
-import { bookingHasViewableInvoice, invoiceLabelForBooking } from '@/lib/bookings'
+import { bookingHasViewableInvoice, invoiceLabelForBooking, isStaffCreated } from '@/lib/bookings'
 import { SourceBadge } from '@/components/user-badge'
 import { RowMenu } from '@/components/ui/row-menu'
 import { SelectMenu } from '@/components/ui/select-menu'
@@ -170,11 +170,20 @@ export function BookingsTable({
                   : b.payment_status === 'paid'
                     ? 'paid'
                     : 'pending'
-            const canChangePayment =
-              Boolean(onPaymentStatusChange) &&
-              b.kind !== 'private' &&
-              b.kind !== 'website' &&
-              !xeroPaid
+            /* Only a booking the office took itself, and only while Xero has
+               not already called it paid.
+               `kind !== 'website'` was not enough: a tour paid for on the site
+               normalises to kind 'tour' with source 'website', so it passed
+               that test and staff could have marked a PayGate payment as
+               pending. isStaffCreated is the predicate that already answers
+               "did we take this booking or did the website", and the row's own
+               Cancel action was already using the same rule — the two now
+               agree instead of contradicting each other. */
+            const canChangePayment = Boolean(onPaymentStatusChange) && isStaffCreated(b) && !xeroPaid
+            /* Where the money was taken, for the read-only rows. A website
+               booking says so rather than showing a bare status that looks
+               like something staff simply have not got round to changing. */
+            const paidOnWebsite = !isStaffCreated(b) && operationalStatus === 'paid'
 
             return (
               <tr
@@ -255,7 +264,15 @@ export function BookingsTable({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {b.kind === 'private' ? 'Enquiry' : xeroPaid ? 'Paid in Xero' : operationalStatus}
+                      {b.kind === 'private'
+                        ? 'Enquiry'
+                        : xeroPaid
+                          ? 'Paid in Xero'
+                          : paidOnWebsite
+                            ? 'Paid on website'
+                            : !isStaffCreated(b)
+                              ? 'Awaiting website payment'
+                              : operationalStatus}
                     </span>
                   )}
                 </td>
