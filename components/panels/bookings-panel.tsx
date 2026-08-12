@@ -62,6 +62,7 @@ export function BookingsPanel({
   const [xeroConnected, setXeroConnected] = useState(false)
   const [raising, setRaising] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [sendingId, setSendingId] = useState<string | null>(null)
   const [invoiceBooking, setInvoiceBooking] = useState<UnifiedBooking | null>(null)
   const [editingBooking, setEditingBooking] = useState<UnifiedBooking | null>(null)
 
@@ -187,6 +188,50 @@ export function BookingsPanel({
     }
   }
 
+  /**
+   * Email the invoice to the customer.
+   *
+   * Confirms with the address spelled out, because the one thing worse than
+   * forgetting to send an invoice is sending it to the wrong person. Nothing
+   * else in the dashboard sends on the customer's behalf automatically.
+   */
+  async function sendInvoice(booking: UnifiedBooking) {
+    const to = booking.customer_email
+    if (!to) {
+      toast.error('This booking has no email address on it. Add one under Edit first.')
+      return
+    }
+    if (!confirm(`Email this invoice to ${to}?`)) return
+
+    setSendingId(booking.raw_id)
+    try {
+      const res = await fetch('/api/invoices/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.raw_id,
+          kind: booking.kind,
+          to,
+          clientName: booking.customer_name,
+          total: booking.amount || 0,
+          summaryLines: [
+            booking.tour_or_vehicle,
+            booking.date ? format(new Date(booking.date), 'd MMMM yyyy') : null,
+            booking.guests ? `${booking.guests} guests` : null,
+          ].filter(Boolean),
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Failed to send')
+      toast.success(`Invoice sent to ${to}`)
+      loadBookings()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to send invoice')
+    } finally {
+      setSendingId(null)
+    }
+  }
+
   async function cancelBooking(booking: UnifiedBooking) {
     if (!confirm('Cancel this booking?')) return
     try {
@@ -303,8 +348,10 @@ export function BookingsPanel({
           onDelete={deleteBooking}
           onRaiseInvoice={raiseInvoice}
           onViewInvoice={setInvoiceBooking}
+          onSendInvoice={sendInvoice}
           onEdit={setEditingBooking}
           raisingId={raising}
+          sendingId={sendingId}
           deletingId={deletingId}
           emptyMessage={
             activeTab === 'addons'

@@ -21,19 +21,42 @@ export const COMPANY = {
   vatNote: 'All amounts are VAT inclusive',
 } as const
 
+function addressList(value: string | undefined, fallback: string[]) {
+  const parsed = (value || '')
+    .split(',')
+    .map((address) => address.trim())
+    .filter((address) => address.includes('@'))
+  return parsed.length > 0 ? parsed : fallback
+}
+
 /**
- * Every invoice this dashboard emails is copied here.
+ * Everyone who gets a copy of every invoice this dashboard emails.
  *
- * A blind copy rather than a visible one: the customer has no reason to see the
- * accounts address on their invoice, and a reply-all from a client should reach
- * the person who sent it, not the archive.
+ * Accounts and the office both need to see what went out — accounts to
+ * reconcile it, the office to answer the customer who rings about it. On a
+ * copy sent to a customer these are blind: the customer has no reason to see
+ * either address, and a reply-all from a client should reach whoever sent it
+ * rather than the archive.
  *
- * Overridable by env so it can be pointed elsewhere without a deploy, but it
- * has a real default so the copy happens whether or not anyone remembers to set
- * the variable.
+ * Comma-separated env override so a person can be added or removed without a
+ * deploy, with a real default so the copies happen whether or not anyone
+ * remembers to set it.
  */
-export const INVOICE_ARCHIVE_EMAIL =
-  process.env.INVOICE_ARCHIVE_EMAIL?.trim() || 'tyron@drivingforce.biz'
+export const INVOICE_ARCHIVE_EMAILS = addressList(process.env.INVOICE_ARCHIVE_EMAIL, [
+  'tyron@drivingforce.biz',
+  'tanya@visitthecape.co.za',
+])
+
+/**
+ * Who is told when an enquiry comes off the website.
+ *
+ * Enquiries were written to the database and nowhere else, so noticing one
+ * meant remembering to go and look. This is the address that finds out
+ * without being asked.
+ */
+export const ENQUIRY_NOTIFY_EMAILS = addressList(process.env.ENQUIRY_NOTIFY_EMAIL, [
+  'tanya@visitthecape.co.za',
+])
 
 /** Invoice palette sampled from the approved VC invoice template. */
 export const INVOICE_COLORS = {

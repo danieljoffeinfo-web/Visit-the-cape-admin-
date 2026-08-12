@@ -184,8 +184,29 @@ export async function buildVtcInvoicePdf(rawInput: VtcInvoiceInput): Promise<Buf
   let metaY = ctx.y
   for (const [label, value] of meta) {
     page.drawText(label, { x: metaLabelX, y: metaY, size: 9.5, font: bold, color: C.muted })
-    page.drawText(value, { x: rightAlign(ctx, value, RIGHT, 10, font), y: metaY, size: 10, font, color: C.text })
-    metaY -= 24
+
+    /* The value is right-aligned to the page margin, so a long one grows
+       leftwards into its own label — which is how "Invoice number" and
+       ADDON-MSPY8YA1-82P2 ended up printed on top of each other. The value
+       may not start before the label ends, so it shrinks to fit that gap and,
+       if even the floor size will not fit, drops to its own line beneath. */
+    const labelEndX = metaLabelX + bold.widthOfTextAtSize(label, 9.5)
+    const available = RIGHT - labelEndX - 10
+    let size = 10
+    while (size > 7 && font.widthOfTextAtSize(value, size) > available) size -= 0.5
+
+    if (font.widthOfTextAtSize(value, size) <= available) {
+      page.drawText(value, { x: rightAlign(ctx, value, RIGHT, size, font), y: metaY, size, font, color: C.text })
+      metaY -= 24
+    } else {
+      metaY -= 13
+      const wrapped = wrap(value, font, 9, RIGHT - metaLabelX)
+      for (const line of wrapped) {
+        page.drawText(line, { x: rightAlign(ctx, line, RIGHT, 9, font), y: metaY, size: 9, font, color: C.text })
+        metaY -= 12
+      }
+      metaY -= 4
+    }
   }
 
   ctx.y -= 27

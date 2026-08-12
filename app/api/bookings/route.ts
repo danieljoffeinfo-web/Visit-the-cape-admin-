@@ -20,6 +20,7 @@ import {
 import { bookingsDb } from '@/lib/bookings-db'
 import { getContentSupabaseAdmin } from '@/lib/content-supabase-admin'
 import { deleteEnquiry, fetchEnquiriesFromSource } from '@/lib/enquiries-server'
+import { nextInvoiceNumber } from '@/lib/invoice-numbers'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
 /** Shape of the rows the website's PayGate flow writes. */
@@ -144,11 +145,17 @@ async function createAddOnBooking(admin: AdminUser, body: Record<string, unknown
 
   const total = addOnBookingTotal(lines)
   const bookingReference = generateBookingReference('ADDON')
+  /* The invoice number is the INV-#### series every other invoice uses, not
+     the booking reference. The reference carries a base-36 timestamp and a
+     random tail so it can be generated without touching the database —
+     ADDON-MSPY8YA1-82P2 — which is fine for an internal key and unreadable on
+     a document a customer has to quote back when they pay. */
+  const invoiceNumber = await nextInvoiceNumber()
   const notes: AddOnBookingNotes = {
     kind: 'addon',
     lines,
     note: body.notes ? String(body.notes) : null,
-    invoice: { number: bookingReference, issuedAt: new Date().toISOString().slice(0, 10) },
+    invoice: { number: invoiceNumber, issuedAt: new Date().toISOString().slice(0, 10) },
   }
 
   const row = {

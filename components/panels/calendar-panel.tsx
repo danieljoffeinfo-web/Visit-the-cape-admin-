@@ -23,6 +23,10 @@ type CalendarEvent = {
   kind: 'fleet' | 'tour' | 'addon'
   title: string
   subtitle: string
+  /** Who booked it — the company where there is one. Null for a departure. */
+  customer?: string | null
+  /** The supporting line: usage and registration, pax, or departure time. */
+  detail?: string | null
   start: string
   end: string
 }
@@ -136,7 +140,7 @@ export function CalendarPanel() {
     for (const event of fleetEvents) {
       const current = vehicleCounts.get(event.colorKey)
       if (current) current.count += 1
-      else vehicleCounts.set(event.colorKey, { label: event.label, count: 1, palette: event.palette })
+      else vehicleCounts.set(event.colorKey, { label: event.title, count: 1, palette: event.palette })
     }
 
     return {
@@ -222,7 +226,7 @@ export function CalendarPanel() {
                   className="cal-day"
                   onClick={() => setSelectedDate(day)}
                   style={{
-                    minHeight: 110,
+                    minHeight: 132,
                     borderRadius: 14,
                     border: `1px solid ${isSelected ? theme.bronzeBorder : isToday ? 'rgba(122,169,255,0.34)' : theme.border}`,
                     background: isSelected ? theme.bronzeBg : isToday ? 'rgba(122,169,255,0.08)' : theme.surface,
@@ -249,18 +253,45 @@ export function CalendarPanel() {
                         className="cal-event"
                         style={{
                           display: 'flex',
-                          alignItems: 'center',
+                          alignItems: 'flex-start',
                           gap: 7,
                           minWidth: 0,
                           padding: '6px 8px',
-                          borderRadius: 999,
+                          borderRadius: 8,
                           background: event.palette.bg,
+                          borderLeft: `3px solid ${event.palette.accent}`,
                           border: `1px solid ${event.palette.border}`,
+                          borderLeftWidth: 3,
+                          borderLeftColor: event.palette.accent,
                         }}
                       >
-                        <span style={{ width: 8, height: 8, borderRadius: 999, background: event.palette.accent, flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: event.palette.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {event.label}
+                        <span style={{ minWidth: 0, display: 'block' }}>
+                          <span
+                            style={{
+                              display: 'block',
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              color: event.palette.text,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {event.label}
+                          </span>
+                          <span
+                            className="cal-event-meta"
+                            style={{
+                              display: 'block',
+                              fontSize: 10.5,
+                              color: theme.textMuted,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {event.meta}
+                          </span>
                         </span>
                       </div>
                     ))}
@@ -290,14 +321,13 @@ export function CalendarPanel() {
                 <div key={event.id} style={{ borderRadius: 14, border: `1px solid ${event.palette.border}`, background: event.palette.soft, padding: 14, boxShadow: `inset 3px 0 0 ${event.palette.accent}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, color: theme.text, fontSize: 15 }}>{event.title}</div>
-                      <div style={{ color: event.palette.text, fontSize: 12, marginTop: 4 }}>{event.label}</div>
+                      <div style={{ fontWeight: 800, color: theme.text, fontSize: 15 }}>{event.label}</div>
+                      <div style={{ color: event.palette.text, fontSize: 12.5, marginTop: 4 }}>{event.meta}</div>
                     </div>
                     <span style={{ fontSize: 10, letterSpacing: '0.12em', textTransform: 'uppercase', color: event.palette.text, background: event.palette.bg, border: `1px solid ${event.palette.border}`, borderRadius: 999, padding: '4px 8px', flexShrink: 0 }}>
                       {event.kind === 'fleet' ? 'Vehicle' : event.kind === 'addon' ? 'Experience' : 'Service'}
                     </span>
                   </div>
-                  <div style={{ color: theme.textMuted, fontSize: 12, marginTop: 8, lineHeight: 1.45 }}>{event.meta}</div>
                   <div style={{ color: theme.textFaint, fontSize: 12, marginTop: 10 }}>
                     {format(event.startDate, 'd MMM yyyy')}{!isSameDay(event.startDate, event.endDate) ? ` → ${format(event.endDate, 'd MMM yyyy')}` : ''}
                   </div>
@@ -346,7 +376,8 @@ export function CalendarPanel() {
               <tr>
                 <th>Dates</th>
                 <th>Type</th>
-                <th>Vehicle / Tour</th>
+                <th>Client</th>
+                <th>Vehicle / Experience</th>
                 <th>Details</th>
               </tr>
             </thead>
@@ -362,8 +393,9 @@ export function CalendarPanel() {
                         : ''}
                     </td>
                     <td>{event.kind === 'fleet' ? 'Fleet' : event.kind === 'addon' ? 'Experience' : 'Departure'}</td>
-                    <td>{event.label}</td>
-                    <td>{event.subtitle || '\u2014'}</td>
+                    <td>{event.customer || '\u2014'}</td>
+                    <td>{event.title}</td>
+                    <td>{event.detail || event.subtitle || '\u2014'}</td>
                   </tr>
                 ))}
             </tbody>
@@ -374,23 +406,40 @@ export function CalendarPanel() {
   )
 }
 
+/**
+ * The line a cell leads with.
+ *
+ * Tanya asked for the client on the calendar, and she is right about which
+ * question it answers: a day cell is read to find out who is out and who to
+ * ring, not to be told a registration number that means nothing until you are
+ * standing next to the vehicle. So the customer leads where there is one, and
+ * the vehicle or experience becomes the supporting line.
+ */
 function getEventLabel(event: CalendarEvent) {
+  if (event.customer) return event.customer
   if (event.kind !== 'fleet') return event.title
+  /* Falls back to the old packed subtitle, so a cached page from before the
+     API carried these fields still renders something sensible. */
   const parts = event.subtitle.split('·').map((part) => part.trim()).filter(Boolean)
   return parts[parts.length - 1] || event.title
 }
 
 function getEventMeta(event: CalendarEvent) {
+  const parts = [event.title, event.detail].filter(Boolean)
+  if (event.customer && parts.length > 0) return parts.join(' · ')
   if (event.kind !== 'fleet') return event.subtitle
-  const parts = event.subtitle.split('·').map((part) => part.trim()).filter(Boolean)
-  if (parts.length <= 1) return event.subtitle
-  return parts.slice(0, parts.length - 1).join(' • ')
+  const split = event.subtitle.split('·').map((part) => part.trim()).filter(Boolean)
+  if (split.length <= 1) return event.subtitle
+  return split.slice(0, split.length - 1).join(' • ')
 }
 
 function getEventColorKey(event: CalendarEvent) {
   if (event.kind === 'addon') return `addon:${event.id}`
   if (event.kind !== 'fleet') return `tour:${event.id}`
-  return `fleet:${getEventLabel(event).toLowerCase()}`
+  /* Keyed on the vehicle so one vehicle keeps one colour across the month.
+     Keying on the label would now colour by CUSTOMER, and the legend below
+     names vehicles. */
+  return `fleet:${event.title.toLowerCase()}`
 }
 
 function getEventColor(event: CalendarEvent): EventColor {

@@ -36,7 +36,6 @@ export type AddOnFormState = {
   customerEmail: string
   customerPhone: string
   tourDate: string
-  guestsCount: string
   notes: string
 }
 
@@ -45,7 +44,6 @@ export const emptyAddOnForm: AddOnFormState = {
   customerEmail: '',
   customerPhone: '',
   tourDate: '',
-  guestsCount: '1',
   notes: '',
 }
 
@@ -148,6 +146,11 @@ export function CreateAddOnForm({
 
   const total = addOnBookingTotal(lines)
 
+  /* The party size, taken from the experiences rather than asked for again.
+     The largest pax count, not the sum: a family of four doing two
+     experiences is four people twice over, not eight. */
+  const guests = lines.reduce((most, line) => Math.max(most, line.quantity), 0)
+
   function toggle(addOn: AddOn) {
     setSelected((prev) => {
       if (prev[addOn.slug]) {
@@ -187,7 +190,7 @@ export function CreateAddOnForm({
       const res = await fetch('/api/bookings?type=addon', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, lines }),
+        body: JSON.stringify({ ...form, guestsCount: String(guests), lines }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to create')
@@ -202,13 +205,13 @@ export function CreateAddOnForm({
     }
   }
 
-  /* Date is not in this list: it uses the console's own picker rather than
-     whatever calendar the browser happens to ship. */
+  /* Neither date nor guests are in this list. The date uses the console's own
+     picker; guests are counted once, on the experience itself, rather than
+     asked for twice and left to disagree. */
   const fields = [
     { key: 'customerName', label: 'Customer Name *', type: 'text' },
     { key: 'customerEmail', label: 'Email *', type: 'email' },
     { key: 'customerPhone', label: 'Phone', type: 'tel' },
-    { key: 'guestsCount', label: 'Total guests on the booking', type: 'number' },
   ] as const
 
   const busy = submitting || saving

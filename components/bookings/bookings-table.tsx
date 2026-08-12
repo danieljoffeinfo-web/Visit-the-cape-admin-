@@ -3,7 +3,8 @@
 import { format } from 'date-fns'
 import type { BookingInvoiceLink, UnifiedBooking } from '@/lib/bookings'
 import { bookingHasViewableInvoice, invoiceLabelForBooking } from '@/lib/bookings'
-import { SourceBadge, StatusBadge, UserColorBadge } from '@/components/user-badge'
+import { SourceBadge, StatusBadge } from '@/components/user-badge'
+import { RowMenu } from '@/components/ui/row-menu'
 import { theme } from '@/lib/theme'
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -31,42 +32,66 @@ type BookingsTableProps = {
   onDelete?: (booking: UnifiedBooking) => void
   onRaiseInvoice?: (booking: UnifiedBooking) => void
   onViewInvoice?: (booking: UnifiedBooking) => void
+  onSendInvoice?: (booking: UnifiedBooking) => void
   onEdit?: (booking: UnifiedBooking) => void
   raisingId?: string | null
+  sendingId?: string | null
   deletingId?: string | null
   emptyMessage?: string
 }
 
-function InvoiceBadge({
-  label,
-  colors,
+function money(amount: number | null | undefined) {
+  if (amount == null) return '—'
+  return `R ${Number(amount).toLocaleString('en-ZA', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+}
+
+/* One scale for the table, so a change of mind is a change in one place. */
+const CELL = { padding: '15px 14px', fontSize: 14, color: theme.text } as const
+const HEAD = {
+  padding: '12px 14px',
+  textAlign: 'left' as const,
+  fontSize: 11.5,
+  letterSpacing: '0.12em',
+  textTransform: 'uppercase' as const,
+  color: theme.textMuted,
+  fontWeight: 700,
+  whiteSpace: 'nowrap' as const,
+}
+
+function RowButton({
+  children,
   onClick,
+  disabled,
+  primary,
+  title,
 }: {
-  label: string
-  colors: { bg: string; color: string }
+  children: React.ReactNode
   onClick?: () => void
+  disabled?: boolean
+  primary?: boolean
+  title?: string
 }) {
-  const style = {
-    padding: '3px 8px',
-    borderRadius: 12,
-    fontSize: 11,
-    fontWeight: 600,
-    letterSpacing: '0.06em',
-    textTransform: 'uppercase' as const,
-    background: colors.bg,
-    color: colors.color,
-    border: 'none',
-    cursor: onClick ? 'pointer' : 'default',
-    fontFamily: theme.bodyFont,
-  }
-
-  if (!onClick) {
-    return <span style={style}>{label}</span>
-  }
-
   return (
-    <button type="button" onClick={onClick} style={style} title="View invoice">
-      {label}
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      style={{
+        padding: '7px 14px',
+        borderRadius: 6,
+        fontSize: 13,
+        fontWeight: 600,
+        fontFamily: theme.bodyFont,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        whiteSpace: 'nowrap',
+        border: primary ? '1px solid transparent' : `1px solid ${theme.bronzeBorder}`,
+        background: primary ? theme.bronze : theme.surface,
+        color: primary ? '#ffffff' : theme.bronzeDark,
+      }}
+    >
+      {children}
     </button>
   )
 }
@@ -80,40 +105,37 @@ export function BookingsTable({
   onDelete,
   onRaiseInvoice,
   onViewInvoice,
+  onSendInvoice,
   onEdit,
   raisingId,
+  sendingId,
   deletingId,
   emptyMessage = 'No bookings yet',
 }: BookingsTableProps) {
   if (loading) {
-    return <div style={{ color: theme.textMuted, padding: 12 }}>Loading bookings…</div>
+    return <div style={{ color: theme.textMuted, padding: 20, fontSize: 14 }}>Loading bookings…</div>
   }
 
   if (bookings.length === 0) {
-    return <div style={{ color: theme.textMuted, padding: 24, textAlign: 'center' }}>{emptyMessage}</div>
+    return (
+      <div style={{ color: theme.textMuted, padding: 40, textAlign: 'center', fontSize: 14 }}>
+        {emptyMessage}
+      </div>
+    )
   }
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 960 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1040 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
-            {['Type', 'Reference', 'Source', 'Customer', 'Tour / Vehicle', 'Date', 'Guests', 'Created By', 'Status', 'Invoice', ''].map((h) => (
-              <th
-                key={h}
-                style={{
-                  padding: '8px 12px',
-                  textAlign: 'left',
-                  fontSize: 11,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  color: theme.textMuted,
-                  fontWeight: 700,
-                }}
-              >
-                {h}
-              </th>
-            ))}
+            {['Type', 'Reference', 'Source', 'Customer', 'Tour / Vehicle', 'Date', 'Guests', 'Amount', 'Status', ''].map(
+              (h, i) => (
+                <th key={`${h}-${i}`} style={HEAD}>
+                  {h}
+                </th>
+              ),
+            )}
           </tr>
         </thead>
         <tbody>
@@ -129,133 +151,121 @@ export function BookingsTable({
               Boolean(xeroConnected) &&
               !link?.xero_invoice_id &&
               (b.kind === 'tour' || b.kind === 'private' || b.kind === 'addon')
-            const canCancel = b.kind !== 'private' && b.status !== 'cancelled' && (b.kind !== 'tour' || b.source !== 'website')
+            const canCancel =
+              b.kind !== 'private' && b.status !== 'cancelled' && (b.kind !== 'tour' || b.source !== 'website')
+            /* Nothing to send without both an invoice and somewhere to send it. */
+            const canSend = Boolean(onSendInvoice) && canViewInvoice && Boolean(b.customer_email)
+            const busy = sendingId === b.raw_id || deletingId === b.raw_id
 
             return (
               <tr
                 key={b.id}
-                style={{
-                  borderBottom: `1px solid ${theme.border}`,
-                  cursor: onEdit ? 'pointer' : 'default',
-                }}
-                /* Opens the booking, not its invoice. Clicking a row used to
-                   jump straight to a PDF, which is the one part of a booking
-                   you cannot change — so the obvious gesture led away from the
-                   thing people wanted. The invoice has its own button. */
+                style={{ borderBottom: `1px solid ${theme.border}`, cursor: onEdit ? 'pointer' : 'default' }}
                 onClick={() => onEdit?.(b)}
                 title={onEdit ? 'Open this booking' : undefined}
               >
-                <td style={{ padding: '10px 12px', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: theme.bronzeDark, fontWeight: 600 }}>
+                <td
+                  style={{
+                    ...CELL,
+                    fontSize: 11.5,
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    color: theme.bronzeDark,
+                    fontWeight: 700,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
                   {kindLabel[b.kind]}
                 </td>
-                <td style={{ padding: '10px 12px', fontSize: 12, color: theme.bronzeDark, fontWeight: 600 }}>
+                <td style={{ ...CELL, fontSize: 13, color: theme.bronzeDark, fontWeight: 600 }}>
                   {b.booking_reference || '—'}
                 </td>
-                <td style={{ padding: '10px 12px' }}>
+                <td style={{ padding: '15px 14px' }}>
                   <SourceBadge source={b.kind === 'private' ? 'website' : b.source} />
                 </td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{b.customer_name}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{b.tour_or_vehicle}</td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>
+                <td style={{ ...CELL, fontWeight: 600 }}>{b.customer_name}</td>
+                <td style={CELL}>{b.tour_or_vehicle}</td>
+                <td style={{ ...CELL, whiteSpace: 'nowrap' }}>
                   {b.date ? format(new Date(b.date), 'd MMM yyyy') : format(new Date(b.created_at), 'd MMM yyyy')}
                 </td>
-                <td style={{ padding: '10px 12px', fontSize: 13, color: theme.text }}>{b.guests || '—'}</td>
-                <td style={{ padding: '10px 12px' }}>
-                  {b.created_by_name ? (
-                    <UserColorBadge name={b.created_by_name} color={b.created_by_color} />
-                  ) : b.kind === 'private' || b.source === 'website' ? (
-                    <span style={{ fontSize: 11, color: theme.textMuted }}>Website</span>
-                  ) : (
-                    <span style={{ color: theme.textMuted, fontSize: 12 }}>—</span>
-                  )}
-                </td>
-                <td style={{ padding: '10px 12px' }}>
+                <td style={CELL}>{b.guests || '—'}</td>
+                {/* Replaces Created By, which named a colleague you already work
+                    beside on a screen whose whole subject is money. */}
+                <td style={{ ...CELL, fontWeight: 700, whiteSpace: 'nowrap' }}>{money(b.amount)}</td>
+                <td style={{ padding: '15px 14px' }}>
                   <StatusBadge status={b.status} />
+                  {canViewInvoice && (
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        marginLeft: 8,
+                        padding: '3px 9px',
+                        borderRadius: 12,
+                        fontSize: 11,
+                        fontWeight: 600,
+                        letterSpacing: '0.06em',
+                        textTransform: 'uppercase',
+                        background: sc.bg,
+                        color: sc.color,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {invoiceLabel}
+                    </span>
+                  )}
                 </td>
-                <td style={{ padding: '10px 12px' }} onClick={(event) => event.stopPropagation()}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    {canViewInvoice && (
-                      <InvoiceBadge
-                        label={invoiceLabel}
-                        colors={sc}
-                        onClick={onViewInvoice ? () => onViewInvoice(b) : undefined}
-                      />
+
+                {/* Three things people do daily stay on the row. Everything
+                    else, including both irreversible actions, is one press
+                    further away. */}
+                <td
+                  style={{ padding: '12px 14px', whiteSpace: 'nowrap', textAlign: 'right' }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    {canViewInvoice && onViewInvoice && (
+                      <RowButton onClick={() => onViewInvoice(b)} title="Open the invoice">
+                        Invoice
+                      </RowButton>
                     )}
-                    {/* An add-on booking already has an invoice PDF the moment it
-                        is created, so the badge alone would leave no way to push
-                        it to Xero. Both are offered until a Xero link exists. */}
-                    {canRaiseInvoice && (
-                      <button
-                        disabled={raisingId === b.raw_id}
-                        onClick={() => onRaiseInvoice?.(b)}
-                        style={{
-                          padding: '4px 10px',
-                          fontSize: 12,
-                          borderRadius: 4,
-                          border: `1px solid ${theme.bronzeBorder}`,
-                          background: theme.surface,
-                          color: theme.bronzeDark,
-                          cursor: 'pointer',
-                          fontFamily: theme.bodyFont,
-                        }}
+                    {!canViewInvoice && canRaiseInvoice && (
+                      <RowButton onClick={() => onRaiseInvoice?.(b)} disabled={raisingId === b.raw_id}>
+                        {raisingId === b.raw_id ? 'Raising…' : 'Raise invoice'}
+                      </RowButton>
+                    )}
+                    {canSend && (
+                      <RowButton
+                        primary
+                        onClick={() => onSendInvoice?.(b)}
+                        disabled={busy}
+                        title={`Email the invoice to ${b.customer_email}`}
                       >
-                        {raisingId === b.raw_id ? '…' : canViewInvoice ? 'Create in Xero' : 'Raise Invoice'}
-                      </button>
+                        {sendingId === b.raw_id ? 'Sending…' : 'Send'}
+                      </RowButton>
                     )}
-                    {!canViewInvoice && !canRaiseInvoice && (
-                      <span style={{ color: theme.textMuted, fontSize: 12 }}>—</span>
-                    )}
+                    {onEdit && <RowButton onClick={() => onEdit(b)}>Edit</RowButton>}
+
+                    <RowMenu
+                      items={[
+                        {
+                          label: 'Create in Xero',
+                          onSelect: () => onRaiseInvoice?.(b),
+                          disabled: !canRaiseInvoice || !canViewInvoice,
+                        },
+                        {
+                          label: 'Cancel booking',
+                          onSelect: () => onCancel?.(b),
+                          disabled: !canCancel || !onCancel,
+                        },
+                        {
+                          label: deletingId === b.raw_id ? 'Deleting…' : 'Delete permanently',
+                          onSelect: () => onDelete?.(b),
+                          danger: true,
+                          disabled: !onDelete,
+                        },
+                      ]}
+                    />
                   </div>
-                </td>
-                <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }} onClick={(event) => event.stopPropagation()}>
-                  {/* The whole row already opens the booking, but nothing said
-                      so — the only labelled actions were Cancel and Delete, so
-                      editing looked like something the dashboard could not do.
-                      Same destination, spelled out. */}
-                  {onEdit && (
-                    <button
-                      onClick={() => onEdit(b)}
-                      title="Open and amend this booking"
-                      style={{
-                        fontSize: 11,
-                        color: theme.bronzeDark,
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontFamily: theme.bodyFont,
-                        fontWeight: 700,
-                        marginRight: 10,
-                      }}
-                    >
-                      Edit
-                    </button>
-                  )}
-                  {canCancel && onCancel && (
-                    <button
-                      onClick={() => onCancel(b)}
-                      style={{ fontSize: 11, color: theme.textMuted, background: 'none', border: 'none', cursor: 'pointer', fontFamily: theme.bodyFont, marginRight: 10 }}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                  {onDelete && (
-                    <button
-                      onClick={() => onDelete(b)}
-                      disabled={deletingId === b.raw_id}
-                      title="Permanently remove this row"
-                      style={{
-                        fontSize: 11,
-                        color: theme.danger,
-                        background: 'none',
-                        border: 'none',
-                        cursor: deletingId === b.raw_id ? 'not-allowed' : 'pointer',
-                        fontFamily: theme.bodyFont,
-                        opacity: deletingId === b.raw_id ? 0.5 : 1,
-                      }}
-                    >
-                      {deletingId === b.raw_id ? 'Deleting…' : 'Delete'}
-                    </button>
-                  )}
                 </td>
               </tr>
             )

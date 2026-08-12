@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getContentSupabaseAdmin } from '@/lib/content-supabase-admin'
+import { notifyNewEnquiry } from '@/lib/enquiry-notify'
 
 const ALLOWED_ORIGINS = [
   'https://www.visitthecape.co.za',
@@ -51,6 +52,20 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (error) throw error
+
+    /* Awaited rather than fired and forgotten: this runs in a serverless
+       function that may be frozen the moment the response is returned, so a
+       detached promise is not reliably delivered. notifyNewEnquiry never
+       throws, so a mail failure cannot cost the customer their enquiry — the
+       row is already saved either way. */
+    await notifyNewEnquiry({
+      name,
+      email,
+      phone: body?.phone ? String(body.phone).trim() : null,
+      experience,
+      message: message || null,
+    })
+
     return NextResponse.json({ ok: true, id: data.id }, { headers })
   } catch (error) {
     console.error('Website enquiry proxy error:', error)

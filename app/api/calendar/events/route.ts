@@ -14,6 +14,7 @@ type FleetBookingRow = {
 type AddOnBookingRow = {
   id: string
   name?: string | null
+  email?: string | null
   tour_date?: string | null
   passengers?: number | null
   status?: string | null
@@ -59,7 +60,7 @@ export async function GET() {
         try {
           return await bookingsDb()
             .from('tag_along_bookings')
-            .select('id,name,tour_date,passengers,status,notes')
+            .select('id,name,email,tour_date,passengers,status,notes')
             .eq('booking_type', 'addon')
             .order('tour_date', { ascending: true })
         } catch (error) {
@@ -75,6 +76,27 @@ export async function GET() {
 
     if (addOnRes.error) console.error('Calendar add-on fetch error:', addOnRes.error)
 
+    /* Client records, keyed on the email every booking already stores, so a
+       company booking can be shown under its trading name. Failing to load
+       them costs the calendar the business names, not the calendar. */
+    const businessByEmail = new Map<string, string>()
+    try {
+      const { data: clients } = await supabaseAdmin
+        .from('customers')
+        .select('email,business_name')
+        .limit(1000)
+      for (const client of clients || []) {
+        const email = String(client.email || '').trim().toLowerCase()
+        const business = String(client.business_name || '').trim()
+        if (email && business) businessByEmail.set(email, business)
+      }
+    } catch (error) {
+      console.error('Calendar client lookup error:', error)
+    }
+
+    const businessFor = (email?: string | null) =>
+      businessByEmail.get(String(email || '').trim().toLowerCase()) || null
+
     const products = Object.fromEntries(((productsRes.data || []) as ProductRow[]).map((product) => [product.id, product]))
 
     const fleetEvents = ((fleetRes.data || []) as FleetBookingRow[])
@@ -83,11 +105,23 @@ export async function GET() {
         const details = parseFleetBookingNotes(row.notes)
         if (!details) return null
 
+        const person = fullCustomerName(details)
+        const business = businessFor(details.customer.email)
+        const registration =
+          vehicleRegistration({ summary: details.vehicle.registrationNumber }) ||
+          details.vehicle.registrationNumber
+
         return {
           id: row.id,
           kind: 'fleet' as const,
           title: details.vehicle.title,
-          subtitle: `${usageTypeLabel(details.rental.usageType)} · ${fullCustomerName(details)} · ${vehicleRegistration({ summary: details.vehicle.registrationNumber }) || details.vehicle.registrationNumber}`,
+          /* Who booked it — the thing the office is asked about when the phone
+             rings. A company shows under its trading name with the person who
+             made the booking after it, because both get used: the invoice says
+             one, the person on the day answers to the other. */
+          customer: business ? `${business} — ${person}` : person,
+          detail: `${usageTypeLabel(details.rental.usageType)} · ${registration}`,
+          subtitle: `${usageTypeLabel(details.rental.usageType)} · ${person} · ${registration}`,
           start: details.rental.startDate,
           end: details.rental.endDate,
         }
@@ -98,6 +132,8 @@ export async function GET() {
       id: departure.id,
       kind: 'tour' as const,
       title: products[departure.product_id]?.title || 'Service departure',
+      customer: null,
+      detail: departure.departure_time ? `Departs ${departure.departure_time}` : 'Scheduled departure',
       subtitle: departure.departure_time ? `Departure at ${departure.departure_time}` : 'Scheduled departure',
       start: departure.departure_date,
       end: departure.departure_date,
@@ -109,6 +145,8 @@ export async function GET() {
         const details = parseAddOnBookingNotes(row.notes)
         const experiences = (details?.lines || []).map((line) => line.name).filter(Boolean)
         const guests = row.passengers || 0
+        const person = row.name || 'Guest'
+        const business = businessFor(row.email)
         return {
           id: row.id,
           kind: 'addon' as const,
@@ -116,9 +154,9 @@ export async function GET() {
              booking covering two experiences names both rather than showing
              the generic "Add-on booking" the row itself carries. */
           title: experiences.join(' + ') || 'Experience',
-          subtitle: [row.name || 'Guest', guests ? `${guests} pax` : null]
-            .filter(Boolean)
-            .join(' · '),
+          customer: business ? `${business} — ${person}` : person,
+          detail: guests ? `${guests} pax` : null,
+          subtitle: [person, guests ? `${guests} pax` : null].filter(Boolean).join(' · '),
           start: row.tour_date as string,
           end: row.tour_date as string,
         }
