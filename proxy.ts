@@ -4,6 +4,8 @@ import { getSupabaseAnonKey, getSupabaseUrl } from '@/lib/supabase-env'
 
 const PUBLIC_PATHS = [
   '/login',
+  // Static fake-data preview. It never calls authenticated admin APIs.
+  '/demo',
   '/api/xero/callback',
   '/api/xero/connect',
   '/api/website/enquiry',
