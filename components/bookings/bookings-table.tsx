@@ -46,9 +46,9 @@ function money(amount: number | null | undefined) {
 }
 
 /* One scale for the table, so a change of mind is a change in one place. */
-const CELL = { padding: '15px 14px', fontSize: 14, color: theme.text } as const
+const CELL = { padding: '14px 12px', fontSize: 14, color: theme.text } as const
 const HEAD = {
-  padding: '12px 14px',
+  padding: '12px 12px',
   textAlign: 'left' as const,
   fontSize: 11.5,
   letterSpacing: '0.12em',
@@ -126,7 +126,7 @@ export function BookingsTable({
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1040 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
             {['Type', 'Reference', 'Source', 'Customer', 'Tour / Vehicle', 'Date', 'Guests', 'Amount', 'Status', ''].map(
@@ -142,6 +142,7 @@ export function BookingsTable({
           {bookings.map((b) => {
             const link = invoiceLinks[b.raw_id]
             const invoiceLabel = invoiceLabelForBooking(b, link)
+            const hasInvoiceState = Boolean(link?.status || b.invoice_status)
             const sc = STATUS_COLORS[invoiceLabel.toUpperCase()] || STATUS_COLORS.DRAFT
             const canViewInvoice = bookingHasViewableInvoice(b, link)
             /* Only until the invoice exists in Xero — after that the link is the
@@ -180,7 +181,7 @@ export function BookingsTable({
                 <td style={{ ...CELL, fontSize: 13, color: theme.bronzeDark, fontWeight: 600 }}>
                   {b.booking_reference || '—'}
                 </td>
-                <td style={{ padding: '15px 14px' }}>
+                <td style={{ padding: '14px 12px' }}>
                   <SourceBadge source={b.kind === 'private' ? 'website' : b.source} />
                 </td>
                 <td style={{ ...CELL, fontWeight: 600 }}>{b.customer_name}</td>
@@ -192,9 +193,14 @@ export function BookingsTable({
                 {/* Replaces Created By, which named a colleague you already work
                     beside on a screen whose whole subject is money. */}
                 <td style={{ ...CELL, fontWeight: 700, whiteSpace: 'nowrap' }}>{money(b.amount)}</td>
-                <td style={{ padding: '15px 14px' }}>
+                <td style={{ padding: '14px 12px' }}>
                   <StatusBadge status={b.status} />
-                  {canViewInvoice && (
+                  {/* Only a real invoice STATE — PAID, AUTHORISED, OVERDUE.
+                      invoiceLabelForBooking falls back to the words "View
+                      invoice" when there is none, which is a button label, not
+                      a status, and printing it here put a meaningless pill
+                      beside CONFIRMED on every row that had an invoice. */}
+                  {hasInvoiceState && (
                     <span
                       style={{
                         display: 'inline-block',
@@ -219,7 +225,7 @@ export function BookingsTable({
                     else, including both irreversible actions, is one press
                     further away. */}
                 <td
-                  style={{ padding: '12px 14px', whiteSpace: 'nowrap', textAlign: 'right' }}
+                  style={{ padding: '12px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>

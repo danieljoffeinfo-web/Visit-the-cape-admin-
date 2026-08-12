@@ -16,6 +16,7 @@ import {
   subMonths,
 } from 'date-fns'
 import { toast } from 'sonner'
+import { DayDialog } from '@/components/calendar/day-dialog'
 import { cardStyle, pageTitle, sectionTitle, theme } from '@/lib/theme'
 
 type CalendarEvent = {
@@ -61,6 +62,11 @@ const TOUR_EVENT_COLOR: EventColor = {
 /* Experiences get their own colour rather than sharing the departure blue.
    A vehicle, a departure and an experience are three different things to have
    to arrange on a given day, and the sheet is read at a glance. */
+/* How many bookings a day cell shows before it says "+N more". Must match the
+   `.cal-event:nth-of-type(n + N+1)` rule in admin-shell.css, which is what
+   actually hides the rest on screen — this only decides what the counter says. */
+const VISIBLE_PER_DAY = 3
+
 const ADDON_EVENT_COLOR: EventColor = {
   bg: 'rgba(93,168,140,0.16)',
   border: 'rgba(93,168,140,0.32)',
@@ -72,6 +78,9 @@ const ADDON_EVENT_COLOR: EventColor = {
 export function CalendarPanel() {
   const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()))
   const [selectedDate, setSelectedDate] = useState(new Date())
+  /* The day whose full list is open. Separate from selectedDate so closing the
+     dialog leaves the day selected in the grid behind it. */
+  const [openDay, setOpenDay] = useState<Date | null>(null)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -214,7 +223,7 @@ export function CalendarPanel() {
                  the rest with CSS rather than never emitting them, so print can
                  reveal the lot. Slicing here meant a printed page silently
                  dropped bookings. */
-              const extraCount = Math.max(0, dayEvents.length - 2)
+              const extraCount = Math.max(0, dayEvents.length - VISIBLE_PER_DAY)
               const isToday = isSameDay(day, new Date())
               const isSelected = isSameDay(day, selectedDate)
               const inCurrentMonth = isSameMonth(day, currentMonth)
@@ -224,9 +233,16 @@ export function CalendarPanel() {
                   key={day.toISOString()}
                   type="button"
                   className="cal-day"
-                  onClick={() => setSelectedDate(day)}
+                  onClick={() => {
+                    setSelectedDate(day)
+                    /* Any day with something on it opens in full. The cell can
+                       only ever show the first few, and which few depends on
+                       how tall a row happens to be — not on how many bookings
+                       the office actually has to work through. */
+                    if (dayEvents.length > 0) setOpenDay(day)
+                  }}
                   style={{
-                    minHeight: 132,
+                    minHeight: 156,
                     borderRadius: 14,
                     border: `1px solid ${isSelected ? theme.bronzeBorder : isToday ? 'rgba(122,169,255,0.34)' : theme.border}`,
                     background: isSelected ? theme.bronzeBg : isToday ? 'rgba(122,169,255,0.08)' : theme.surface,
@@ -295,7 +311,19 @@ export function CalendarPanel() {
                         </span>
                       </div>
                     ))}
-                    {extraCount > 0 ? <div className="cal-more" style={{ fontSize: 11, color: theme.textMuted, paddingLeft: 2 }}>+{extraCount} more</div> : null}
+                    {extraCount > 0 ? (
+                      <div
+                        className="cal-more"
+                        style={{
+                          fontSize: 11.5,
+                          fontWeight: 700,
+                          color: theme.bronzeDark,
+                          paddingLeft: 2,
+                        }}
+                      >
+                        +{extraCount} more — open day
+                      </div>
+                    ) : null}
                   </div>
                 </button>
               )
@@ -360,6 +388,20 @@ export function CalendarPanel() {
           </div>
         </div>
       </div>
+
+      <DayDialog
+        date={openDay}
+        events={
+          openDay
+            ? parsedEvents
+                .filter((event) =>
+                  isWithinInterval(openDay, { start: event.startDate, end: event.endDate }),
+                )
+                .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+            : []
+        }
+        onClose={() => setOpenDay(null)}
+      />
 
       {/* Every booking in the month, day by day, with the detail a day cell has
           no room for. Print-only: on screen the side panel already answers this

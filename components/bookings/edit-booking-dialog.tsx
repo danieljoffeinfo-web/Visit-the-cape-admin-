@@ -13,7 +13,7 @@ import {
 } from '@/lib/theme'
 
 /**
- * Amend a booking.
+ * Edit a booking.
  *
  * Clicking a row used to open the invoice, which is the one thing about a
  * booking you cannot change from there. This is what a row click gets you now;
@@ -248,7 +248,7 @@ export function EditBookingDialog({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
           <div>
             <h3 style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: 19, color: theme.text, margin: 0 }}>
-              {readOnly ? 'Booking details' : 'Amend booking'}
+              {readOnly ? 'Booking details' : 'Edit booking'}
             </h3>
             <p style={{ fontSize: 12, color: theme.textMuted, margin: '4px 0 0' }}>
               {booking.booking_reference || booking.raw_id.slice(0, 8).toUpperCase()} ·{' '}

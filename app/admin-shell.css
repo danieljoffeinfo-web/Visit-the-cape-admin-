@@ -326,7 +326,10 @@
    !important because the event carries an inline display:flex, and an inline
    style beats a stylesheet rule — without it every cell renders every booking
    and the compact grid the panel is built around collapses. */
-.cal-event:nth-of-type(n + 3) {
+/* Three per cell on screen, the rest behind "open day". !important because
+   the event carries an inline display, and inline beats a plain rule.
+   VISIBLE_PER_DAY in calendar-panel.tsx must agree with the 4 here. */
+.cal-event:nth-of-type(n + 4) {
   display: none !important;
 }
 
@@ -346,6 +349,7 @@
   .admin-header,
   .cal-print-button,
   .cal-more,
+  .cal-day-dialog,
   nav,
   button:not(.cal-day) {
     display: none !important;
@@ -413,7 +417,7 @@
      onwards is :nth-of-type and therefore outranks a bare .cal-event even with
      !important on both. */
   .cal-event,
-  .cal-event:nth-of-type(n + 3) {
+  .cal-event:nth-of-type(n + 4) {
     display: flex !important;
     background: #fff !important;
     border: 1px solid #666 !important;

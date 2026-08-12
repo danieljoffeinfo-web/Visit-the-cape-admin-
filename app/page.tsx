@@ -51,15 +51,11 @@ const ActivityLogsPanel = dynamic(
   () => import('@/components/panels/activity-logs-panel').then((m) => ({ default: m.ActivityLogsPanel })),
   { loading: () => <PanelLoader /> },
 )
-const ContentLibraryPanel = dynamic(
-  () => import('@/components/panels/content-library-panel').then((m) => ({ default: m.ContentLibraryPanel })),
-  { loading: () => <PanelLoader /> },
-)
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
   | 'experiences' | 'fleet' | 'accounting' | 'clients' | 'settings'
-  | 'activity-logs' | 'content-library'
+  | 'activity-logs'
 
 const PANEL_STORAGE_KEY = 'vtc_active_panel'
 
@@ -74,7 +70,6 @@ const PANEL_TITLES: Record<Panel, string> = {
   clients: 'Clients',
   settings: 'Settings',
   'activity-logs': 'Activity Logs',
-  'content-library': 'Content Library',
 }
 
 function resolveInitialPanel(raw: string | null): Panel {
@@ -84,6 +79,8 @@ function resolveInitialPanel(raw: string | null): Panel {
   /* Tours & Pricing has been withdrawn pending a restructure. A stored session
      still pointing at it would otherwise land on a blank panel. */
   if (raw === 'tours') return 'dashboard'
+  /* Content Library has been withdrawn too; same reason, same landing. */
+  if (raw === 'content-library') return 'dashboard'
   if (raw && raw in PANEL_TITLES) return raw as Panel
   return 'dashboard'
 }
@@ -245,7 +242,6 @@ function AdminApp() {
           {panel === 'clients' && <ClientsPanel />}
           {panel === 'settings' && <SettingsPanel />}
           {panel === 'activity-logs' && <ActivityLogsPanel />}
-          {panel === 'content-library' && <ContentLibraryPanel />}
         </div>
       </div>
     </div>
