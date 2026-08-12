@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { panelStyle, useAnchoredPopover } from '@/components/ui/popover'
 import { fieldLabel, inputStyle, theme } from '@/lib/theme'
@@ -24,21 +24,34 @@ export function SelectMenu({
   onChange,
   options,
   label,
+  ariaLabel,
   placeholder = 'Select…',
   disabled,
   id,
+  compact,
+  tone,
 }: {
   value: string
   onChange: (value: string) => void
   options: SelectOption[]
   label?: string
+  /**
+   * Accessible name where no visible label fits — a control in a table cell,
+   * which must still say WHICH row it belongs to when read aloud.
+   */
+  ariaLabel?: string
   placeholder?: string
   disabled?: boolean
   id?: string
+  /** Tighter box, for use inside a table row rather than a form. */
+  compact?: boolean
+  /** Colour for the closed control's text, where the value carries meaning. */
+  tone?: string
 }) {
   const { open, setOpen, mounted, position, triggerRef, panelRef } =
     useAnchoredPopover<HTMLButtonElement>(260)
   const [activeIndex, setActiveIndex] = useState(0)
+  const listboxId = useId()
   const typeahead = useRef({ term: '', at: 0 })
   const selectedIndex = options.findIndex((option) => option.value === value)
   const selected = selectedIndex >= 0 ? options[selectedIndex] : null
@@ -129,7 +142,9 @@ export function SelectMenu({
       onClick={() => !disabled && setOpen(!open)}
       onKeyDown={onKeyDown}
       role="combobox"
+      aria-label={ariaLabel}
       aria-expanded={open}
+      aria-controls={open ? listboxId : undefined}
       aria-haspopup="listbox"
       style={{
         ...inputStyle,
@@ -140,7 +155,8 @@ export function SelectMenu({
         textAlign: 'left',
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.55 : 1,
-        borderColor: open ? theme.bronzeBorder : theme.border,
+        borderColor: open ? theme.bronzeBorder : theme.borderStrong,
+        ...(compact ? { padding: '6px 10px', fontSize: 12.5, fontWeight: 700, width: 'auto', minWidth: 118 } : {}),
       }}
     >
       <span
@@ -148,7 +164,7 @@ export function SelectMenu({
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          color: selected ? theme.text : theme.textFaint,
+          color: tone || (selected ? theme.text : theme.textFaint),
         }}
       >
         {selected ? selected.label : placeholder}
@@ -173,7 +189,9 @@ export function SelectMenu({
       ? createPortal(
           <div
             ref={panelRef}
+            id={listboxId}
             role="listbox"
+            aria-label={ariaLabel}
             style={{
               ...panelStyle,
               top: position.top,

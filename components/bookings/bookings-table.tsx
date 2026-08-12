@@ -5,6 +5,7 @@ import type { BookingInvoiceLink, UnifiedBooking } from '@/lib/bookings'
 import { bookingHasViewableInvoice, invoiceLabelForBooking } from '@/lib/bookings'
 import { SourceBadge } from '@/components/user-badge'
 import { RowMenu } from '@/components/ui/row-menu'
+import { SelectMenu } from '@/components/ui/select-menu'
 import { theme } from '@/lib/theme'
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -212,29 +213,33 @@ export function BookingsTable({
                 <td style={{ ...CELL, fontWeight: 700, whiteSpace: 'nowrap' }}>{money(b.amount)}</td>
                 <td style={{ padding: '14px 12px' }}>
                   {canChangePayment ? (
-                    <select
-                      aria-label={`Payment status for ${b.customer_name}`}
+                    /* The console's own dropdown, not the browser's. Every
+                       other select in the admin was replaced for the same
+                       reason and one native menu here would stand out as
+                       plainly as it did there. The accessible name carries the
+                       customer, because "Pending" read aloud on its own does
+                       not say which booking it belongs to. */
+                    <SelectMenu
+                      compact
+                      ariaLabel={`Payment status for ${b.customer_name}`}
                       value={operationalStatus}
                       disabled={statusUpdatingId === b.raw_id}
-                      onChange={(event) => onPaymentStatusChange?.(
-                        b,
-                        event.target.value as 'pending' | 'paid' | 'cancelled',
-                      )}
-                      style={{
-                        padding: '6px 28px 6px 9px',
-                        borderRadius: 6,
-                        border: `1px solid ${theme.borderStrong}`,
-                        background: theme.surface,
-                        color: operationalStatus === 'paid' ? theme.success : operationalStatus === 'cancelled' ? theme.danger : theme.bronzeDark,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        fontFamily: theme.bodyFont,
-                      }}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="paid">Paid</option>
-                      <option value="cancelled">Cancelled</option>
-                    </select>
+                      onChange={(value) =>
+                        onPaymentStatusChange?.(b, value as 'pending' | 'paid' | 'cancelled')
+                      }
+                      tone={
+                        operationalStatus === 'paid'
+                          ? theme.success
+                          : operationalStatus === 'cancelled'
+                            ? theme.danger
+                            : theme.bronzeDark
+                      }
+                      options={[
+                        { value: 'pending', label: 'Pending', hint: 'Not yet received' },
+                        { value: 'paid', label: 'Paid', hint: 'Payment confirmed here' },
+                        { value: 'cancelled', label: 'Cancelled', hint: 'Kept as a record' },
+                      ]}
+                    />
                   ) : (
                     <span
                       style={{
@@ -263,6 +268,20 @@ export function BookingsTable({
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    {/* Emailing an invoice is a daily job and was asked for as a
+                        button, so it stays on the row rather than behind the
+                        menu. Everything rarer, and everything irreversible,
+                        sits one press further away. */}
+                    {canSend && (
+                      <RowButton
+                        primary
+                        onClick={() => onSendInvoice?.(b)}
+                        disabled={busy}
+                        title={`Email the invoice to ${b.customer_email}`}
+                      >
+                        {sendingId === b.raw_id ? 'Sending…' : 'Send invoice'}
+                      </RowButton>
+                    )}
                     {onEdit && <RowButton onClick={() => onEdit(b)}>Open booking</RowButton>}
 
                     <RowMenu
@@ -276,11 +295,6 @@ export function BookingsTable({
                           label: raisingId === b.raw_id ? 'Creating invoice…' : 'Create invoice in Xero',
                           onSelect: () => onRaiseInvoice?.(b),
                           disabled: !canRaiseInvoice,
-                        },
-                        {
-                          label: sendingId === b.raw_id ? 'Emailing invoice…' : 'Email invoice to customer',
-                          onSelect: () => onSendInvoice?.(b),
-                          disabled: !canSend || busy,
                         },
                         {
                           label: 'Cancel booking',

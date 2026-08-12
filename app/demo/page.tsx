@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Sidebar } from '@/components/sidebar'
+import { SelectMenu } from '@/components/ui/select-menu'
 import { UserColorBadge } from '@/components/user-badge'
 import type { AdminUser } from '@/lib/auth-types'
 import styles from './demo.module.css'
@@ -155,7 +156,7 @@ function BookingsDemo() {
       <div className={styles.tabs}><b>All</b><span>Tours</span><span>Experiences</span><span>Internal</span><span>Website</span></div>
       <section className={styles.card}>
         <div className={styles.tableWrap}><table className={styles.table}><thead><tr>{['Type','Reference','Customer','Tour / vehicle','Date','Amount','Payment',''].map((h) => <th key={h}>{h}</th>)}</tr></thead>
-          <tbody>{sampleBookings.map((row, rowIndex) => <tr key={row[1]}>{row.map((value) => <td key={value}>{value}</td>)}<td><select aria-label={`Payment status for ${row[2]}`} className={styles.statusSelect} value={statuses[rowIndex]} onChange={(event) => setStatuses((current) => current.map((status, index) => index === rowIndex ? event.target.value as 'pending' | 'paid' | 'cancelled' : status))}><option value="pending">Pending</option><option value="paid">Paid</option><option value="cancelled">Cancelled</option></select></td><td><button className={styles.openButton}>Open booking</button><button className={styles.moreButton} aria-label="More actions">•••</button></td></tr>)}</tbody>
+          <tbody>{sampleBookings.map((row, rowIndex) => <tr key={row[1]}>{row.map((value) => <td key={value}>{value}</td>)}<td><SelectMenu compact ariaLabel={`Payment status for ${row[2]}`} value={statuses[rowIndex]} onChange={(value) => setStatuses((current) => current.map((status, index) => index === rowIndex ? value as 'pending' | 'paid' | 'cancelled' : status))} options={[{ value: 'pending', label: 'Pending' }, { value: 'paid', label: 'Paid' }, { value: 'cancelled', label: 'Cancelled' }]} /></td><td><button className={styles.openButton}>Open booking</button><button className={styles.moreButton} aria-label="More actions">•••</button></td></tr>)}</tbody>
         </table></div>
       </section>
     </div>
