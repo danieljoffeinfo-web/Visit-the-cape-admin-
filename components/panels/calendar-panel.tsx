@@ -149,9 +149,25 @@ export function CalendarPanel() {
           <div style={{ minWidth: 180, textAlign: 'center', fontFamily: theme.headingFont, fontWeight: 800, fontSize: 24, color: theme.text }}>{format(currentMonth, 'MMMM yyyy')}</div>
           <button onClick={() => setCurrentMonth((current) => addMonths(current, 1))} style={navButton}>→</button>
         </div>
+        <button
+          type="button"
+          className="cal-print-button"
+          onClick={() => window.print()}
+          style={{ ...navButton, width: 'auto', padding: '0 16px', borderRadius: 999 }}
+          title="Print this month with every booking listed in full"
+        >
+          Print month
+        </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.75fr) minmax(320px, 0.85fr)', gap: 20, alignItems: 'start' }} className="admin-grid-calendar">
+      {/* Paper only. The screen names the month in the nav pill, which is a
+          control and is hidden when printing. */}
+      <div className="cal-print-header">
+        <h2>{format(currentMonth, 'MMMM yyyy')} — Visit The Cape</h2>
+        <span>Printed {format(new Date(), 'd MMM yyyy, HH:mm')}</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.75fr) minmax(320px, 0.85fr)', gap: 20, alignItems: 'start' }} className="admin-grid-calendar cal-main">
         <div style={cardStyle}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
             <div>
@@ -170,13 +186,17 @@ export function CalendarPanel() {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
+          <div className="cal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 8 }}>
             {calendarDays.map((day) => {
               const dayEvents = parsedEvents
                 .filter((event) => isWithinInterval(day, { start: event.startDate, end: event.endDate }))
                 .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-              const visibleEvents = dayEvents.slice(0, 2)
-              const extraCount = Math.max(0, dayEvents.length - visibleEvents.length)
+              /* Every event is rendered. The screen still shows two — the cell
+                 is small and the side panel carries the detail — but it hides
+                 the rest with CSS rather than never emitting them, so print can
+                 reveal the lot. Slicing here meant a printed page silently
+                 dropped bookings. */
+              const extraCount = Math.max(0, dayEvents.length - 2)
               const isToday = isSameDay(day, new Date())
               const isSelected = isSameDay(day, selectedDate)
               const inCurrentMonth = isSameMonth(day, currentMonth)
@@ -185,6 +205,7 @@ export function CalendarPanel() {
                 <button
                   key={day.toISOString()}
                   type="button"
+                  className="cal-day"
                   onClick={() => setSelectedDate(day)}
                   style={{
                     minHeight: 110,
@@ -208,9 +229,10 @@ export function CalendarPanel() {
                   </div>
 
                   <div style={{ display: 'grid', gap: 6 }}>
-                    {visibleEvents.map((event) => (
+                    {dayEvents.map((event) => (
                       <div
                         key={`${day.toISOString()}-${event.id}`}
+                        className="cal-event"
                         style={{
                           display: 'flex',
                           alignItems: 'center',
@@ -228,7 +250,7 @@ export function CalendarPanel() {
                         </span>
                       </div>
                     ))}
-                    {extraCount > 0 ? <div style={{ fontSize: 11, color: theme.textMuted, paddingLeft: 2 }}>+{extraCount} more</div> : null}
+                    {extraCount > 0 ? <div className="cal-more" style={{ fontSize: 11, color: theme.textMuted, paddingLeft: 2 }}>+{extraCount} more</div> : null}
                   </div>
                 </button>
               )
@@ -292,6 +314,46 @@ export function CalendarPanel() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Every booking in the month, day by day, with the detail a day cell has
+          no room for. Print-only: on screen the side panel already answers this
+          for the selected day, but a printout has no selected day and nothing
+          to click, so without this it is a grid of names with no dates,
+          vehicles or customers against them. */}
+      <div className="cal-agenda">
+        <h3>Bookings in {format(currentMonth, 'MMMM yyyy')}</h3>
+        {monthEvents.length === 0 ? (
+          <p>No bookings this month.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Dates</th>
+                <th>Type</th>
+                <th>Vehicle / Tour</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...monthEvents]
+                .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+                .map((event) => (
+                  <tr key={`agenda-${event.id}`}>
+                    <td>
+                      {format(event.startDate, 'EEE d MMM')}
+                      {!isSameDay(event.startDate, event.endDate)
+                        ? ` \u2192 ${format(event.endDate, 'EEE d MMM')}`
+                        : ''}
+                    </td>
+                    <td>{event.kind === 'fleet' ? 'Fleet' : 'Departure'}</td>
+                    <td>{event.label}</td>
+                    <td>{event.subtitle || '\u2014'}</td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )

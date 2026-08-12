@@ -188,6 +188,10 @@ export function ClientsPanel() {
               placeholder="Anything worth remembering next time they book"
             />
           </div>
+          <p style={{ fontSize: 12, color: theme.textMuted, margin: '0 0 14px' }}>
+            Saving only adds them here. Nothing goes to Xero unless you press Add to Xero on
+            their row, and you never have to.
+          </p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button onClick={save} disabled={saving} style={primaryButton}>
               {saving ? 'Saving…' : draft.id ? 'Save changes' : 'Add client'}

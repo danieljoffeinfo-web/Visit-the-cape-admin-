@@ -304,3 +304,169 @@
     display: none;
   }
 }
+
+/* ─── Print ──────────────────────────────────────────────────────────────
+ *
+ * Printing this dashboard used to produce the screen: a dark sidebar down
+ * the left, a day grid clipped to two bookings a cell, and the detail panel
+ * showing whichever single day happened to be selected. Nothing you could
+ * hand to a driver.
+ *
+ * On paper the chrome goes, every booking in a cell is shown rather than the
+ * first two, and the month is listed out in full underneath.
+ */
+.cal-print-header,
+.cal-agenda {
+  display: none;
+}
+
+/* On screen a day cell shows the first two bookings and a "+N more" count;
+   the rest are in the DOM but hidden, so printing can reveal them without the
+   grid having to re-render.
+   !important because the event carries an inline display:flex, and an inline
+   style beats a stylesheet rule — without it every cell renders every booking
+   and the compact grid the panel is built around collapses. */
+.cal-event:nth-of-type(n + 3) {
+  display: none !important;
+}
+
+@media print {
+  /* Ink, not the app's dark shell. Browsers drop backgrounds when printing
+     unless asked, so anything relying on a dark background for contrast has
+     to be re-stated in black on white. */
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Controls, navigation and anything that only makes sense with a cursor. */
+  .admin-sidebar,
+  .admin-sidebar-backdrop,
+  .admin-header,
+  .cal-print-button,
+  .cal-more,
+  nav,
+  button:not(.cal-day) {
+    display: none !important;
+  }
+
+  /* The shell is a sidebar-plus-content layout; with the sidebar gone it has
+     nothing left to lay out. */
+  .admin-shell {
+    display: block !important;
+  }
+  .admin-main,
+  .admin-content {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  .cal-print-header {
+    display: flex !important;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 2px solid #000;
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+  }
+  .cal-print-header h2 {
+    font-size: 18pt;
+    font-weight: 800;
+    margin: 0;
+  }
+  .cal-print-header span {
+    font-size: 9pt;
+    color: #444;
+  }
+
+  /* The side panel is for a selected day, and print has no selection. The
+     agenda below replaces it with the whole month. */
+  .cal-main {
+    display: block !important;
+  }
+  .cal-main > div:last-child {
+    display: none !important;
+  }
+
+  .cal-grid {
+    gap: 2px !important;
+  }
+
+  /* Day cells: every booking, wrapped rather than truncated. On screen these
+     are one ellipsised line each because the cell is 100px tall; on paper the
+     cell can grow and the text is the whole point. */
+  .cal-day {
+    min-height: 0 !important;
+    height: auto !important;
+    border: 1px solid #999 !important;
+    background: #fff !important;
+    opacity: 1 !important;
+    padding: 4px !important;
+    break-inside: avoid;
+  }
+  /* Both selectors, because the screen rule that hides the third booking
+     onwards is :nth-of-type and therefore outranks a bare .cal-event even with
+     !important on both. */
+  .cal-event,
+  .cal-event:nth-of-type(n + 3) {
+    display: flex !important;
+    background: #fff !important;
+    border: 1px solid #666 !important;
+    border-radius: 3px !important;
+    padding: 2px 4px !important;
+  }
+  .cal-event span:last-child {
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+    font-size: 7.5pt !important;
+    color: #000 !important;
+    line-height: 1.25;
+  }
+
+  .cal-agenda {
+    display: block !important;
+    /* No forced page break: a quiet month fits under the grid and a busy one
+       flows over on its own. Forcing it wasted a sheet either way. */
+    margin-top: 14px;
+  }
+  .cal-agenda h3 {
+    font-size: 13pt;
+    margin: 0 0 8px;
+  }
+  .cal-agenda table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+  }
+  .cal-agenda th,
+  .cal-agenda td {
+    border: 1px solid #999;
+    padding: 4px 6px;
+    text-align: left;
+    vertical-align: top;
+    color: #000;
+  }
+  .cal-agenda th {
+    background: #eee !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    font-size: 8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .cal-agenda tr {
+    break-inside: avoid;
+  }
+
+  /* Seven columns of day cells need the long edge of the page. */
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+}

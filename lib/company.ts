@@ -21,6 +21,20 @@ export const COMPANY = {
   vatNote: 'All amounts are VAT inclusive',
 } as const
 
+/**
+ * Every invoice this dashboard emails is copied here.
+ *
+ * A blind copy rather than a visible one: the customer has no reason to see the
+ * accounts address on their invoice, and a reply-all from a client should reach
+ * the person who sent it, not the archive.
+ *
+ * Overridable by env so it can be pointed elsewhere without a deploy, but it
+ * has a real default so the copy happens whether or not anyone remembers to set
+ * the variable.
+ */
+export const INVOICE_ARCHIVE_EMAIL =
+  process.env.INVOICE_ARCHIVE_EMAIL?.trim() || 'tyron@drivingforce.biz'
+
 /** Invoice palette sampled from the approved VC invoice template. */
 export const INVOICE_COLORS = {
   bronze: { r: 0.71, g: 0.43, b: 0.18 },      // #b56e2d

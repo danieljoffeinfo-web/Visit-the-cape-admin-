@@ -1,5 +1,5 @@
 import { Resend } from 'resend'
-import { COMPANY } from '@/lib/company'
+import { COMPANY, INVOICE_ARCHIVE_EMAIL } from '@/lib/company'
 import { formatMoney } from '@/lib/invoice-pdf'
 import type { AdminUser } from '@/lib/auth-types'
 
@@ -74,7 +74,11 @@ export async function emailInvoiceToCreator(input: {
     const resend = new Resend(apiKey)
     const { error } = await resend.emails.send({
       from: fromEmail,
-      to: [input.admin.email],
+      /* The admin who took the booking, plus the standing archive address, so
+         every invoice this dashboard generates lands somewhere central whether
+         or not it is ever sent on to the customer. Deduped: when the archive
+         address IS the admin, one copy is enough. */
+      to: [...new Set([input.admin.email, INVOICE_ARCHIVE_EMAIL].filter(Boolean))],
       subject: input.subjectLine,
       html,
       text,
@@ -180,6 +184,7 @@ export async function emailInvoiceToClient(input: {
     const { error } = await resend.emails.send({
       from: fromEmail,
       to,
+      ...(INVOICE_ARCHIVE_EMAIL ? { bcc: INVOICE_ARCHIVE_EMAIL } : {}),
       ...(input.replyTo ? { replyTo: input.replyTo } : {}),
       subject: input.subjectLine,
       html,
