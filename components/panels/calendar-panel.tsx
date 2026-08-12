@@ -167,7 +167,7 @@ export function CalendarPanel() {
         <div>
           <h1 style={pageTitle}>Calendar</h1>
           <p style={{ color: theme.textMuted, fontSize: 13, margin: 0, maxWidth: 720 }}>
-            Cleaner monthly planner for fleet vehicles and service departures. Click any day to view the full booking details on the right.
+            Vehicles, experiences and service departures. Click any day to open everything booked on it.
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 999, background: theme.surfaceMuted, border: `1px solid ${theme.border}` }}>
@@ -198,7 +198,7 @@ export function CalendarPanel() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
             <div>
               <div style={sectionTitle}>Monthly planner</div>
-              <div style={subtleText}>Compact day cells. Booking details stay in the side panel instead of filling the whole grid.</div>
+              <div style={subtleText}>Each cell shows the first three bookings. Click a day for the rest.</div>
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <LegendPill label="Fleet vehicle" palette={FLEET_EVENT_COLORS[0]} />
@@ -218,11 +218,10 @@ export function CalendarPanel() {
               const dayEvents = parsedEvents
                 .filter((event) => isWithinInterval(day, { start: event.startDate, end: event.endDate }))
                 .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-              /* Every event is rendered. The screen still shows two — the cell
-                 is small and the side panel carries the detail — but it hides
-                 the rest with CSS rather than never emitting them, so print can
-                 reveal the lot. Slicing here meant a printed page silently
-                 dropped bookings. */
+              /* Every event is rendered. The screen shows the first three and
+                 hides the rest with CSS rather than never emitting them, so
+                 print can reveal the lot and the day dialog has them all.
+                 Slicing here meant a printed page silently dropped bookings. */
               const extraCount = Math.max(0, dayEvents.length - VISIBLE_PER_DAY)
               const isToday = isSameDay(day, new Date())
               const isSelected = isSameDay(day, selectedDate)
@@ -283,6 +282,7 @@ export function CalendarPanel() {
                       >
                         <span style={{ minWidth: 0, display: 'block' }}>
                           <span
+                            className="cal-event-label"
                             style={{
                               display: 'block',
                               fontSize: 11.5,
@@ -404,10 +404,10 @@ export function CalendarPanel() {
       />
 
       {/* Every booking in the month, day by day, with the detail a day cell has
-          no room for. Print-only: on screen the side panel already answers this
-          for the selected day, but a printout has no selected day and nothing
-          to click, so without this it is a grid of names with no dates,
-          vehicles or customers against them. */}
+          no room for. Print-only: on screen the day dialog answers this for
+          whichever day was clicked, but a printout has no selected day and
+          nothing to click, so without this it is a grid of names with no
+          dates, vehicles or amounts against them. */}
       <div className="cal-agenda">
         <h3>Bookings in {format(currentMonth, 'MMMM yyyy')}</h3>
         {monthEvents.length === 0 ? (

@@ -424,13 +424,25 @@
     border-radius: 3px !important;
     padding: 2px 4px !important;
   }
-  .cal-event span:last-child {
+  /* Targeted by class, not by position. This was `.cal-event span:last-child`,
+     written when an event was a dot span followed by a text span. The event is
+     now a label over a meta line, and last-child matched only the meta — so the
+     client's name kept the nowrap and ellipsis it carries on screen and printed
+     cut off, on the one output where the whole name is the point. */
+  .cal-event-label,
+  .cal-event-meta {
     overflow: visible !important;
     white-space: normal !important;
     text-overflow: clip !important;
-    font-size: 7.5pt !important;
     color: #000 !important;
     line-height: 1.25;
+  }
+  .cal-event-label {
+    font-size: 7.5pt !important;
+    font-weight: 700 !important;
+  }
+  .cal-event-meta {
+    font-size: 6.5pt !important;
   }
 
   .cal-agenda {
