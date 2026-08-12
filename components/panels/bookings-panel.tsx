@@ -156,7 +156,14 @@ export function BookingsPanel({
 
   async function deleteBooking(booking: UnifiedBooking) {
     const label = booking.customer_name || booking.booking_reference || 'this row'
-    if (!confirm(`Permanently delete ${label}? This cannot be undone.`)) return
+    /* A website booking that has been paid is the only record that money came
+       in, so deleting it says so out loud. Cancel keeps the row; delete does
+       not. Still allowed — clearing out test rows is exactly what this is for. */
+    const paid = (booking.payment_status || '').toLowerCase() === 'paid'
+    const warning = paid
+      ? `\n\n${label} has PAID. Deleting removes the record of that payment. Cancel the booking instead if you only want to stop it going ahead.`
+      : ''
+    if (!confirm(`Permanently delete ${label}? This cannot be undone.${warning}`)) return
 
     setDeletingId(booking.raw_id)
     try {

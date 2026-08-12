@@ -286,6 +286,59 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: 'Private enquiries are read-only in bookings hub' }, { status: 400 })
   }
 
+  if (kind === 'website') {
+    /* Cancel only. The details are the customer's own, entered on the website
+       and paid against, so the edit dialog holds them read-only and the one
+       state the office needs to set is "this is not happening".
+       private_tour_bookings has no status column — payment_status is the only
+       state the PayGate flow tracks, so the cancellation records itself there.
+       Falling through to the branch below would look the row up in
+       tag_along_bookings, where it has never existed, and answer 404. */
+    if (updates.status !== 'cancelled') {
+      return NextResponse.json(
+        { error: 'Website bookings can only be cancelled from the bookings hub' },
+        { status: 400 },
+      )
+    }
+
+    const content = getContentSupabaseAdmin()
+    const { data: existingWebsite } = await content
+      .from('private_tour_bookings')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (!existingWebsite) {
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+    }
+
+    const { data, error } = await content
+      .from('private_tour_bookings')
+      .update({ payment_status: 'cancelled' })
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) {
+      console.error('Website booking cancel error:', error)
+      return NextResponse.json({ error: 'Failed to cancel booking' }, { status: 500 })
+    }
+
+    await logActivityServer({
+      admin,
+      action: 'Cancelled website booking',
+      entityType: 'website_booking',
+      entityId: id,
+      entityLabel: existingWebsite.customer_name
+        ? `${existingWebsite.customer_name} — ${existingWebsite.tour_name || 'Private tour'}`
+        : id,
+      oldValue: existingWebsite,
+      newValue: data,
+    })
+
+    return NextResponse.json({ booking: normalizePrivateTourBookingRow(data) })
+  }
+
   const { data: existing } = await bookingsDb()
     .from('tag_along_bookings')
     .select('*')
@@ -385,8 +438,18 @@ export async function DELETE(request: NextRequest) {
         .eq('booking_type', 'fleet')
       if (error) throw error
       await supabaseAdmin.from('xero_invoice_links').delete().eq('booking_id', id)
-    } else if (kind === 'tour' || kind === 'internal') {
+    } else if (kind === 'tour' || kind === 'internal' || kind === 'addon') {
       const { error } = await bookingsDb().from('tag_along_bookings').delete().eq('id', id)
+      if (error) throw error
+      await supabaseAdmin.from('xero_invoice_links').delete().eq('booking_id', id)
+    } else if (kind === 'website') {
+      /* Owned by the content project, not this one — the website's PayGate flow
+         writes them. Deleting through supabaseAdmin would report success while
+         deleting nothing, since the row is not in that database at all. */
+      const { error } = await getContentSupabaseAdmin()
+        .from('private_tour_bookings')
+        .delete()
+        .eq('id', id)
       if (error) throw error
       await supabaseAdmin.from('xero_invoice_links').delete().eq('booking_id', id)
     } else {
