@@ -297,6 +297,14 @@ export async function PATCH(request: NextRequest) {
   }
 
   const allowed: Record<string, unknown> = {}
+  /* Who and when, not just how much. Correcting a misspelled name or a wrong
+     date used to mean cancelling the booking and taking it again. Absent means
+     "leave alone", so a form sending one field cannot blank the others. */
+  if (updates.customerName !== undefined) allowed.name = String(updates.customerName).trim()
+  if (updates.customerEmail !== undefined) allowed.email = String(updates.customerEmail).trim()
+  if (updates.customerPhone !== undefined) allowed.phone = String(updates.customerPhone).trim() || null
+  if (updates.tourName !== undefined) allowed.tour_name = String(updates.tourName).trim()
+  if (updates.tourDate !== undefined) allowed.tour_date = String(updates.tourDate) || null
   if (updates.status !== undefined) allowed.status = updates.status
   if (updates.payment_status !== undefined) allowed.payment_status = updates.payment_status
   if (updates.invoice_status !== undefined) allowed.invoice_status = updates.invoice_status

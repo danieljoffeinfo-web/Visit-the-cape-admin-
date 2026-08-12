@@ -95,7 +95,10 @@ const TYPOGRAPHIC: [RegExp, string][] = [
 
 function safeText<T extends string | null | undefined>(value: T): T {
   if (typeof value !== 'string') return value
-  let out = value
+  /* Widened to a plain string for the loop. Reassigning the narrowed generic
+     does not typecheck: replace() returns string, and T could be a narrower
+     literal type than that. */
+  let out: string = value
   for (const [pattern, replacement] of TYPOGRAPHIC) out = out.replace(pattern, replacement)
   return out as T
 }

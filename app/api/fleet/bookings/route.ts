@@ -11,6 +11,7 @@ import { logActivityServer } from '@/lib/activity-log-server'
 import { revalidateFleetAvailabilityOnWebsite } from '@/lib/revalidate-fleet'
 import { buildFleetInvoicePdf } from '@/lib/invoice-pdf'
 import { emailInvoiceToCreator } from '@/lib/invoice-email'
+import { recordClientFromBooking } from '@/lib/clients-server'
 import { nextInvoiceNumber } from '@/lib/invoice-numbers'
 
 export async function GET(request: NextRequest) {
@@ -261,23 +262,20 @@ export async function POST(request: NextRequest) {
       console.error('Fleet booking invoice stamp error:', invoiceStampError)
     }
 
-    // The customers table is keyed on email, so only track customers we can key.
-    let customerBookingCount: number | null = null
-    if (customerEmail) {
-      const { count } = await supabaseAdmin
-        .from('tour_bookings')
-        .select('id', { count: 'exact', head: true })
-        .eq('email', customerEmail)
-      customerBookingCount = count ?? null
-
-      await supabaseAdmin.from('customers').upsert({
-        name: customerName,
-        email: customerEmail,
-        phone: phone ? String(phone).trim() : null,
-        total_bookings: customerBookingCount || 1,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'email' })
-    }
+    /* Record the client. This used to be an upsert with onConflict 'email',
+       which needs a unique constraint on that bare column — there wasn't one,
+       so it never reliably landed and the Clients list read as empty however
+       many bookings had been taken. recordClientFromBooking reads first and
+       then writes, so it needs no constraint and, more importantly, will not
+       blank a phone number captured on an earlier booking just because this
+       form left the field empty. */
+    const clientRecord = await recordClientFromBooking({
+      firstName: String(firstName),
+      surname: String(surname),
+      email: customerEmail,
+      phone: phone ? String(phone) : null,
+      accountNumber: customerAccount,
+    })
 
     // Xero is opt-in. By default the invoice exists only in the admin, where it
     // can be downloaded and is emailed to whoever created the booking.
@@ -294,17 +292,18 @@ export async function POST(request: NextRequest) {
         })
       : { connected: false as const, invoice: null }
 
+    /* Xero details land on the client record only once the invoice exists.
+       Not a second booking — recordClientFromBooking increments the count, so
+       this would double it. The Xero columns are patched directly instead. */
     if (invoiceResult.invoice && customerEmail) {
-      await supabaseAdmin.from('customers').upsert({
-        name: customerName,
-        email: customerEmail,
-        phone: phone ? String(phone).trim() : null,
-        total_bookings: customerBookingCount || 1,
-        xero_contact_id: invoiceResult.invoice.contact?.contactID || null,
-        xero_last_status: invoiceResult.invoice.status || null,
-        xero_total_invoiced: totalAmount,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'email' })
+      await supabaseAdmin
+        .from('customers')
+        .update({
+          xero_contact_id: invoiceResult.invoice.contact?.contactID || null,
+          xero_last_status: invoiceResult.invoice.status || null,
+          updated_at: new Date().toISOString(),
+        })
+        .ilike('email', customerEmail)
     }
 
     // Generate the invoice PDF and email a copy to the admin who booked it.
@@ -419,7 +418,31 @@ export async function PATCH(request: NextRequest) {
     const updatingAmount = nextAmount !== null
     const updatingPaymentReceived = typeof paymentReceivedRaw === 'boolean'
 
-    if (!updatingAmount && !updatingPaymentReceived) {
+    /* Amending the rest of the booking, not just its price.
+     *
+     * This route used to accept an amount and a payment flag and nothing else,
+     * which is why clicking a booking could only ever show you the invoice —
+     * there was no way to correct a date, a name or a passenger count without
+     * cancelling and rebooking. Every field below is optional; absent means
+     * "leave it alone" rather than "clear it", so a form that sends one change
+     * cannot wipe the rest of the record. */
+    const patchable = {
+      firstName: body?.firstName,
+      surname: body?.surname,
+      email: body?.email,
+      phone: body?.phone,
+      accountNumber: body?.accountNumber,
+      startDate: body?.startDate,
+      endDate: body?.endDate,
+      seatsBooked: body?.seatsBooked,
+      usageType: body?.usageType,
+      depositAmount: body?.depositAmount,
+      notes: body?.notes,
+    }
+    const editedFields = Object.entries(patchable).filter(([, v]) => v !== undefined)
+    const updatingDetails = editedFields.length > 0
+
+    if (!updatingAmount && !updatingPaymentReceived && !updatingDetails) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
     }
 
@@ -440,17 +463,67 @@ export async function PATCH(request: NextRequest) {
     }
 
     const parsedNotes = parseFleetBookingNotes(bookingRow.notes)
+
+    /* Dates drive the rental length, which drives the derived day rate, so they
+       are resolved before anything that depends on them. */
+    const nextStart = patchable.startDate ? String(patchable.startDate) : parsedNotes?.rental.startDate
+    const nextEnd = patchable.endDate ? String(patchable.endDate) : parsedNotes?.rental.endDate
+    if (nextStart && nextEnd) {
+      const s0 = parseISO(nextStart)
+      const e0 = parseISO(nextEnd)
+      if (!isValid(s0) || !isValid(e0) || e0 < s0) {
+        return NextResponse.json({ error: 'Booking dates are invalid' }, { status: 400 })
+      }
+    }
+    const nextDays =
+      nextStart && nextEnd
+        ? differenceInCalendarDays(parseISO(nextEnd), parseISO(nextStart)) + 1
+        : parsedNotes?.rental.days ?? 1
+
+    const totalAfter = updatingAmount ? nextAmount! : parsedNotes?.rental.totalAmount ?? 0
     // Editing the total re-derives the per-day rate so total === dailyRate x days.
-    const nextDailyRate = updatingAmount && parsedNotes && parsedNotes.rental.days > 0
-      ? nextAmount! / parsedNotes.rental.days
-      : parsedNotes?.rental.dailyRate ?? null
+    const nextDailyRate = nextDays > 0 ? totalAfter / nextDays : parsedNotes?.rental.dailyRate ?? null
+
+    const pick = (value: unknown, fallback: string | null | undefined) =>
+      value === undefined ? fallback ?? null : String(value).trim() || null
+
     const updatedNotes = parsedNotes
       ? JSON.stringify({
           ...parsedNotes,
+          customer: {
+            ...parsedNotes.customer,
+            firstName: patchable.firstName === undefined
+              ? parsedNotes.customer.firstName
+              : String(patchable.firstName).trim(),
+            surname: patchable.surname === undefined
+              ? parsedNotes.customer.surname
+              : String(patchable.surname).trim(),
+            email: patchable.email === undefined
+              ? parsedNotes.customer.email
+              : String(patchable.email).trim(),
+            phone: pick(patchable.phone, parsedNotes.customer.phone),
+            accountNumber: pick(patchable.accountNumber, parsedNotes.customer.accountNumber),
+          },
           rental: {
             ...parsedNotes.rental,
+            startDate: nextStart ?? parsedNotes.rental.startDate,
+            endDate: nextEnd ?? parsedNotes.rental.endDate,
+            days: nextDays,
             dailyRate: nextDailyRate,
-            totalAmount: updatingAmount ? nextAmount! : parsedNotes.rental.totalAmount,
+            totalAmount: totalAfter,
+            seatsBooked:
+              patchable.seatsBooked === undefined
+                ? parsedNotes.rental.seatsBooked
+                : Math.max(1, parseInt(String(patchable.seatsBooked), 10) || 1),
+            usageType:
+              patchable.usageType === undefined
+                ? parsedNotes.rental.usageType
+                : normalizeUsageType(String(patchable.usageType)),
+            depositAmount:
+              patchable.depositAmount === undefined
+                ? parsedNotes.rental.depositAmount ?? null
+                : Math.max(0, Number(patchable.depositAmount) || 0) || null,
+            notes: pick(patchable.notes, parsedNotes.rental.notes),
             paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : parsedNotes.rental.paymentReceived || false,
           },
         })

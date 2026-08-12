@@ -31,6 +31,7 @@ type BookingsTableProps = {
   onDelete?: (booking: UnifiedBooking) => void
   onRaiseInvoice?: (booking: UnifiedBooking) => void
   onViewInvoice?: (booking: UnifiedBooking) => void
+  onEdit?: (booking: UnifiedBooking) => void
   raisingId?: string | null
   deletingId?: string | null
   emptyMessage?: string
@@ -79,6 +80,7 @@ export function BookingsTable({
   onDelete,
   onRaiseInvoice,
   onViewInvoice,
+  onEdit,
   raisingId,
   deletingId,
   emptyMessage = 'No bookings yet',
@@ -134,11 +136,14 @@ export function BookingsTable({
                 key={b.id}
                 style={{
                   borderBottom: `1px solid ${theme.border}`,
-                  cursor: canViewInvoice && onViewInvoice ? 'pointer' : 'default',
+                  cursor: onEdit ? 'pointer' : 'default',
                 }}
-                onClick={() => {
-                  if (canViewInvoice && onViewInvoice) onViewInvoice(b)
-                }}
+                /* Opens the booking, not its invoice. Clicking a row used to
+                   jump straight to a PDF, which is the one part of a booking
+                   you cannot change — so the obvious gesture led away from the
+                   thing people wanted. The invoice has its own button. */
+                onClick={() => onEdit?.(b)}
+                title={onEdit ? 'Open this booking' : undefined}
               >
                 <td style={{ padding: '10px 12px', fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: theme.bronzeDark, fontWeight: 600 }}>
                   {kindLabel[b.kind]}

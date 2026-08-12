@@ -10,6 +10,7 @@ import { cardStyle, pageTitle, primaryButton, secondaryButton } from '@/lib/them
 import { BookingsTabBar } from '@/components/bookings/bookings-tab-bar'
 import { BookingsTable } from '@/components/bookings/bookings-table'
 import { InvoiceViewerDialog } from '@/components/bookings/invoice-viewer-dialog'
+import { EditBookingDialog } from '@/components/bookings/edit-booking-dialog'
 import { CreateTourForm, emptyTourForm } from '@/components/bookings/create-tour-form'
 import { CreateInternalForm, emptyInternalForm } from '@/components/bookings/create-internal-form'
 import { CreateFleetForm } from '@/components/bookings/create-fleet-form'
@@ -58,6 +59,7 @@ export function BookingsPanel({
   const [raising, setRaising] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [invoiceBooking, setInvoiceBooking] = useState<UnifiedBooking | null>(null)
+  const [editingBooking, setEditingBooking] = useState<UnifiedBooking | null>(null)
 
   useEffect(() => {
     if (initialTab) setActiveTab(initialTab)
@@ -293,6 +295,7 @@ export function BookingsPanel({
           onDelete={deleteBooking}
           onRaiseInvoice={raiseInvoice}
           onViewInvoice={setInvoiceBooking}
+          onEdit={setEditingBooking}
           raisingId={raising}
           deletingId={deletingId}
           emptyMessage={
@@ -308,6 +311,14 @@ export function BookingsPanel({
           }
         />
       </div>
+
+      <EditBookingDialog
+        booking={editingBooking}
+        invoiceLink={editingBooking ? invoiceLinks[editingBooking.raw_id] : null}
+        onClose={() => setEditingBooking(null)}
+        onSaved={loadBookings}
+        onViewInvoice={setInvoiceBooking}
+      />
 
       <InvoiceViewerDialog
         open={!!invoiceBooking}

@@ -1,25 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getApprovedAdminUser } from '@/lib/auth-server'
-import { parseAddOnBookingNotes } from '@/lib/add-ons'
-import {
-  buildAddOnInvoicePdf,
-  buildFleetInvoicePdf,
-  buildTourInvoicePdf,
-  fullCustomerName,
-  parseFleetBookingNotes,
-} from '@/lib/invoice-pdf'
-import { bookingsDb } from '@/lib/bookings-db'
-import { getEnquiriesDb } from '@/lib/enquiries-server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
-import { getAuthedXeroClient } from '@/lib/xero'
+import { buildInvoiceForBooking } from '@/lib/invoice-for-booking'
 
-type InvoiceLinkRow = {
-  booking_id: string
-  xero_invoice_id?: string | null
-  xero_invoice_number?: string | null
-  status?: string | null
-}
-
+/**
+ * The invoice for a booking, as a PDF.
+ *
+ * All the table-specific work moved to lib/invoice-for-booking so the
+ * send-to-client route can attach the same document this one downloads —
+ * previously the only way to obtain an invoice was through this response body.
+ */
 function pdfResponse(buffer: Buffer, filename: string, inline: boolean) {
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,
@@ -29,194 +18,6 @@ function pdfResponse(buffer: Buffer, filename: string, inline: boolean) {
       'Cache-Control': 'private, no-cache',
     },
   })
-}
-
-async function fetchXeroInvoicePdf(link: InvoiceLinkRow) {
-  if (!link.xero_invoice_id) return null
-
-  const auth = await getAuthedXeroClient()
-  if (!auth) return null
-
-  try {
-    const response = await auth.xero.accountingApi.getInvoiceAsPdf(auth.tenantId, link.xero_invoice_id)
-    const body = response.body
-    if (!body) return null
-    const buffer = Buffer.isBuffer(body) ? body : Buffer.from(body as ArrayBuffer)
-    return buffer
-  } catch (error) {
-    console.error('Xero invoice PDF fetch error:', error)
-    return null
-  }
-}
-
-async function buildFleetPdf(bookingId: string, link: InvoiceLinkRow | null) {
-  const { data: booking, error } = await supabaseAdmin
-    .from('tour_bookings')
-    .select('id,amount,notes,created_at')
-    .eq('id', bookingId)
-    .eq('booking_type', 'fleet')
-    .maybeSingle()
-
-  if (error || !booking) return null
-
-  const details = parseFleetBookingNotes(booking.notes)
-  if (!details) return null
-
-  const amount = Number(booking.amount || details.rental.totalAmount || 0)
-  // Prefer the number issued when the booking was made so a re-download always
-  // reproduces the same invoice the admin already has by email.
-  const invoiceNumber =
-    details.invoice?.number || link?.xero_invoice_number || `FLEET-${booking.id.slice(0, 8).toUpperCase()}`
-  const createdAt = details.invoice?.issuedAt || booking.created_at || new Date().toISOString()
-
-  const pdfBuffer = await buildFleetInvoicePdf({
-    bookingId: booking.id,
-    createdAt,
-    invoiceNumber,
-    vehicleName: details.vehicle.title,
-    registrationNumber: details.vehicle.registrationNumber || '',
-    customerName: fullCustomerName(details),
-    accountNumber: details.customer.accountNumber || null,
-    startDate: details.rental.startDate,
-    endDate: details.rental.endDate,
-    days: details.rental.days,
-    usageType: details.rental.usageType || 'tour',
-    amount,
-    depositAmount: details.rental.depositAmount ?? null,
-    notes: details.rental.notes || '',
-  })
-
-  return { pdfBuffer, invoiceNumber }
-}
-
-/**
- * Add-on booking invoice.
- *
- * The chosen experiences and the prices they were sold at are JSON inside the
- * booking's `notes` column, so this reads the same row a tour booking reads and
- * branches on what it finds there. A row tagged `addon` whose notes will not
- * parse falls through to the tour invoice rather than 404ing — a one-line
- * invoice is a better outcome than none.
- */
-async function buildAddOnPdf(bookingId: string, link: InvoiceLinkRow | null) {
-  const { data: booking, error } = await bookingsDb()
-    .from('tag_along_bookings')
-    .select('id,name,email,tour_date,passengers,notes,booking_reference,created_at')
-    .eq('id', bookingId)
-    .maybeSingle()
-
-  if (error || !booking) return null
-
-  const details = parseAddOnBookingNotes(booking.notes)
-  if (!details) return null
-
-  const invoiceNumber =
-    details.invoice?.number ||
-    link?.xero_invoice_number ||
-    booking.booking_reference ||
-    `ADDON-${booking.id.slice(0, 8).toUpperCase()}`
-  const createdAt =
-    details.invoice?.issuedAt ||
-    (booking.created_at
-      ? new Date(booking.created_at).toISOString().slice(0, 10)
-      : new Date().toISOString().slice(0, 10))
-
-  const pdfBuffer = await buildAddOnInvoicePdf({
-    bookingId: booking.id,
-    createdAt,
-    invoiceNumber,
-    customerName: booking.name,
-    customerEmail: booking.email,
-    bookingDate: booking.tour_date || '',
-    guests: booking.passengers || 0,
-    lines: details.lines,
-    reference: booking.booking_reference,
-  })
-
-  return { pdfBuffer, invoiceNumber }
-}
-
-async function buildTagAlongPdf(bookingId: string, link: InvoiceLinkRow | null, title: string) {
-  const { data: booking, error } = await bookingsDb()
-    .from('tag_along_bookings')
-    .select('id,name,email,phone,tour_name,tour_date,passengers,amount,notes,booking_reference,invoice_status,created_at')
-    .eq('id', bookingId)
-    .maybeSingle()
-
-  if (error || !booking) return null
-
-  const amount = Number(booking.amount || 0)
-  const invoiceNumber = link?.xero_invoice_number || booking.booking_reference || `BOOK-${booking.id.slice(0, 8).toUpperCase()}`
-  const invoiceStatus = link?.status || booking.invoice_status || 'Draft copy'
-  const createdAt = booking.created_at
-    ? new Date(booking.created_at).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10)
-
-  const pdfBuffer = await buildTourInvoicePdf({
-    bookingId: booking.id,
-    createdAt,
-    invoiceNumber,
-    invoiceStatus,
-    title,
-    customerName: booking.name,
-    customerEmail: booking.email,
-    customerPhone: booking.phone,
-    tourName: booking.tour_name || 'Tour booking',
-    tourDate: booking.tour_date || '',
-    guests: booking.passengers || 0,
-    reference: booking.booking_reference,
-    amount,
-    notes: booking.notes,
-  })
-
-  return { pdfBuffer, invoiceNumber }
-}
-
-async function buildPrivatePdf(bookingId: string, link: InvoiceLinkRow | null) {
-  /* Enquiries belong to whichever project `getEnquiriesDb` names — the content
-     one in production, where the columns differ from the admin project's copy
-     (`experience`, and no date or passengers). Selecting the admin column list
-     against it returned an error, so every private-enquiry invoice 404'd.
-     Select everything and read defensively instead. */
-  const db = getEnquiriesDb()
-  if (!db) return null
-
-  const { data: row, error } = await db.client
-    .from('enquiries')
-    .select('*')
-    .eq('id', bookingId)
-    .maybeSingle()
-
-  if (error || !row) return null
-
-  const enquiry = row as Record<string, unknown>
-  const value = (key: string) => (enquiry[key] == null ? '' : String(enquiry[key]))
-
-  const id = value('id')
-  const invoiceNumber = link?.xero_invoice_number || `ENQ-${id.slice(0, 8).toUpperCase()}`
-  const invoiceStatus = link?.status || 'Draft copy'
-  const createdAt = enquiry.created_at
-    ? new Date(value('created_at')).toISOString().slice(0, 10)
-    : new Date().toISOString().slice(0, 10)
-
-  const pdfBuffer = await buildTourInvoicePdf({
-    bookingId: id,
-    createdAt,
-    invoiceNumber,
-    invoiceStatus,
-    title: 'Private enquiry invoice',
-    customerName: value('name'),
-    customerEmail: value('email'),
-    // The website writes `experience`; the admin project's copy calls it
-    // `tour_type`. Accept either rather than depending on which one answered.
-    tourName: value('tour_type') || value('experience') || 'Private enquiry',
-    tourDate: value('date'),
-    guests: Number(enquiry.passengers) || 0,
-    amount: Number(enquiry.amount) || 0,
-    notes: value('message'),
-  })
-
-  return { pdfBuffer, invoiceNumber }
 }
 
 export async function GET(request: NextRequest) {
@@ -233,42 +34,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'booking_id is required' }, { status: 400 })
   }
 
-  const { data: link } = await supabaseAdmin
-    .from('xero_invoice_links')
-    .select('booking_id,xero_invoice_id,xero_invoice_number,status')
-    .eq('booking_id', bookingId)
-    .maybeSingle()
-
   try {
-    const xeroPdf = link ? await fetchXeroInvoicePdf(link as InvoiceLinkRow) : null
-    if (xeroPdf) {
-      const filename = link?.xero_invoice_number || `invoice-${bookingId.slice(0, 8)}`
-      return pdfResponse(xeroPdf, filename, inline)
-    }
-
-    let generated: { pdfBuffer: Buffer; invoiceNumber: string } | null = null
-
-    if (kind === 'fleet' || !kind) {
-      generated = await buildFleetPdf(bookingId, link as InvoiceLinkRow | null)
-    }
-
-    if (!generated && (kind === 'addon' || !kind)) {
-      generated = await buildAddOnPdf(bookingId, link as InvoiceLinkRow | null)
-    }
-
-    if (!generated && (kind === 'tour' || kind === 'internal' || kind === 'addon' || !kind)) {
-      const title = kind === 'internal' ? 'Internal booking invoice' : 'Tour booking invoice'
-      generated = await buildTagAlongPdf(bookingId, link as InvoiceLinkRow | null, title)
-    }
-
-    if (!generated && (kind === 'private' || !kind)) {
-      generated = await buildPrivatePdf(bookingId, link as InvoiceLinkRow | null)
-    }
-
+    const generated = await buildInvoiceForBooking(bookingId, kind)
     if (!generated) {
       return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
     }
-
     return pdfResponse(generated.pdfBuffer, generated.invoiceNumber, inline)
   } catch (error) {
     console.error('Invoice PDF generation error:', error)

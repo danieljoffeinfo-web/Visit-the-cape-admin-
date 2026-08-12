@@ -195,10 +195,26 @@ export function sortBookings(rows: UnifiedBooking[]) {
   )
 }
 
+/**
+ * Was this booking taken in-house, or did it come off the website?
+ *
+ * Not the same question as what KIND of booking it is, which is what the
+ * Internal tab used to filter on. Every vehicle hired out by the office is a
+ * fleet booking with an internal source, so a tab that matched on kind showed
+ * an empty table while the All view sat there displaying the very rows the
+ * operator was looking for, each one badged INTERNAL. Fleet answers "what was
+ * booked"; Internal answers "who booked it", and the two overlapping is the
+ * point rather than a bug.
+ */
+export function isStaffCreated(row: UnifiedBooking) {
+  if (row.kind === 'website' || row.kind === 'private') return false
+  return row.kind === 'internal' || row.kind === 'addon' || row.source === 'internal'
+}
+
 export function filterBookingsByTab(rows: UnifiedBooking[], tab: BookingTab) {
   if (tab === 'all') return rows
   if (tab === 'tours') return rows.filter((r) => r.kind === 'tour')
-  if (tab === 'internal') return rows.filter((r) => r.kind === 'internal')
+  if (tab === 'internal') return rows.filter(isStaffCreated)
   if (tab === 'fleet') return rows.filter((r) => r.kind === 'fleet')
   if (tab === 'private') return rows.filter((r) => r.kind === 'private')
   if (tab === 'addons') return rows.filter((r) => r.kind === 'addon')

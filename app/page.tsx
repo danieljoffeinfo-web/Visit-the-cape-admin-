@@ -39,8 +39,8 @@ const AccountingPanel = dynamic(
   () => import('@/components/panels/accounting-panel').then((m) => ({ default: m.AccountingPanel })),
   { loading: () => <PanelLoader /> },
 )
-const CrmPanel = dynamic(
-  () => import('@/components/panels/crm-panel').then((m) => ({ default: m.CrmPanel })),
+const ClientsPanel = dynamic(
+  () => import('@/components/panels/clients-panel').then((m) => ({ default: m.ClientsPanel })),
   { loading: () => <PanelLoader /> },
 )
 const SettingsPanel = dynamic(
@@ -58,7 +58,7 @@ const ContentLibraryPanel = dynamic(
 
 type Panel =
   | 'dashboard' | 'bookings' | 'calendar' | 'enquiries'
-  | 'tours' | 'fleet' | 'accounting' | 'crm' | 'settings'
+  | 'tours' | 'fleet' | 'accounting' | 'clients' | 'settings'
   | 'activity-logs' | 'content-library'
 
 const PANEL_STORAGE_KEY = 'vtc_active_panel'
@@ -71,7 +71,7 @@ const PANEL_TITLES: Record<Panel, string> = {
   tours: 'Tours & Pricing',
   fleet: 'Fleet Manager',
   accounting: 'Accounting',
-  crm: 'CRM',
+  clients: 'Clients',
   settings: 'Settings',
   'activity-logs': 'Activity Logs',
   'content-library': 'Content Library',
@@ -79,6 +79,8 @@ const PANEL_TITLES: Record<Panel, string> = {
 
 function resolveInitialPanel(raw: string | null): Panel {
   if (raw === 'tour-bookings' || raw === 'internal-bookings') return 'bookings'
+  /* CRM was renamed to Clients; keep old links and stored sessions working. */
+  if (raw === 'crm') return 'clients'
   if (raw && raw in PANEL_TITLES) return raw as Panel
   return 'dashboard'
 }
@@ -237,7 +239,7 @@ function AdminApp() {
           {panel === 'tours' && <ToursPanel />}
           {panel === 'fleet' && <FleetPanel onNavigate={navigate} />}
           {panel === 'accounting' && <AccountingPanel />}
-          {panel === 'crm' && <CrmPanel />}
+          {panel === 'clients' && <ClientsPanel />}
           {panel === 'settings' && <SettingsPanel />}
           {panel === 'activity-logs' && <ActivityLogsPanel />}
           {panel === 'content-library' && <ContentLibraryPanel />}
