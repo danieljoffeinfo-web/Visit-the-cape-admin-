@@ -42,7 +42,7 @@ export function AccountingPanel() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <h1 style={pageTitle}>Money</h1>
+          <h1 style={pageTitle}>Accounting</h1>
           <p style={{ color: theme.textMuted, fontSize: 14, marginTop: 6, maxWidth: 620, lineHeight: 1.5 }}>
             Xero is the official record for invoices and payments. Use this page to see what has been paid and what still needs to be collected.
           </p>

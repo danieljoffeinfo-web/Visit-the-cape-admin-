@@ -34,7 +34,7 @@ const mainNavItems = [
       { id: 'fleet', label: 'Vehicles', icon: <CarIcon /> },
       { id: 'experiences', label: 'Experiences', icon: <MapIcon /> },
       { id: 'clients', label: 'Clients', icon: <UsersIcon /> },
-      { id: 'accounting', label: 'Money', icon: <ChartIcon /> },
+      { id: 'accounting', label: 'Accounting', icon: <ChartIcon /> },
     ],
   },
 ] as const

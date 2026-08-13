@@ -66,7 +66,7 @@ export function SettingsPanel() {
       <div style={{ ...card, marginBottom: 20 }}>
         <h2 style={{ ...sectionTitle, marginBottom: 10 }}>Xero</h2>
         <p style={{ color: theme.textMuted, fontSize: 13, marginBottom: 20 }}>
-          Xero stores the official customer invoices and payment status shown on the Money page.
+          Xero stores the official customer invoices and payment status shown on the Accounting page.
         </p>
 
         {loadingXero ? (

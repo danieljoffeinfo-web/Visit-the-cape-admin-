@@ -66,7 +66,7 @@ const PANEL_TITLES: Record<Panel, string> = {
   enquiries: 'Messages',
   experiences: 'Experiences',
   fleet: 'Vehicles',
-  accounting: 'Money',
+  accounting: 'Accounting',
   clients: 'Clients',
   settings: 'Connections',
   'activity-logs': 'Activity history',
