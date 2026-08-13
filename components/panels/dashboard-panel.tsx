@@ -9,10 +9,8 @@ import {
   type OutstandingInvoices,
   type RevenueDay,
 } from '@/lib/dashboard'
-import { cardStyle, dangerButton, theme } from '@/lib/theme'
+import { cardStyle, theme } from '@/lib/theme'
 import type { BookingTab } from '@/lib/bookings'
-import { ClearDataDialog, useClearAdminData } from '@/components/admin/clear-data-dialog'
-import { toast } from 'sonner'
 
 const card = cardStyle
 
@@ -58,7 +56,7 @@ function ProgressBar({ filled, total }: { filled: number; total: number }) {
           height: '100%',
           width: `${pct}%`,
           borderRadius: 2,
-          background: pct >= 100 ? '#ef5350' : '#b8956a',
+          background: pct >= 100 ? theme.danger : theme.bronze,
           transition: 'width 0.3s ease',
         }}
       />
@@ -105,7 +103,7 @@ function PulseSkeleton() {
       {[0, 1, 2].map((i) => (
         <div key={i} style={{ ...card, minHeight: 100, opacity: 0.5 }}>
           <div style={{ height: 10, width: '50%', background: theme.surfaceMuted, borderRadius: 4, marginBottom: 12 }} />
-          <div style={{ height: 32, width: '30%', background: 'rgba(184,149,106,0.15)', borderRadius: 4 }} />
+          <div style={{ height: 32, width: '30%', background: theme.bronzeBg, borderRadius: 4 }} />
         </div>
       ))}
     </div>
@@ -114,8 +112,10 @@ function PulseSkeleton() {
 
 export function DashboardPanel({
   onNavigate,
+  userName,
 }: {
   onNavigate: (p: string, opts?: { tab?: BookingTab; action?: string }) => void
+  userName: string
 }) {
   const [loading, setLoading] = useState(true)
   const [unreadCount, setUnreadCount] = useState(0)
@@ -124,8 +124,6 @@ export function DashboardPanel({
   const [enquiries, setEnquiries] = useState<EnquiryRow[]>([])
   const [revenueDays, setRevenueDays] = useState<RevenueDay[]>([])
   const [fleet, setFleet] = useState<FleetVehicleStatus[]>([])
-  const [showClearDialog, setShowClearDialog] = useState(false)
-  const { clearing, clearAllData } = useClearAdminData()
 
   useEffect(() => {
     loadDashboard()
@@ -153,27 +151,16 @@ export function DashboardPanel({
 
   const revenueTotal = revenueDays.reduce((s, d) => s + d.amount, 0)
 
-  async function handleClearAllData() {
-    try {
-      const data = await clearAllData()
-      toast.success(`All admin data cleared. ${data.fleetPreserved ?? 0} fleet vehicles kept.`)
-      setShowClearDialog(false)
-      await loadDashboard()
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to clear data')
-    }
-  }
-
   const pulseCards = [
     {
-      label: 'Unread Enquiries',
+      label: 'Messages to answer',
       value: loading ? '—' : String(unreadCount),
-      sub: unreadCount > 0 ? 'Needs response' : 'All caught up',
+      sub: unreadCount > 0 ? 'Open the inbox and reply' : 'Nothing waiting for you',
       urgent: unreadCount > 0,
       onClick: () => onNavigate('enquiries'),
     },
     {
-      label: 'Outstanding Invoices',
+      label: 'Payments outstanding',
       value: loading
         ? '—'
         : invoices.fallback === 'connect'
@@ -182,56 +169,61 @@ export function DashboardPanel({
             ? '—'
             : formatZAR(invoices.total || 0),
       sub: invoices.fallback === 'connect'
-        ? 'Connect Xero'
+        ? 'Connect Xero to see unpaid invoices'
         : invoices.fallback === 'no_data'
-          ? 'No invoice data'
-          : 'AUTHORISED unpaid',
+          ? 'Xero data is unavailable'
+          : 'Invoices still waiting for payment',
       urgent: (invoices.total || 0) > 0,
       onClick: () => onNavigate('accounting'),
     },
   ]
 
   const quickActions = [
-    { icon: '✉', label: 'View Enquiries', desc: 'Check latest customer messages', to: 'enquiries' as const },
-    { icon: '📋', label: 'New Internal Booking', desc: 'Create a booking from the admin dashboard', to: 'bookings' as const, tab: 'internal' as BookingTab, action: 'create' },
-    { icon: '🎫', label: 'New Tour Booking', desc: 'Create a manual tour booking on request', to: 'bookings' as const, tab: 'tours' as BookingTab, action: 'create' },
-    /* Both of these book against live availability, so they open the section
-       that knows it rather than a create form in the bookings hub. */
-    { icon: '🚐', label: 'Book Out a Vehicle', desc: 'Hire a vehicle out for a tour or rental', to: 'fleet' as const },
-    { icon: '🎟', label: 'Book an Experience', desc: 'Book an add-on adventure for a customer', to: 'experiences' as const },
-    { icon: '📜', label: 'View Activity Logs', desc: 'See who changed what and when', to: 'activity-logs' as const },
-    { icon: '₤', label: 'Accounting', desc: 'Invoices, payments and reports', to: 'accounting' as const },
+    { icon: '01', label: 'New tour booking', desc: 'Add a customer to a scheduled or private tour', to: 'bookings' as const, tab: 'tours' as BookingTab, action: 'create' },
+    { icon: '02', label: 'Book a vehicle', desc: 'Check availability before confirming a vehicle', to: 'fleet' as const },
+    { icon: '03', label: 'Book an experience', desc: 'Add an activity for a customer', to: 'experiences' as const },
   ]
+
+  const today = new Intl.DateTimeFormat('en-ZA', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date())
+  const firstName = userName.trim().split(/\s+/)[0] || 'there'
 
   return (
     <div className="dashboard-root">
       <style>{`
         .dashboard-root { max-width: 100%; overflow-x: hidden; }
-        .dashboard-pulse { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .dashboard-briefing { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; padding: 26px 28px; border-radius: 12px; margin-bottom: 18px; background: ${theme.surface}; color: ${theme.text}; border: 1px solid ${theme.border}; box-shadow: 0 1px 3px rgba(44,38,32,.04); }
+        .dashboard-pulse { display: grid; grid-template-columns: repeat(2, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
         .dashboard-operations { display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 24px; }
         .dashboard-health { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
         .dashboard-quick { margin-bottom: 0; }
+        .dashboard-quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+        .dashboard-action { text-align: left; border: 1px solid ${theme.border}; background: ${theme.surface}; border-radius: 9px; padding: 16px; cursor: pointer; transition: transform .15s ease, border-color .15s ease; }
+        .dashboard-action:hover { transform: translateY(-1px); border-color: ${theme.bronzeBorder}; }
         .pulse-card { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-        .pulse-card:hover { border-color: rgba(184,149,106,0.35) !important; background: rgba(184,149,106,0.04) !important; }
+        .pulse-card:hover { border-color: ${theme.bronzeBorder} !important; background: ${theme.bronzeBg} !important; }
         .enquiry-row { cursor: pointer; transition: background 0.12s; border-radius: 4px; margin: 0 -8px; padding: 10px 8px !important; }
-        .enquiry-row:hover { background: rgba(184,149,106,0.06); }
+        .enquiry-row:hover { background: ${theme.bronzeBg}; }
         @media (min-width: 900px) {
           .dashboard-operations { grid-template-columns: 1.65fr 1fr; }
         }
+        @media (max-width: 700px) {
+          .dashboard-briefing { grid-template-columns: 1fr; }
+          .dashboard-pulse, .dashboard-quick-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
 
-      <h1
-        style={{
-          fontFamily: "'Barlow Condensed', sans-serif",
-          fontWeight: 900,
-          fontSize: 28,
-          letterSpacing: '0.04em',
-          textTransform: 'uppercase',
-          marginBottom: 24,
-        }}
-      >
-        Dashboard
-      </h1>
+      <section className="dashboard-briefing" aria-labelledby="briefing-title">
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ fontFamily: theme.utilityFont, fontSize: 10, letterSpacing: '0.16em', textTransform: 'uppercase', color: theme.bronzeDark, marginBottom: 8 }}>Daily briefing</div>
+          <h1 id="briefing-title" style={{ fontFamily: theme.headingFont, fontWeight: 900, fontSize: 36, letterSpacing: '0.02em', margin: 0, lineHeight: 1 }}>Good day, {firstName}.</h1>
+          <p style={{ margin: '8px 0 0', color: theme.textMuted, fontSize: 14 }}>Here is what needs your attention today.</p>
+        </div>
+        <div style={{ position: 'relative', zIndex: 1, fontFamily: theme.utilityFont, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: theme.textMuted, paddingBottom: 3 }}>{today}</div>
+      </section>
 
       {/* Pulse Bar */}
       {loading ? (
@@ -244,7 +236,7 @@ export function DashboardPanel({
               className="pulse-card"
               style={{
                 ...card,
-                borderColor: p.urgent ? 'rgba(184,149,106,0.4)' : card.border,
+                borderColor: p.urgent ? theme.bronzeBorder : card.border,
               }}
               onClick={p.onClick}
               role="button"
@@ -276,46 +268,28 @@ export function DashboardPanel({
         {/* Today's Schedule + Next 7 Days */}
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
-            <h3 style={sectionTitle}>Today&apos;s Schedule + Next 7 Days</h3>
+            <h3 style={sectionTitle}>Next 7 days</h3>
             <button
               onClick={() => onNavigate('bookings', { tab: 'tours', action: 'create' })}
               style={{
                 padding: '5px 12px',
                 borderRadius: 4,
-                border: '1px solid rgba(184,149,106,0.35)',
+                border: `1px solid ${theme.bronzeBorder}`,
                 background: 'transparent',
-                color: '#b8956a',
+                color: theme.bronzeDark,
                 cursor: 'pointer',
                 fontSize: 12,
-                fontFamily: "'Barlow', sans-serif",
+                fontFamily: theme.bodyFont,
               }}
             >
-              Add Tour
+              New tour booking
             </button>
           </div>
 
           {loading ? (
             <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>Loading schedule...</div>
           ) : departures.length === 0 ? (
-            <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>
-              No departures scheduled.{' '}
-              <button
-                onClick={() => onNavigate('bookings', { tab: 'tours', action: 'create' })}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#b8956a',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontFamily: "'Barlow', sans-serif",
-                  padding: 0,
-                  textDecoration: 'underline',
-                  textUnderlineOffset: 3,
-                }}
-              >
-                Schedule a departure →
-              </button>
-            </div>
+            <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>No departures are scheduled for the next seven days.</div>
           ) : (
             departures.map((d) => (
               <div
@@ -331,7 +305,7 @@ export function DashboardPanel({
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontSize: 13, color: '#b8956a', fontWeight: 600 }}>
+                    <div style={{ fontSize: 13, color: theme.bronzeDark, fontWeight: 600 }}>
                       {d.booked_seats}/{d.seats_total}
                     </div>
                     <div style={{ fontSize: 11, color: mutedLight }}>seats filled</div>
@@ -349,15 +323,15 @@ export function DashboardPanel({
         {/* Unread Enquiries Feed */}
         <div style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h3 style={sectionTitle}>Unread Enquiries</h3>
+            <h3 style={sectionTitle}>New messages</h3>
             {unreadCount > 0 && (
               <span
                 style={{
                   fontSize: 11,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
-                  color: '#b8956a',
-                  background: 'rgba(184,149,106,0.12)',
+                  color: theme.bronzeDark,
+                  background: theme.bronzeBg,
                   padding: '2px 8px',
                   borderRadius: 10,
                 }}
@@ -370,7 +344,7 @@ export function DashboardPanel({
           {loading ? (
             <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>Loading enquiries...</div>
           ) : enquiries.length === 0 ? (
-            <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>No unread enquiries</div>
+            <div style={{ color: mutedLight, fontSize: 13, padding: '12px 0' }}>No customer messages need a reply.</div>
           ) : (
             enquiries.map((e) => (
               <div
@@ -387,10 +361,10 @@ export function DashboardPanel({
                     width: 7,
                     height: 7,
                     borderRadius: '50%',
-                    background: '#b8956a',
+                    background: theme.bronze,
                     marginTop: 6,
                     flexShrink: 0,
-                    boxShadow: '0 0 6px rgba(184,149,106,0.5)',
+                    boxShadow: `0 0 6px ${theme.bronzeBorder}`,
                   }}
                 />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -415,7 +389,7 @@ export function DashboardPanel({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
             <h3 style={sectionTitle}>Revenue</h3>
             {!loading && revenueTotal > 0 && (
-              <span style={{ fontSize: 13, color: '#b8956a', fontWeight: 600 }}>{formatZAR(revenueTotal)}</span>
+              <span style={{ fontSize: 13, color: theme.bronzeDark, fontWeight: 600 }}>{formatZAR(revenueTotal)}</span>
             )}
           </div>
           <div style={{ fontSize: 11, color: mutedLight, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>
@@ -463,60 +437,34 @@ export function DashboardPanel({
 
       {/* Quick Actions */}
       <div style={card} className="dashboard-quick">
-        <h3 style={{ ...sectionTitle, marginBottom: 14 }}>Quick Actions</h3>
+        <h3 style={{ ...sectionTitle, marginBottom: 14 }}>Start something</h3>
+        <div className="dashboard-quick-grid">
         {quickActions.map((a) => (
-          <div
+          <button
+            type="button"
             key={a.label}
             onClick={() => onNavigate(a.to, 'tab' in a ? { tab: a.tab, action: a.action } : undefined)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '10px 0',
-              borderBottom: `1px solid ${theme.border}`,
-              cursor: 'pointer',
-            }}
+            className="dashboard-action"
           >
             <div
               style={{
-                width: 36,
-                height: 36,
-                borderRadius: 8,
-                background: 'rgba(184,149,106,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#b8956a',
-                fontSize: 16,
-                flexShrink: 0,
+                color: theme.bronze,
+                fontSize: 10,
+                fontFamily: theme.utilityFont,
+                letterSpacing: '0.12em',
+                marginBottom: 10,
               }}
             >
               {a.icon}
             </div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{a.label}</div>
-              <div style={{ fontSize: 12, color: muted, marginTop: 1 }}>{a.desc}</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: theme.text }}>{a.label}</div>
+              <div style={{ fontSize: 12, color: muted, marginTop: 3, lineHeight: 1.45 }}>{a.desc}</div>
             </div>
-          </div>
+          </button>
         ))}
+        </div>
       </div>
-
-      <div style={{ ...card, marginTop: 24, border: '1px solid rgba(196, 92, 74, 0.2)' }}>
-        <h3 style={{ ...sectionTitle, marginBottom: 10, color: theme.danger }}>Clear all data</h3>
-        <p style={{ color: muted, fontSize: 13, lineHeight: 1.6, marginBottom: 14 }}>
-          Remove all bookings, enquiries, customers, and dashboard stats. You will be asked to type a confirmation phrase first.
-        </p>
-        <button type="button" onClick={() => setShowClearDialog(true)} disabled={clearing} style={dangerButton}>
-          Clear all admin data…
-        </button>
-      </div>
-
-      <ClearDataDialog
-        open={showClearDialog}
-        onClose={() => setShowClearDialog(false)}
-        onConfirm={handleClearAllData}
-        loading={clearing}
-      />
     </div>
   )
 }

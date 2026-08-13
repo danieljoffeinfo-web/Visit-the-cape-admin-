@@ -2,9 +2,10 @@
 
 import { format } from 'date-fns'
 import type { BookingInvoiceLink, UnifiedBooking } from '@/lib/bookings'
-import { bookingHasViewableInvoice, invoiceLabelForBooking } from '@/lib/bookings'
-import { SourceBadge, StatusBadge } from '@/components/user-badge'
+import { bookingHasViewableInvoice, invoiceLabelForBooking, isStaffCreated } from '@/lib/bookings'
+import { SourceBadge } from '@/components/user-badge'
 import { RowMenu } from '@/components/ui/row-menu'
+import { SelectMenu } from '@/components/ui/select-menu'
 import { theme } from '@/lib/theme'
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -34,9 +35,11 @@ type BookingsTableProps = {
   onViewInvoice?: (booking: UnifiedBooking) => void
   onSendInvoice?: (booking: UnifiedBooking) => void
   onEdit?: (booking: UnifiedBooking) => void
+  onPaymentStatusChange?: (booking: UnifiedBooking, status: 'pending' | 'paid' | 'cancelled') => void
   raisingId?: string | null
   sendingId?: string | null
   deletingId?: string | null
+  statusUpdatingId?: string | null
   emptyMessage?: string
 }
 
@@ -107,9 +110,11 @@ export function BookingsTable({
   onViewInvoice,
   onSendInvoice,
   onEdit,
+  onPaymentStatusChange,
   raisingId,
   sendingId,
   deletingId,
+  statusUpdatingId,
   emptyMessage = 'No bookings yet',
 }: BookingsTableProps) {
   if (loading) {
@@ -129,7 +134,7 @@ export function BookingsTable({
       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 980 }}>
         <thead>
           <tr style={{ borderBottom: `1px solid ${theme.borderStrong}` }}>
-            {['Type', 'Reference', 'Source', 'Customer', 'Tour / Vehicle', 'Date', 'Guests', 'Amount', 'Status', ''].map(
+            {['Type', 'Reference', 'Source', 'Customer', 'Tour / Vehicle', 'Date', 'Guests', 'Amount', 'Payment', ''].map(
               (h, i) => (
                 <th key={`${h}-${i}`} style={HEAD}>
                   {h}
@@ -142,7 +147,6 @@ export function BookingsTable({
           {bookings.map((b) => {
             const link = invoiceLinks[b.raw_id]
             const invoiceLabel = invoiceLabelForBooking(b, link)
-            const hasInvoiceState = Boolean(link?.status || b.invoice_status)
             const sc = STATUS_COLORS[invoiceLabel.toUpperCase()] || STATUS_COLORS.DRAFT
             const canViewInvoice = bookingHasViewableInvoice(b, link)
             /* Only until the invoice exists in Xero — after that the link is the
@@ -157,6 +161,29 @@ export function BookingsTable({
             /* Nothing to send without both an invoice and somewhere to send it. */
             const canSend = Boolean(onSendInvoice) && canViewInvoice && Boolean(b.customer_email)
             const busy = sendingId === b.raw_id || deletingId === b.raw_id
+            const xeroPaid = String(link?.status || b.invoice_status || '').toUpperCase() === 'PAID'
+            const operationalStatus: 'pending' | 'paid' | 'cancelled' =
+              xeroPaid
+                ? 'paid'
+                : b.status === 'cancelled' || b.payment_status === 'cancelled'
+                  ? 'cancelled'
+                  : b.payment_status === 'paid'
+                    ? 'paid'
+                    : 'pending'
+            /* Only a booking the office took itself, and only while Xero has
+               not already called it paid.
+               `kind !== 'website'` was not enough: a tour paid for on the site
+               normalises to kind 'tour' with source 'website', so it passed
+               that test and staff could have marked a PayGate payment as
+               pending. isStaffCreated is the predicate that already answers
+               "did we take this booking or did the website", and the row's own
+               Cancel action was already using the same rule — the two now
+               agree instead of contradicting each other. */
+            const canChangePayment = Boolean(onPaymentStatusChange) && isStaffCreated(b) && !xeroPaid
+            /* Where the money was taken, for the read-only rows. A website
+               booking says so rather than showing a bare status that looks
+               like something staff simply have not got round to changing. */
+            const paidOnWebsite = !isStaffCreated(b) && operationalStatus === 'paid'
 
             return (
               <tr
@@ -194,51 +221,74 @@ export function BookingsTable({
                     beside on a screen whose whole subject is money. */}
                 <td style={{ ...CELL, fontWeight: 700, whiteSpace: 'nowrap' }}>{money(b.amount)}</td>
                 <td style={{ padding: '14px 12px' }}>
-                  <StatusBadge status={b.status} />
-                  {/* Only a real invoice STATE — PAID, AUTHORISED, OVERDUE.
-                      invoiceLabelForBooking falls back to the words "View
-                      invoice" when there is none, which is a button label, not
-                      a status, and printing it here put a meaningless pill
-                      beside CONFIRMED on every row that had an invoice. */}
-                  {hasInvoiceState && (
+                  {canChangePayment ? (
+                    /* The console's own dropdown, not the browser's. Every
+                       other select in the admin was replaced for the same
+                       reason and one native menu here would stand out as
+                       plainly as it did there. The accessible name carries the
+                       customer, because "Pending" read aloud on its own does
+                       not say which booking it belongs to. */
+                    <SelectMenu
+                      compact
+                      ariaLabel={`Payment status for ${b.customer_name}`}
+                      value={operationalStatus}
+                      disabled={statusUpdatingId === b.raw_id}
+                      onChange={(value) =>
+                        onPaymentStatusChange?.(b, value as 'pending' | 'paid' | 'cancelled')
+                      }
+                      tone={
+                        operationalStatus === 'paid'
+                          ? theme.success
+                          : operationalStatus === 'cancelled'
+                            ? theme.danger
+                            : theme.bronzeDark
+                      }
+                      options={[
+                        { value: 'pending', label: 'Pending', hint: 'Not yet received' },
+                        { value: 'paid', label: 'Paid', hint: 'Payment confirmed here' },
+                        { value: 'cancelled', label: 'Cancelled', hint: 'Kept as a record' },
+                      ]}
+                    />
+                  ) : (
                     <span
                       style={{
                         display: 'inline-block',
-                        marginLeft: 8,
                         padding: '3px 9px',
                         borderRadius: 12,
                         fontSize: 11,
                         fontWeight: 600,
                         letterSpacing: '0.06em',
                         textTransform: 'uppercase',
-                        background: sc.bg,
-                        color: sc.color,
+                        background: operationalStatus === 'paid' ? STATUS_COLORS.PAID.bg : operationalStatus === 'cancelled' ? STATUS_COLORS.OVERDUE.bg : sc.bg,
+                        color: operationalStatus === 'paid' ? STATUS_COLORS.PAID.color : operationalStatus === 'cancelled' ? STATUS_COLORS.OVERDUE.color : sc.color,
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {invoiceLabel}
+                      {b.kind === 'private'
+                        ? 'Enquiry'
+                        : xeroPaid
+                          ? 'Paid in Xero'
+                          : paidOnWebsite
+                            ? 'Paid on website'
+                            : !isStaffCreated(b)
+                              ? 'Awaiting website payment'
+                              : operationalStatus}
                     </span>
                   )}
                 </td>
 
-                {/* Three things people do daily stay on the row. Everything
-                    else, including both irreversible actions, is one press
-                    further away. */}
+                {/* Keep one obvious booking action on the row. Invoice and
+                    destructive actions are grouped under a plain-language
+                    menu so the table stays calm and scan-friendly. */}
                 <td
                   style={{ padding: '12px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}
                   onClick={(event) => event.stopPropagation()}
                 >
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                    {canViewInvoice && onViewInvoice && (
-                      <RowButton onClick={() => onViewInvoice(b)} title="Open the invoice">
-                        Invoice
-                      </RowButton>
-                    )}
-                    {!canViewInvoice && canRaiseInvoice && (
-                      <RowButton onClick={() => onRaiseInvoice?.(b)} disabled={raisingId === b.raw_id}>
-                        {raisingId === b.raw_id ? 'Raising…' : 'Raise invoice'}
-                      </RowButton>
-                    )}
+                    {/* Emailing an invoice is a daily job and was asked for as a
+                        button, so it stays on the row rather than behind the
+                        menu. Everything rarer, and everything irreversible,
+                        sits one press further away. */}
                     {canSend && (
                       <RowButton
                         primary
@@ -246,17 +296,22 @@ export function BookingsTable({
                         disabled={busy}
                         title={`Email the invoice to ${b.customer_email}`}
                       >
-                        {sendingId === b.raw_id ? 'Sending…' : 'Send'}
+                        {sendingId === b.raw_id ? 'Sending…' : 'Send invoice'}
                       </RowButton>
                     )}
-                    {onEdit && <RowButton onClick={() => onEdit(b)}>Edit</RowButton>}
+                    {onEdit && <RowButton onClick={() => onEdit(b)}>Open booking</RowButton>}
 
                     <RowMenu
                       items={[
                         {
-                          label: 'Create in Xero',
+                          label: 'View invoice',
+                          onSelect: () => onViewInvoice?.(b),
+                          disabled: !canViewInvoice || !onViewInvoice,
+                        },
+                        {
+                          label: raisingId === b.raw_id ? 'Creating invoice…' : 'Create invoice in Xero',
                           onSelect: () => onRaiseInvoice?.(b),
-                          disabled: !canRaiseInvoice || !canViewInvoice,
+                          disabled: !canRaiseInvoice,
                         },
                         {
                           label: 'Cancel booking',

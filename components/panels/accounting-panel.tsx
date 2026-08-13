@@ -3,10 +3,9 @@
 import { useEffect, useState } from 'react'
 import { RevenuePayments } from '@/components/accounting/revenue-payments'
 import { AnalyticsReports } from '@/components/accounting/analytics-reports'
-import { AdvancedSync } from '@/components/accounting/advanced-sync'
 import { pageTitle, primaryButton, theme } from '@/lib/theme'
 
-type AccountingSection = 'revenue' | 'analytics' | 'advanced'
+type AccountingSection = 'revenue' | 'analytics'
 
 export function AccountingPanel() {
   const [section, setSection] = useState<AccountingSection>('revenue')
@@ -35,27 +34,28 @@ export function AccountingPanel() {
   }
 
   const sections: { id: AccountingSection; label: string }[] = [
-    { id: 'revenue', label: 'Revenue & Payments' },
-    { id: 'analytics', label: 'Analytics & Reports' },
-    { id: 'advanced', label: 'Advanced Sync' },
+    { id: 'revenue', label: 'Invoices & payments' },
+    { id: 'analytics', label: 'Business reports' },
   ]
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <h1 style={pageTitle}>Accounting</h1>
-          <p style={{ color: theme.textMuted, fontSize: 13, marginTop: 6 }}>Powered by Xero</p>
+          <h1 style={pageTitle}>Money</h1>
+          <p style={{ color: theme.textMuted, fontSize: 14, marginTop: 6, maxWidth: 620, lineHeight: 1.5 }}>
+            Xero is the official record for invoices and payments. Use this page to see what has been paid and what still needs to be collected.
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {checkingConnection ? null : connected ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: 'rgba(61, 139, 99, 0.12)', border: '1px solid rgba(61, 139, 99, 0.25)', color: theme.success, fontSize: 13 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: theme.success }} />
-              {orgName} Connected
+              Xero connected · {orgName}
             </div>
           ) : (
             <a href="/api/xero/connect" style={{ ...primaryButton, textDecoration: 'none', display: 'inline-block', fontSize: 13 }}>
-              Connect Xero
+              Connect Xero account
             </a>
           )}
         </div>
@@ -98,7 +98,6 @@ export function AccountingPanel() {
 
       {section === 'revenue' && <RevenuePayments connected={connected} />}
       {section === 'analytics' && <AnalyticsReports connected={connected} />}
-      {section === 'advanced' && <AdvancedSync connected={connected} />}
     </div>
   )
 }

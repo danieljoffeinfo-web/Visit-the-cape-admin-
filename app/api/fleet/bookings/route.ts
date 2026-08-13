@@ -409,6 +409,7 @@ export async function PATCH(request: NextRequest) {
     const bookingId = String(body?.id || '').trim()
     const amountRaw = body?.amount
     const paymentReceivedRaw = body?.paymentReceived
+    const operationalStatusRaw = body?.operationalStatus
 
     if (!bookingId) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
@@ -417,6 +418,7 @@ export async function PATCH(request: NextRequest) {
     const nextAmount = amountRaw === undefined || amountRaw === null ? null : Number(amountRaw)
     const updatingAmount = nextAmount !== null
     const updatingPaymentReceived = typeof paymentReceivedRaw === 'boolean'
+    const updatingOperationalStatus = ['pending', 'paid', 'cancelled'].includes(operationalStatusRaw)
 
     /* Amending the rest of the booking, not just its price.
      *
@@ -442,7 +444,7 @@ export async function PATCH(request: NextRequest) {
     const editedFields = Object.entries(patchable).filter(([, v]) => v !== undefined)
     const updatingDetails = editedFields.length > 0
 
-    if (!updatingAmount && !updatingPaymentReceived && !updatingDetails) {
+    if (!updatingAmount && !updatingPaymentReceived && !updatingOperationalStatus && !updatingDetails) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
     }
 
@@ -525,6 +527,9 @@ export async function PATCH(request: NextRequest) {
                 : Math.max(0, Number(patchable.depositAmount) || 0) || null,
             notes: pick(patchable.notes, parsedNotes.rental.notes),
             paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : parsedNotes.rental.paymentReceived || false,
+            operationalStatus: updatingOperationalStatus
+              ? operationalStatusRaw
+              : parsedNotes.rental.operationalStatus || null,
           },
         })
       : bookingRow.notes
@@ -533,6 +538,9 @@ export async function PATCH(request: NextRequest) {
       .from('tour_bookings')
       .update({
         ...(updatingAmount ? { amount: nextAmount } : {}),
+        ...(updatingOperationalStatus
+          ? { status: operationalStatusRaw === 'cancelled' ? 'cancelled' : 'confirmed' }
+          : {}),
         notes: updatedNotes,
         updated_at: new Date().toISOString(),
       })
@@ -554,12 +562,16 @@ export async function PATCH(request: NextRequest) {
 
     await logActivityServer({
       admin,
-      action: updatingPaymentReceived ? 'Changed booking payment status' : 'Updated booking',
+      action: updatingPaymentReceived || updatingOperationalStatus ? 'Changed booking payment status' : 'Updated booking',
       entityType: 'fleet_booking',
       entityId: bookingId,
       entityLabel: bookingRow.email || bookingId,
       oldValue: { amount: parsedNotes?.rental.totalAmount, paymentReceived: parsedNotes?.rental.paymentReceived },
-      newValue: { amount: updatingAmount ? nextAmount : undefined, paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : undefined },
+      newValue: {
+        amount: updatingAmount ? nextAmount : undefined,
+        paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : undefined,
+        operationalStatus: updatingOperationalStatus ? operationalStatusRaw : undefined,
+      },
     })
 
     return NextResponse.json({

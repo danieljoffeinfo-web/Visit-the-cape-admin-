@@ -1,4 +1,4 @@
-/** Visit The Cape admin — off-white shell with bronze accents */
+/** Visit The Cape admin — original off-white shell with bronze accents. */
 export const theme = {
   bg: '#f7f4ef',
   surface: '#ffffff',
@@ -19,6 +19,7 @@ export const theme = {
   modalShadow: '0 16px 48px rgba(44, 38, 32, 0.12)',
   headingFont: "'Barlow Condensed', sans-serif",
   bodyFont: "'Barlow', sans-serif",
+  utilityFont: "'Barlow', sans-serif",
 } as const
 
 export const cardStyle = {

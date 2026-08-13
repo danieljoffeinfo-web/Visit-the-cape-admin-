@@ -46,6 +46,7 @@ export type FleetBookingNotes = {
     depositAmount?: number | null
     usageType?: FleetUsageType | null
     paymentReceived?: boolean | null
+    operationalStatus?: 'pending' | 'paid' | 'cancelled' | null
     notes?: string | null
   }
   /** Invoice issued for this booking. Created in the admin, not in Xero. */

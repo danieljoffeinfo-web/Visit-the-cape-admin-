@@ -18,40 +18,39 @@ interface SidebarProps {
   onClose?: () => void
 }
 
-const navItems = [
+const mainNavItems = [
   {
-    section: 'Main',
+    section: 'Daily work',
     items: [
-      { id: 'dashboard', label: 'Dashboard', icon: <GridIcon /> },
+      { id: 'dashboard', label: 'Home', icon: <GridIcon /> },
       { id: 'bookings', label: 'Bookings', icon: <BookIcon /> },
       { id: 'calendar', label: 'Calendar', icon: <CalIcon /> },
-      { id: 'enquiries', label: 'Enquiries', icon: <MailIcon /> },
+      { id: 'enquiries', label: 'Messages', icon: <MailIcon /> },
     ],
   },
   {
-    section: 'Operations',
+    section: 'Business',
     items: [
-      { id: 'fleet', label: 'Fleet Manager', icon: <CarIcon /> },
+      { id: 'fleet', label: 'Vehicles', icon: <CarIcon /> },
       { id: 'experiences', label: 'Experiences', icon: <MapIcon /> },
-      { id: 'accounting', label: 'Accounting', icon: <ChartIcon /> },
-    ],
-  },
-  {
-    section: null,
-    items: [
       { id: 'clients', label: 'Clients', icon: <UsersIcon /> },
-      { id: 'activity-logs', label: 'Activity Logs', icon: <LogIcon /> },
+      { id: 'accounting', label: 'Money', icon: <ChartIcon /> },
     ],
   },
+] as const
+
+const ownerNavItems = [
   {
-    section: 'Config',
+    section: 'Owner tools',
     items: [
-      { id: 'settings', label: 'Settings', icon: <GearIcon /> },
+      { id: 'settings', label: 'Connections', icon: <GearIcon /> },
     ],
   },
 ] as const
 
 export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClose }: SidebarProps) {
+  const navItems = admin?.role === 'owner' ? [...mainNavItems, ...ownerNavItems] : mainNavItems
+
   function selectPanel(id: Panel) {
     onChange(id)
     onClose?.()
@@ -68,7 +67,7 @@ export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClos
             Visit The Cape
           </div>
           <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: theme.textFaint, marginTop: 4 }}>
-            Admin Console
+            Operations desk
           </div>
         </div>
         {onClose && (
@@ -94,7 +93,7 @@ export function Sidebar({ active, onChange, admin, onSignOut, mobileOpen, onClos
         )}
       </div>
 
-      <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
+      <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }} aria-label="Admin sections">
         {navItems.map((group, gi) => (
           <div key={gi}>
             {group.section && (
@@ -168,5 +167,4 @@ function MapIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="current
 function CarIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M2 9l1.5-4h9L14 9"/><rect x="1" y="9" width="14" height="4" rx="1.5"/><circle cx="4.5" cy="13" r="1.5"/><circle cx="11.5" cy="13" r="1.5"/></svg> }
 function ChartIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="2" y1="14" x2="14" y2="14"/><rect x="3" y="8" width="3" height="6"/><rect x="7" y="5" width="3" height="9"/><rect x="11" y="2" width="3" height="12"/></svg> }
 function UsersIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="6" cy="5" r="2.5"/><path d="M1 14c0-3 2.2-5 5-5s5 2 5 5"/><circle cx="12" cy="5" r="2"/><path d="M10 14c0-2 1-3.5 3-4"/></svg> }
-function LogIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 2h7l3 3v9H3V2z"/><line x1="6" y1="7" x2="10" y2="7"/><line x1="6" y1="10" x2="10" y2="10"/></svg> }
 function GearIcon() { return <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.1 3.1l1.4 1.4M11.5 11.5l1.4 1.4M3.1 12.9l1.4-1.4M11.5 4.5l1.4-1.4"/></svg> }
