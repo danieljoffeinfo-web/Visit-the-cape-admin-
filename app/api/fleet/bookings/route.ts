@@ -2,7 +2,7 @@ import { Invoice } from 'xero-node'
 import { NextRequest, NextResponse } from 'next/server'
 import { differenceInCalendarDays, isValid, parseISO } from 'date-fns'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { balanceDue, buildSeatsLabel, normalizeUsageType, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { balanceDue, buildSeatsLabel, fleetInvoiceDescription, normalizeUsageType, parseFleetBookingNotes, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { getFleetVehicleForBooking } from '@/lib/fleet-db'
 import { getAuthedXeroClient } from '@/lib/xero'
 import { createXeroInvoiceForBooking } from '@/lib/xero-invoices'
@@ -92,6 +92,19 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/**
+ * Money, to the cent.
+ *
+ * A day rate divided out of a total and multiplied back up does not land on
+ * the number it started from — R40,000 over three days round-trips to
+ * R39,999.999999999996. Left alone that drift is written back to the booking on
+ * every edit, so it compounds. Rounded here, once, wherever a rate or a total
+ * is derived rather than typed.
+ */
+function toCents(value: number) {
+  return Math.round(value * 100) / 100
+}
+
 export async function POST(request: NextRequest) {
   try {
     const admin = await getApprovedAdminUser()
@@ -110,6 +123,8 @@ export async function POST(request: NextRequest) {
       startDate,
       endDate,
       amount,
+      dailyRate,
+      invoiceDescription,
       depositRequired,
       depositAmount,
       seatsBooked,
@@ -119,7 +134,15 @@ export async function POST(request: NextRequest) {
     } = body
 
     // Email and account number are optional — only the name and dates are needed.
-    if (!vehicleId || !firstName || !surname || !startDate || !endDate || amount === undefined || amount === null) {
+    const pricedPerDay = dailyRate !== undefined && dailyRate !== null
+    if (
+      !vehicleId ||
+      !firstName ||
+      !surname ||
+      !startDate ||
+      !endDate ||
+      (!pricedPerDay && (amount === undefined || amount === null))
+    ) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -131,11 +154,21 @@ export async function POST(request: NextRequest) {
 
     const rentalDays = differenceInCalendarDays(end, start) + 1
 
-    // The amount is typed in per booking rather than derived from a day rate.
-    const totalAmount = Number(amount)
+    /* Priced per day: the office types the daily rate and the server multiplies
+       it out, so the total can never disagree with the dates on the booking.
+       A bare `amount` is still accepted, because bookings taken before this
+       change - and the edit dialog patching only a total - both send one. */
+    const perDayRate = pricedPerDay ? Number(dailyRate) : 0
+    if (pricedPerDay && (!Number.isFinite(perDayRate) || perDayRate <= 0)) {
+      return NextResponse.json({ error: 'Amount per day must be greater than zero' }, { status: 400 })
+    }
+
+    const totalAmount = pricedPerDay ? toCents(perDayRate * rentalDays) : Number(amount)
     if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
       return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
     }
+
+    const bookingInvoiceDescription = invoiceDescription ? String(invoiceDescription).trim() : ''
 
     const wantsDeposit = Boolean(depositRequired)
     const deposit = wantsDeposit ? Number(depositAmount) : 0
@@ -204,7 +237,9 @@ export async function POST(request: NextRequest) {
         endDate,
         days: rentalDays,
         seatsBooked: bookedSeats,
+        dailyRate: pricedPerDay ? perDayRate : toCents(totalAmount / rentalDays),
         totalAmount,
+        invoiceDescription: bookingInvoiceDescription || null,
         depositAmount: deposit > 0 ? deposit : null,
         usageType: bookingUsageType,
         paymentReceived: false,
@@ -283,7 +318,16 @@ export async function POST(request: NextRequest) {
       ? await createXeroInvoiceForBooking({
           contactName: customerName,
           contactEmail: customerEmail || null,
-          description: `${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''} rental · ${usageTypeLabel(bookingUsageType)} · ${startDate} to ${endDate} · ${rentalDays} day${rentalDays === 1 ? '' : 's'}`,
+          /* The same line the PDF carries. These used to be written
+             separately, so a customer holding both documents could read two
+             different descriptions of one hire. */
+          description: `${fleetInvoiceDescription({
+            vehicleName: vehicle.title,
+            usageType: bookingUsageType,
+            dailyRate: pricedPerDay ? perDayRate : null,
+            days: rentalDays,
+            custom: bookingInvoiceDescription,
+          })} · ${startDate} to ${endDate}`,
           amount: totalAmount,
           dueDate: endDate,
           bookingId: insertedBooking.id,
@@ -322,6 +366,8 @@ export async function POST(request: NextRequest) {
         days: rentalDays,
         usageType: bookingUsageType,
         amount: totalAmount,
+        dailyRate: pricedPerDay ? perDayRate : toCents(totalAmount / rentalDays),
+        invoiceDescription: bookingInvoiceDescription || null,
         depositAmount: deposit > 0 ? deposit : null,
         notes: notes ? String(notes).trim() : null,
       })
@@ -408,11 +454,22 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json()
     const bookingId = String(body?.id || '').trim()
     const amountRaw = body?.amount
+    const dailyRateRaw = body?.dailyRate
     const paymentReceivedRaw = body?.paymentReceived
     const operationalStatusRaw = body?.operationalStatus
 
     if (!bookingId) {
       return NextResponse.json({ error: 'Booking ID is required' }, { status: 400 })
+    }
+
+    /* A day rate wins over a total when both arrive. The edit dialog sends a
+       rate, and the total it implies depends on dates that may be changing in
+       the same request - so the multiplication happens here, once the new
+       dates are known, rather than in the browser against the old ones. */
+    const nextDailyRate = dailyRateRaw === undefined || dailyRateRaw === null ? null : Number(dailyRateRaw)
+    const updatingDailyRate = nextDailyRate !== null
+    if (updatingDailyRate && (!Number.isFinite(nextDailyRate) || nextDailyRate <= 0)) {
+      return NextResponse.json({ error: 'Amount per day must be greater than zero' }, { status: 400 })
     }
 
     const nextAmount = amountRaw === undefined || amountRaw === null ? null : Number(amountRaw)
@@ -439,12 +496,13 @@ export async function PATCH(request: NextRequest) {
       seatsBooked: body?.seatsBooked,
       usageType: body?.usageType,
       depositAmount: body?.depositAmount,
+      invoiceDescription: body?.invoiceDescription,
       notes: body?.notes,
     }
     const editedFields = Object.entries(patchable).filter(([, v]) => v !== undefined)
     const updatingDetails = editedFields.length > 0
 
-    if (!updatingAmount && !updatingPaymentReceived && !updatingOperationalStatus && !updatingDetails) {
+    if (!updatingAmount && !updatingDailyRate && !updatingPaymentReceived && !updatingOperationalStatus && !updatingDetails) {
       return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
     }
 
@@ -482,9 +540,40 @@ export async function PATCH(request: NextRequest) {
         ? differenceInCalendarDays(parseISO(nextEnd), parseISO(nextStart)) + 1
         : parsedNotes?.rental.days ?? 1
 
-    const totalAfter = updatingAmount ? nextAmount! : parsedNotes?.rental.totalAmount ?? 0
-    // Editing the total re-derives the per-day rate so total === dailyRate x days.
-    const nextDailyRate = nextDays > 0 ? totalAfter / nextDays : parsedNotes?.rental.dailyRate ?? null
+    const storedTotal = parsedNotes?.rental.totalAmount ?? 0
+    const storedDays = parsedNotes?.rental.days ?? nextDays
+    const daysChanged = nextDays !== storedDays
+
+    /* Did the operator actually retype the rate, or is this the rate the
+       dialog read back off the booking?
+       It has to be the second question, because the dialog shows a rounded
+       rate: a R40,000 hire over three days displays as R13,333.33, and
+       R13,333.33 x 3 is R39,999.99. Treating that as a change would have
+       knocked a cent off the total every time someone opened a booking to fix
+       a phone number. Compared against the rate the stored total implies,
+       within the rounding that display costs. */
+    const impliedRate = storedDays > 0 && storedTotal > 0 ? storedTotal / storedDays : null
+    const rateChanged =
+      updatingDailyRate && (impliedRate === null || Math.abs(nextDailyRate! - impliedRate) > 0.01)
+
+    /* A retyped rate first, then a typed total, then whatever rate the booking
+       already implies — so a booking that predates day-rate pricing gets one
+       without its total being disturbed to fit. */
+    const rateAfter = rateChanged
+      ? nextDailyRate!
+      : updatingAmount && nextDays > 0
+        ? toCents(nextAmount! / nextDays)
+        : parsedNotes?.rental.dailyRate ?? impliedRate
+
+    /* Recomputed only when something that determines it moved: a retyped rate,
+       a typed total, or dates that changed the length of the hire. */
+    const totalAfter = rateChanged
+      ? toCents(nextDailyRate! * nextDays)
+      : updatingAmount
+        ? nextAmount!
+        : daysChanged && rateAfter != null
+          ? toCents(rateAfter * nextDays)
+          : storedTotal
 
     const pick = (value: unknown, fallback: string | null | undefined) =>
       value === undefined ? fallback ?? null : String(value).trim() || null
@@ -511,7 +600,7 @@ export async function PATCH(request: NextRequest) {
             startDate: nextStart ?? parsedNotes.rental.startDate,
             endDate: nextEnd ?? parsedNotes.rental.endDate,
             days: nextDays,
-            dailyRate: nextDailyRate,
+            dailyRate: rateAfter,
             totalAmount: totalAfter,
             seatsBooked:
               patchable.seatsBooked === undefined
@@ -525,6 +614,7 @@ export async function PATCH(request: NextRequest) {
               patchable.depositAmount === undefined
                 ? parsedNotes.rental.depositAmount ?? null
                 : Math.max(0, Number(patchable.depositAmount) || 0) || null,
+            invoiceDescription: pick(patchable.invoiceDescription, parsedNotes.rental.invoiceDescription),
             notes: pick(patchable.notes, parsedNotes.rental.notes),
             paymentReceived: updatingPaymentReceived ? paymentReceivedRaw : parsedNotes.rental.paymentReceived || false,
             operationalStatus: updatingOperationalStatus
@@ -537,7 +627,12 @@ export async function PATCH(request: NextRequest) {
     const { data: updatedBooking, error: updateError } = await supabaseAdmin
       .from('tour_bookings')
       .update({
-        ...(updatingAmount ? { amount: nextAmount } : {}),
+        /* Was `updatingAmount` only, which left the column stale whenever the
+           total moved for any other reason: a new day rate, or dates that made
+           the hire longer. The bookings list reads this column, so it showed
+           one number while the invoice showed another. Written only when the
+           total actually moved, so an unrelated edit does not touch it. */
+        ...(totalAfter > 0 && totalAfter !== storedTotal ? { amount: totalAfter } : {}),
         ...(updatingOperationalStatus
           ? { status: operationalStatusRaw === 'cancelled' ? 'cancelled' : 'confirmed' }
           : {}),

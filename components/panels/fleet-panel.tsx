@@ -294,7 +294,9 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
     bookingDays: string
     startDate: string
     endDate: string
+    dailyRate: string
     amount: string
+    invoiceDescription: string
     depositRequired: boolean
     depositAmount: string
     seatsBooked: string
@@ -311,8 +313,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       toast.error('Enter the customer name')
       return
     }
-    if (!payload.amount || Number(payload.amount) <= 0) {
-      toast.error('Enter the booking amount')
+    if (!payload.dailyRate || Number(payload.dailyRate) <= 0) {
+      toast.error('Enter the amount per day')
       return
     }
     if (payload.depositRequired && (!payload.depositAmount || Number(payload.depositAmount) <= 0)) {
@@ -336,6 +338,9 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...payload,
+          /* The server multiplies the rate out against its own reading of the
+             dates, so the total below is only what the operator was shown. */
+          dailyRate: Number(payload.dailyRate),
           amount: Number(payload.amount),
           depositAmount: payload.depositRequired ? Number(payload.depositAmount) : null,
           seatsBooked: payload.seatsBooked ? Number(payload.seatsBooked) : vehicleSeats(vehicle || { duration_label: '1 seat' }) || 1,

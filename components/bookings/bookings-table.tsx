@@ -66,12 +66,15 @@ function RowButton({
   onClick,
   disabled,
   primary,
+  danger,
   title,
 }: {
   children: React.ReactNode
   onClick?: () => void
   disabled?: boolean
   primary?: boolean
+  /** Outlined in red rather than filled: visible, but never the eye's first stop. */
+  danger?: boolean
   title?: string
 }) {
   return (
@@ -89,9 +92,11 @@ function RowButton({
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         whiteSpace: 'nowrap',
-        border: primary ? '1px solid transparent' : `1px solid ${theme.bronzeBorder}`,
+        border: primary
+          ? '1px solid transparent'
+          : `1px solid ${danger ? 'rgba(196, 92, 74, 0.4)' : theme.bronzeBorder}`,
         background: primary ? theme.bronze : theme.surface,
-        color: primary ? '#ffffff' : theme.bronzeDark,
+        color: primary ? '#ffffff' : danger ? theme.danger : theme.bronzeDark,
       }}
     >
       {children}
@@ -301,6 +306,21 @@ export function BookingsTable({
                     )}
                     {onEdit && <RowButton onClick={() => onEdit(b)}>Open booking</RowButton>}
 
+                    {/* Asked for on the row rather than behind the menu: the
+                        office clears out test and cancelled bookings often
+                        enough that hunting for it was the complaint. It still
+                        confirms, and it still names what is about to go. */}
+                    {onDelete && (
+                      <RowButton
+                        danger
+                        onClick={() => onDelete(b)}
+                        disabled={busy}
+                        title={`Permanently delete ${b.customer_name}'s booking`}
+                      >
+                        {deletingId === b.raw_id ? 'Deleting…' : 'Delete'}
+                      </RowButton>
+                    )}
+
                     <RowMenu
                       items={[
                         {
@@ -317,12 +337,6 @@ export function BookingsTable({
                           label: 'Cancel booking',
                           onSelect: () => onCancel?.(b),
                           disabled: !canCancel || !onCancel,
-                        },
-                        {
-                          label: deletingId === b.raw_id ? 'Deleting…' : 'Delete permanently',
-                          onSelect: () => onDelete?.(b),
-                          danger: true,
-                          disabled: !onDelete,
                         },
                       ]}
                     />

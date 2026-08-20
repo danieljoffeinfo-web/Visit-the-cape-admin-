@@ -86,6 +86,13 @@ async function buildFleetPdf(bookingId: string, link: InvoiceLinkRow | null) {
     days: details.rental.days,
     usageType: details.rental.usageType || 'tour',
     amount,
+    /* Re-derived when the booking predates day-rate pricing, so a re-download
+       still shows the arithmetic behind the total rather than dropping the
+       line it was issued with. */
+    dailyRate:
+      details.rental.dailyRate ??
+      (details.rental.days > 0 ? amount / details.rental.days : null),
+    invoiceDescription: details.rental.invoiceDescription ?? null,
     depositAmount: details.rental.depositAmount ?? null,
     notes: details.rental.notes || '',
     billTo,

@@ -1,19 +1,18 @@
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from 'pdf-lib'
 import { addOnBookingTotal, addOnLineTotal, type AddOnLine } from '@/lib/add-ons'
 import { COMPANY, INVOICE_COLORS } from '@/lib/company'
-import { balanceDue, fullCustomerName, parseFleetBookingNotes, usageTypeLabel } from '@/lib/fleet'
+import { balanceDue, fleetInvoiceDescription, formatRands, fullCustomerName, parseFleetBookingNotes } from '@/lib/fleet'
 import { invoiceLogoBytes } from '@/lib/invoice-logo'
 
 /**
  * "R50,000.00" — comma thousands, period decimals, matching the approved
  * template. Node's en-ZA locale renders "R50 000,00", so group manually.
+ *
+ * The implementation moved to `lib/fleet` so the booking dialog can show the
+ * operator the exact line this document will carry without importing pdf-lib
+ * into the browser bundle.
  */
-function formatMoney(amount: number) {
-  const value = Number(amount) || 0
-  const [whole, decimals] = Math.abs(value).toFixed(2).split('.')
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return `${value < 0 ? '-' : ''}R${grouped}.${decimals}`
-}
+const formatMoney = formatRands
 
 /** "25 October 2026" — the long form used on the approved template. */
 function formatLongDate(value?: string | null) {
@@ -390,6 +389,10 @@ export async function buildFleetInvoicePdf(input: {
   days: number
   usageType: string
   amount: number
+  /** Agreed rate per day, when the booking was priced that way. */
+  dailyRate?: number | null
+  /** Typed on the booking; overrides the generated line entirely. */
+  invoiceDescription?: string | null
   depositAmount?: number | null
   notes?: string | null
   /** Resolved from the client record; falls back to the name below. */
@@ -411,7 +414,13 @@ export async function buildFleetInvoicePdf(input: {
     referenceNote: period,
     lineItems: [
       {
-        description: `${input.vehicleName} rental - ${usageTypeLabel(input.usageType).toLowerCase()}`,
+        description: fleetInvoiceDescription({
+          vehicleName: input.vehicleName,
+          usageType: input.usageType,
+          dailyRate: input.dailyRate,
+          days: input.days,
+          custom: input.invoiceDescription,
+        }),
         amount: input.amount,
       },
     ],

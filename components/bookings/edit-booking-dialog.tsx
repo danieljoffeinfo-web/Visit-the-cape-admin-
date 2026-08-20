@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import type { BookingInvoiceLink, UnifiedBooking } from '@/lib/bookings'
-import { FLEET_USAGE_TYPES } from '@/lib/fleet'
+import { fleetInvoiceDescription, FLEET_USAGE_TYPES, formatRands } from '@/lib/fleet'
 import {
   fieldLabel,
   inputStyle,
@@ -40,26 +40,47 @@ type Draft = {
   startDate: string
   endDate: string
   usageType: string
+  dailyRate: string
+  invoiceDescription: string
 }
 
 function draftFrom(booking: UnifiedBooking): Draft {
   const [firstName, ...rest] = (booking.customer_name || '').trim().split(/\s+/)
+  /* The rental detail off the booking itself. Everything below used to be a
+     guess — end date copied from the start, hire type hardcoded to 'tour',
+     phone and account number blank — and saving wrote those guesses back. */
+  const fleet = booking.fleet
   return {
     customerName: booking.customer_name || '',
     customerEmail: booking.customer_email || '',
-    customerPhone: '',
+    customerPhone: fleet?.phone || '',
     tourName: booking.tour_or_vehicle || '',
     tourDate: booking.date || '',
     guests: String(booking.guests || ''),
     amount: booking.amount != null ? String(booking.amount) : '',
-    notes: '',
+    notes: fleet?.notes || '',
     firstName: firstName || '',
     surname: rest.join(' '),
-    accountNumber: '',
+    accountNumber: fleet?.accountNumber || '',
     startDate: booking.date || '',
-    endDate: booking.date || '',
-    usageType: 'tour',
+    endDate: fleet?.endDate || booking.date || '',
+    usageType: fleet?.usageType || 'tour',
+    dailyRate: fleet?.dailyRate != null ? String(round2(fleet.dailyRate)) : '',
+    invoiceDescription: fleet?.invoiceDescription || '',
   }
+}
+
+/** Day rates divide out of totals, so they need rounding before display. */
+function round2(value: number) {
+  return Math.round(value * 100) / 100
+}
+
+/** Inclusive of both ends, matching how the booking route counts them. */
+function rentalDays(startDate: string, endDate: string) {
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) return 0
+  return Math.round((end.getTime() - start.getTime()) / 86400000) + 1
 }
 
 export function EditBookingDialog({
@@ -105,6 +126,18 @@ export function EditBookingDialog({
 
   if (!booking || !draft) return null
 
+  /* Plain consts, not hooks — everything above this point has already run and
+     these are cheap. The day rate is what gets typed; the total is what the
+     office reads back to the customer, so both are on screen. */
+  const fleetDays = rentalDays(draft.startDate, draft.endDate)
+  const fleetTotal = (Number(draft.dailyRate) || 0) * fleetDays
+  const defaultInvoiceDescription = fleetInvoiceDescription({
+    vehicleName: booking.tour_or_vehicle || 'Vehicle',
+    usageType: draft.usageType,
+    dailyRate: Number(draft.dailyRate) || 0,
+    days: fleetDays,
+  })
+
   async function save() {
     if (!booking || !draft) return
     setSaving(true)
@@ -124,8 +157,16 @@ export function EditBookingDialog({
               endDate: draft.endDate,
               seatsBooked: draft.guests,
               usageType: draft.usageType,
+              invoiceDescription: draft.invoiceDescription,
               notes: draft.notes,
-              ...(draft.amount ? { amount: Number(draft.amount) } : {}),
+              /* The rate, not the total. The server re-multiplies it against
+                 whatever dates this same save is setting, so changing the end
+                 date re-prices the hire instead of leaving a stale total. */
+              ...(draft.dailyRate
+                ? { dailyRate: Number(draft.dailyRate) }
+                : draft.amount
+                  ? { amount: Number(draft.amount) }
+                  : {}),
             }),
           })
         : await fetch('/api/bookings', {
@@ -310,7 +351,18 @@ export function EditBookingDialog({
                   ))}
                 </select>
               </div>
-              {field('Amount (ZAR)', 'amount', 'number')}
+              {field('Amount per day (R)', 'dailyRate', 'number')}
+              <div>
+                <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Total</label>
+                <div style={{ ...inputStyle, display: 'flex', alignItems: 'center', background: theme.bronzeBg, borderColor: theme.bronzeBorder, fontWeight: 700 }}>
+                  {fleetTotal > 0 ? formatRands(fleetTotal) : '—'}
+                  {fleetDays > 0 && (
+                    <span style={{ fontWeight: 400, color: theme.textMuted, marginLeft: 8, fontSize: 12 }}>
+                      {fleetDays} day{fleetDays === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+              </div>
             </>
           ) : (
             <>
@@ -324,6 +376,26 @@ export function EditBookingDialog({
             </>
           )}
         </div>
+
+        {isFleet && (
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>
+              Invoice description (optional)
+            </label>
+            <input
+              type="text"
+              value={draft.invoiceDescription}
+              onChange={set('invoiceDescription')}
+              placeholder={defaultInvoiceDescription}
+              style={inputStyle}
+            />
+            <p style={{ fontSize: 12, color: theme.textMuted, margin: '6px 0 0' }}>
+              {draft.invoiceDescription.trim()
+                ? 'This is what the invoice will say.'
+                : `Leave blank and the invoice says: ${defaultInvoiceDescription}`}
+            </p>
+          </div>
+        )}
 
         <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
           {!readOnly && (

@@ -26,6 +26,26 @@ export type UnifiedBooking = {
   /** Present on add-on bookings: what was chosen, and at what price. Carried on
    *  the row so raising the Xero invoice can itemise it without a second read. */
   addOnLines?: AddOnLine[]
+  /**
+   * Present on fleet bookings: the rental detail that has no column of its own.
+   *
+   * A fleet booking's dates, hire type and day rate live in a JSON blob in
+   * `notes`, and the flat row only ever surfaced the start date. The edit
+   * dialog, having nothing else to read, filled its End date from the start
+   * date and defaulted the hire type to "Tour use" — so opening a booking and
+   * saving it collapsed a week's rental to a single day and relabelled what
+   * the customer had hired. Carried here so the dialog opens on the truth.
+   */
+  fleet?: {
+    endDate: string
+    days: number
+    dailyRate: number | null
+    usageType: string
+    invoiceDescription: string | null
+    accountNumber: string | null
+    phone: string | null
+    notes: string | null
+  }
 }
 
 type TagAlongRow = {
@@ -191,6 +211,22 @@ export function normalizeFleetRow(
     invoice_status: invoiceStatus || null,
     amount: row.amount ?? notes?.rental.totalAmount ?? null,
     created_at: row.created_at,
+    ...(notes
+      ? {
+          fleet: {
+            endDate: notes.rental.endDate,
+            days: notes.rental.days,
+            dailyRate:
+              notes.rental.dailyRate ??
+              (notes.rental.days > 0 ? notes.rental.totalAmount / notes.rental.days : null),
+            usageType: notes.rental.usageType || 'tour',
+            invoiceDescription: notes.rental.invoiceDescription ?? null,
+            accountNumber: notes.customer.accountNumber ?? null,
+            phone: notes.customer.phone ?? null,
+            notes: notes.rental.notes ?? null,
+          },
+        }
+      : {}),
   }
 }
 

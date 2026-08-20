@@ -9,12 +9,33 @@ export type FleetVehicle = {
   image_url?: string | null
 }
 
-export type FleetUsageType = 'internal' | 'tour' | 'airport_transfer'
+export type FleetUsageType =
+  | 'internal'
+  | 'tour'
+  | 'airport_transfer'
+  | 'bus_only'
+  | 'bus_driver'
+  | 'bus_driver_fuel'
+  | 'bus_guide_fuel'
 
+/**
+ * What the vehicle is going out as.
+ *
+ * The first three answer why it is out; the four below answer what the hire
+ * includes, which is what the customer is actually paying for and what they
+ * expect to read on the invoice. Both sets live in one list because the office
+ * picks one thing per booking, not two.
+ *
+ * Order matters: it is the order of the dropdown.
+ */
 export const FLEET_USAGE_TYPES: { value: FleetUsageType; label: string }[] = [
   { value: 'tour', label: 'Tour use' },
   { value: 'internal', label: 'Internal use' },
   { value: 'airport_transfer', label: 'Airport transfer' },
+  { value: 'bus_only', label: 'Bus only' },
+  { value: 'bus_driver', label: 'Bus and driver' },
+  { value: 'bus_driver_fuel', label: 'Bus, driver, fuel' },
+  { value: 'bus_guide_fuel', label: 'Bus, tour guide, fuel' },
 ]
 
 export type FleetBookingNotes = {
@@ -38,10 +59,19 @@ export type FleetBookingNotes = {
     endDate: string
     days: number
     seatsBooked: number
-    /** Legacy: rate per day on bookings taken before amounts were typed in. */
+    /** Agreed rate per day. The total is this multiplied by `days`. */
     dailyRate?: number | null
     /** Total agreed for the rental, VAT inclusive. */
     totalAmount: number
+    /**
+     * What the invoice line should say, when the office typed something in.
+     *
+     * Empty on most bookings, and deliberately so: `fleetInvoiceDescription`
+     * builds a line from the vehicle, the hire type and the day rate, which is
+     * right often enough that making it mandatory would be busywork. This is
+     * for the booking it is wrong for.
+     */
+    invoiceDescription?: string | null
     /** Upfront deposit required to confirm; deducted from the balance due. */
     depositAmount?: number | null
     usageType?: FleetUsageType | null
@@ -95,6 +125,55 @@ export function normalizeUsageType(usageType?: string | null): FleetUsageType {
 export function usageTypeLabel(usageType?: string | null) {
   const value = normalizeUsageType(usageType)
   return FLEET_USAGE_TYPES.find((option) => option.value === value)?.label || 'Tour use'
+}
+
+/**
+ * "R50,000.00" - comma thousands, period decimals, matching the approved
+ * invoice template.
+ *
+ * Lives here rather than in the PDF builder because the booking dialog has to
+ * show the operator the very line the invoice will carry, and the dialog runs
+ * in the browser where pdf-lib must not be imported. One implementation, read
+ * by both.
+ */
+export function formatRands(amount: number) {
+  const value = Number(amount) || 0
+  const [whole, decimals] = Math.abs(value).toFixed(2).split('.')
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${value < 0 ? '-' : ''}R${grouped}.${decimals}`
+}
+
+/**
+ * The line a fleet invoice leads with.
+ *
+ * Names the vehicle, then what the hire includes - which is the thing the
+ * customer queries, and the reason the hire type had to reach the invoice at
+ * all. The day rate follows so the total can be checked rather than taken on
+ * trust: three days at R800 is an arithmetic anyone can do in their head, and
+ * a bare R2,400.00 is not.
+ *
+ * A description typed on the booking wins outright. The office knows what this
+ * particular hire was, and no template beats being told.
+ */
+export function fleetInvoiceDescription(input: {
+  vehicleName: string
+  usageType?: string | null
+  dailyRate?: number | null
+  days?: number | null
+  custom?: string | null
+}) {
+  const typed = (input.custom || '').trim()
+  if (typed) return typed
+
+  const parts = [`${input.vehicleName} rental`, usageTypeLabel(input.usageType)]
+
+  const rate = Number(input.dailyRate) || 0
+  const days = Number(input.days) || 0
+  if (rate > 0 && days > 0) {
+    parts.push(`${formatRands(rate)} per day \u00d7 ${days} day${days === 1 ? '' : 's'}`)
+  }
+
+  return parts.join(' \u2014 ')
 }
 
 /** Total for a rental. Falls back to 0 when either input is unusable. */

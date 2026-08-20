@@ -3,7 +3,7 @@
 import { addDays, differenceInCalendarDays, format, isBefore, parseISO } from 'date-fns'
 import { useEffect, useMemo, useState } from 'react'
 import { clientPrefill, type Client } from '@/lib/clients'
-import { buildSeatsLabel, FLEET_USAGE_TYPES, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
+import { buildSeatsLabel, fleetInvoiceDescription, FLEET_USAGE_TYPES, usageTypeLabel, vehicleRegistration, vehicleSeats } from '@/lib/fleet'
 import { VehiclePreviewCard } from '@/components/fleet/vehicle-preview-card'
 import type { FleetVehicleCardData } from '@/components/fleet/vehicle-card'
 import { ClientPicker } from '@/components/ui/client-picker'
@@ -30,7 +30,11 @@ type BookVehicleDialogProps = {
     bookingDays: string
     startDate: string
     endDate: string
+    /** Agreed rate per day. The total is this multiplied by the rental days. */
+    dailyRate: string
+    /** The total the rate works out to, for callers that display it. */
     amount: string
+    invoiceDescription: string
     depositRequired: boolean
     depositAmount: string
     seatsBooked: string
@@ -72,7 +76,8 @@ export function BookVehicleDialog({
   const [bookingDays, setBookingDays] = useState('2')
   const [startDate, setStartDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [endDate, setEndDate] = useState(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-  const [amount, setAmount] = useState('')
+  const [dailyRate, setDailyRate] = useState('')
+  const [invoiceDescription, setInvoiceDescription] = useState('')
   const [depositRequired, setDepositRequired] = useState(false)
   const [depositAmount, setDepositAmount] = useState('')
   const [seatsBooked, setSeatsBooked] = useState('')
@@ -118,7 +123,8 @@ export function BookVehicleDialog({
     setBookingDays('2')
     setStartDate(format(new Date(), 'yyyy-MM-dd'))
     setEndDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'))
-    setAmount('')
+    setDailyRate('')
+    setInvoiceDescription('')
     setDepositRequired(false)
     setDepositAmount('')
     setSeatsBooked(vehicle ? String(vehicleSeats(vehicle) || 1) : '')
@@ -145,11 +151,27 @@ export function BookVehicleDialog({
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId) || null
   const rentalDays = useMemo(() => computeRentalDays(startDate, endDate), [startDate, endDate])
-  const totalAmount = Math.max(0, Number(amount) || 0)
+  /* Priced per day now, not per booking. The office types one number it has
+     actually agreed with the customer, and the length of the hire does the
+     rest — so a date change re-prices the booking instead of silently leaving
+     a total that no longer matches the days it covers. */
+  const perDayRate = Math.max(0, Number(dailyRate) || 0)
+  const totalAmount = perDayRate * rentalDays
   const deposit = depositRequired ? Math.max(0, Number(depositAmount) || 0) : 0
   const balance = Math.max(0, totalAmount - deposit)
   const depositTooBig = depositRequired && deposit > totalAmount && totalAmount > 0
-  const stepOneReady = totalAmount > 0 && !depositTooBig && (!depositRequired || deposit > 0)
+  const stepOneReady =
+    perDayRate > 0 && rentalDays > 0 && !depositTooBig && (!depositRequired || deposit > 0)
+
+  /* What the invoice will say if nothing is typed below it. Rebuilt as the
+     vehicle, hire type, rate and dates change, so the operator is reading the
+     real line rather than a description of one. */
+  const defaultInvoiceDescription = fleetInvoiceDescription({
+    vehicleName: selectedVehicle?.title || 'Vehicle',
+    usageType,
+    dailyRate: perDayRate,
+    days: rentalDays,
+  })
   const conflicts = vehicleId ? conflictsForVehicle(vehicleId, startDate, endDate) : []
 
   if (!open) return null
@@ -260,7 +282,9 @@ export function BookVehicleDialog({
               bookingDays,
               startDate,
               endDate,
-              amount,
+              dailyRate,
+              amount: String(totalAmount),
+              invoiceDescription,
               depositRequired,
               depositAmount,
               seatsBooked,
@@ -313,7 +337,7 @@ export function BookVehicleDialog({
                 <Field label="Days" type="number" value={bookingDays} onChange={handleBookingDaysChange} />
               </div>
 
-              <Field label="Amount (R)" type="number" value={amount} onChange={setAmount} placeholder="50000" />
+              <Field label="Amount per day (R)" type="number" value={dailyRate} onChange={setDailyRate} placeholder="800" />
 
               <fieldset style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: '12px 14px', margin: 0 }}>
                 <legend style={{ ...fieldLabel, padding: '0 6px' }}>Upfront deposit required?</legend>
@@ -346,6 +370,14 @@ export function BookVehicleDialog({
               </fieldset>
 
               <div style={{ padding: '12px 14px', borderRadius: 8, background: theme.bronzeBg, border: `1px solid ${theme.bronzeBorder}` }}>
+                {/* The arithmetic, spelled out. The operator typed a rate, not
+                    a total, so the total has to show its working or there is
+                    nothing on screen to check it against. */}
+                {perDayRate > 0 && rentalDays > 0 && (
+                  <div style={{ fontSize: 13, color: theme.textMuted, paddingBottom: 6 }}>
+                    {money(perDayRate)} per day × {rentalDays} day{rentalDays === 1 ? '' : 's'}
+                  </div>
+                )}
                 <Totals label="Total (VAT inclusive)" value={totalAmount > 0 ? money(totalAmount) : '—'} strong />
                 {deposit > 0 && (
                   <>
@@ -355,10 +387,29 @@ export function BookVehicleDialog({
                 )}
                 {totalAmount <= 0 && (
                   <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>
-                    Type the agreed amount for this booking.
+                    Type the agreed rate per day for this booking.
                   </div>
                 )}
               </div>
+
+              {/* Optional, and shown with the line it replaces. Most hires are
+                  described perfectly well by the vehicle and what the hire
+                  includes; this is for the one that is not. */}
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={fieldLabel}>Invoice description (optional)</span>
+                <input
+                  type="text"
+                  value={invoiceDescription}
+                  onChange={(e) => setInvoiceDescription(e.target.value)}
+                  placeholder={defaultInvoiceDescription}
+                  style={inputStyle}
+                />
+                <span style={{ fontSize: 12, color: theme.textMuted }}>
+                  {invoiceDescription.trim()
+                    ? 'This is what the invoice will say.'
+                    : `Leave blank and the invoice says: ${defaultInvoiceDescription}`}
+                </span>
+              </label>
 
               {depositTooBig && (
                 <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(196,92,74,0.08)', border: '1px solid rgba(196,92,74,0.22)', color: theme.danger, fontSize: 13 }}>
@@ -405,31 +456,27 @@ export function BookVehicleDialog({
               </div>
               <Field label="Booking notes" value={notes} onChange={setNotes} placeholder="Collection point, driver notes, etc." />
 
-              <fieldset style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: '12px 14px', margin: 0 }}>
-                <legend style={{ ...fieldLabel, padding: '0 6px' }}>Also create this invoice in Xero?</legend>
-                <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
-                  {[
-                    { value: false, label: 'No' },
-                    { value: true, label: 'Yes' },
-                  ].map((option) => (
-                    <label key={option.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: theme.text, cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="sendInvoiceToXero"
-                        checked={sendInvoiceToXero === option.value}
-                        onChange={() => setSendInvoiceToXero(option.value)}
-                        style={{ accentColor: theme.bronze, cursor: 'pointer' }}
-                      />
-                      {option.label}
-                    </label>
-                  ))}
+              {/* Two targets rather than two radio dots. This is the last
+                  decision before the booking is saved and the one with a
+                  consequence outside the console, so it is sized like a choice
+                  instead of a checkbox someone scrolls past. */}
+              <div role="radiogroup" aria-label="Also create this invoice in Xero?">
+                <div style={{ ...fieldLabel, marginBottom: 8 }}>Also create this invoice in Xero?</div>
+                <div style={{ display: 'grid', gap: 10 }} className="admin-form-grid-2">
+                  <ChoiceButton
+                    selected={!sendInvoiceToXero}
+                    onSelect={() => setSendInvoiceToXero(false)}
+                    label="No"
+                    hint="Created here only — nothing is sent to Xero"
+                  />
+                  <ChoiceButton
+                    selected={sendInvoiceToXero}
+                    onSelect={() => setSendInvoiceToXero(true)}
+                    label="Yes"
+                    hint="Also raised in Xero as an approved invoice"
+                  />
                 </div>
-                <p style={{ fontSize: 12, color: theme.textMuted, margin: '8px 0 0' }}>
-                  {sendInvoiceToXero
-                    ? 'The invoice is also raised in Xero.'
-                    : 'The invoice is created here only — nothing is sent to Xero.'}
-                </p>
-              </fieldset>
+              </div>
 
               <div style={{ padding: '12px 14px', borderRadius: 8, background: theme.bronzeBg, border: `1px solid ${theme.bronzeBorder}`, fontSize: 13, color: theme.textMuted }}>
                 <strong style={{ color: theme.text }}>{selectedVehicle?.title}</strong>
@@ -479,6 +526,54 @@ function Totals({ label, value, strong, accent }: { label: string; value: string
       <span style={{ fontSize: 13, fontWeight: strong ? 700 : 600, color: accent ? theme.bronzeDark : theme.text }}>{label}</span>
       <span style={{ fontFamily: theme.headingFont, fontWeight: 800, fontSize: strong ? 20 : 17, color: accent ? theme.bronzeDark : theme.text }}>{value}</span>
     </div>
+  )
+}
+
+/**
+ * A large, obvious either/or.
+ *
+ * Buttons rather than a radio pair because the answer changes what happens
+ * outside this console: Yes raises a real document in the accounts. A 13px dot
+ * is the wrong size for that decision.
+ */
+function ChoiceButton({
+  selected,
+  onSelect,
+  label,
+  hint,
+}: {
+  selected: boolean
+  onSelect: () => void
+  label: string
+  hint: string
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onSelect}
+      style={{
+        display: 'block',
+        width: '100%',
+        textAlign: 'left',
+        padding: '14px 16px',
+        borderRadius: 10,
+        cursor: 'pointer',
+        fontFamily: theme.bodyFont,
+        background: selected ? theme.bronzeBg : theme.surface,
+        border: `2px solid ${selected ? theme.bronze : theme.border}`,
+        color: selected ? theme.bronzeDark : theme.text,
+        transition: 'background 0.15s ease, border-color 0.15s ease',
+      }}
+    >
+      <span style={{ display: 'block', fontSize: 17, fontWeight: 700, fontFamily: theme.headingFont, letterSpacing: '0.02em' }}>
+        {label}
+      </span>
+      <span style={{ display: 'block', fontSize: 12, marginTop: 3, color: selected ? theme.bronzeDark : theme.textMuted, lineHeight: 1.4 }}>
+        {hint}
+      </span>
+    </button>
   )
 }
 
