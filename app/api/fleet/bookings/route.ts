@@ -133,16 +133,8 @@ export async function POST(request: NextRequest) {
       sendInvoiceToXero,
     } = body
 
-    // Email and account number are optional — only the name and dates are needed.
-    const pricedPerDay = dailyRate !== undefined && dailyRate !== null
-    if (
-      !vehicleId ||
-      !firstName ||
-      !surname ||
-      !startDate ||
-      !endDate ||
-      (!pricedPerDay && (amount === undefined || amount === null))
-    ) {
+    // Email, account number and price are optional — only the name and dates are needed.
+    if (!vehicleId || !firstName || !surname || !startDate || !endDate) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -157,16 +149,29 @@ export async function POST(request: NextRequest) {
     /* Priced per day: the office types the daily rate and the server multiplies
        it out, so the total can never disagree with the dates on the booking.
        A bare `amount` is still accepted, because bookings taken before this
-       change - and the edit dialog patching only a total - both send one. */
-    const perDayRate = pricedPerDay ? Number(dailyRate) : 0
-    if (pricedPerDay && (!Number.isFinite(perDayRate) || perDayRate <= 0)) {
-      return NextResponse.json({ error: 'Amount per day must be greater than zero' }, { status: 400 })
+       change - and the edit dialog patching only a total - both send one.
+
+       Neither is required. A vehicle going out for internal use has no price,
+       and making one mandatory had the office typing R1 a day to get past the
+       form, which then sat on the booking, the invoice and the revenue figures
+       as if it had been charged. Blank or zero means "no charge". */
+    const blank = (value: unknown) => value === undefined || value === null || value === ''
+    const perDayRate = blank(dailyRate) ? 0 : Number(dailyRate)
+    if (!Number.isFinite(perDayRate) || perDayRate < 0) {
+      return NextResponse.json({ error: 'Amount per day cannot be negative' }, { status: 400 })
+    }
+    const pricedPerDay = perDayRate > 0
+
+    const typedTotal = blank(amount) ? 0 : Number(amount)
+    if (!Number.isFinite(typedTotal) || typedTotal < 0) {
+      return NextResponse.json({ error: 'Amount cannot be negative' }, { status: 400 })
     }
 
-    const totalAmount = pricedPerDay ? toCents(perDayRate * rentalDays) : Number(amount)
-    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
-      return NextResponse.json({ error: 'Amount must be greater than zero' }, { status: 400 })
-    }
+    const totalAmount = pricedPerDay ? toCents(perDayRate * rentalDays) : typedTotal
+    /* Nothing to invoice for a hire with no price, so no number is allocated,
+       nothing goes to Xero and no PDF is emailed. Pricing it later from the
+       edit dialog issues the number then. */
+    const priced = totalAmount > 0
 
     const bookingInvoiceDescription = invoiceDescription ? String(invoiceDescription).trim() : ''
 
@@ -175,12 +180,15 @@ export async function POST(request: NextRequest) {
     if (wantsDeposit && (!Number.isFinite(deposit) || deposit <= 0)) {
       return NextResponse.json({ error: 'Enter the upfront deposit amount' }, { status: 400 })
     }
+    if (wantsDeposit && !priced) {
+      return NextResponse.json({ error: 'Add an amount per day before taking a deposit' }, { status: 400 })
+    }
     if (wantsDeposit && deposit > totalAmount) {
       return NextResponse.json({ error: 'Deposit cannot be more than the total amount' }, { status: 400 })
     }
 
     // Invoices are generated in the admin. Xero is opt-in and off by default.
-    const wantsXeroInvoice = Boolean(sendInvoiceToXero)
+    const wantsXeroInvoice = Boolean(sendInvoiceToXero) && priced
     const bookingUsageType = normalizeUsageType(usageType)
 
     const { data: vehicle, error: vehicleError } = await getFleetVehicleForBooking(vehicleId)
@@ -237,7 +245,7 @@ export async function POST(request: NextRequest) {
         endDate,
         days: rentalDays,
         seatsBooked: bookedSeats,
-        dailyRate: pricedPerDay ? perDayRate : toCents(totalAmount / rentalDays),
+        dailyRate: pricedPerDay ? perDayRate : priced ? toCents(totalAmount / rentalDays) : null,
         totalAmount,
         invoiceDescription: bookingInvoiceDescription || null,
         depositAmount: deposit > 0 ? deposit : null,
@@ -259,7 +267,8 @@ export async function POST(request: NextRequest) {
         email: customerEmail,
         phone: phone ? String(phone).trim() : null,
         passengers: bookedSeats,
-        amount: totalAmount,
+        // Null rather than 0, so the bookings list shows "—" instead of R 0.
+        amount: priced ? totalAmount : null,
         notes: JSON.stringify(bookingNotes),
       })
       .select('id,created_at')
@@ -277,24 +286,27 @@ export async function POST(request: NextRequest) {
 
     // Allocate the invoice number only now that a row definitely exists — doing
     // it earlier meant a rejected insert still burned a number, leaving gaps in
-    // the INV-#### series.
-    const invoiceNumber = await nextInvoiceNumber()
-    const invoiceMeta = {
-      number: invoiceNumber,
-      issuedAt,
-      dueDate: endDate,
-      issuedByName: admin.full_name,
-      issuedByEmail: admin.email,
-    }
+    // the INV-#### series. An unpriced booking takes no number at all.
+    const invoiceNumber = priced ? await nextInvoiceNumber() : null
 
-    const { error: invoiceStampError } = await supabaseAdmin
-      .from('tour_bookings')
-      .update({ notes: JSON.stringify({ ...bookingNotes, invoice: invoiceMeta }) })
-      .eq('id', insertedBooking.id)
+    if (invoiceNumber) {
+      const invoiceMeta = {
+        number: invoiceNumber,
+        issuedAt,
+        dueDate: endDate,
+        issuedByName: admin.full_name,
+        issuedByEmail: admin.email,
+      }
 
-    if (invoiceStampError) {
-      // The booking is saved and usable; only the stored number is missing.
-      console.error('Fleet booking invoice stamp error:', invoiceStampError)
+      const { error: invoiceStampError } = await supabaseAdmin
+        .from('tour_bookings')
+        .update({ notes: JSON.stringify({ ...bookingNotes, invoice: invoiceMeta }) })
+        .eq('id', insertedBooking.id)
+
+      if (invoiceStampError) {
+        // The booking is saved and usable; only the stored number is missing.
+        console.error('Fleet booking invoice stamp error:', invoiceStampError)
+      }
     }
 
     /* Record the client. This used to be an upsert with onConflict 'email',
@@ -352,44 +364,46 @@ export async function POST(request: NextRequest) {
 
     // Generate the invoice PDF and email a copy to the admin who booked it.
     let invoiceEmail: { sent: boolean; reason?: string } = { sent: false, reason: 'not attempted' }
-    try {
-      const pdf = await buildFleetInvoicePdf({
-        bookingId: insertedBooking.id,
-        createdAt: issuedAt,
-        invoiceNumber,
-        vehicleName: vehicle.title,
-        registrationNumber: vehicleRegistration(vehicle),
-        customerName,
-        accountNumber: customerAccount,
-        startDate,
-        endDate,
-        days: rentalDays,
-        usageType: bookingUsageType,
-        amount: totalAmount,
-        dailyRate: pricedPerDay ? perDayRate : toCents(totalAmount / rentalDays),
-        invoiceDescription: bookingInvoiceDescription || null,
-        depositAmount: deposit > 0 ? deposit : null,
-        notes: notes ? String(notes).trim() : null,
-      })
+    if (invoiceNumber) {
+      try {
+        const pdf = await buildFleetInvoicePdf({
+          bookingId: insertedBooking.id,
+          createdAt: issuedAt,
+          invoiceNumber,
+          vehicleName: vehicle.title,
+          registrationNumber: vehicleRegistration(vehicle),
+          customerName,
+          accountNumber: customerAccount,
+          startDate,
+          endDate,
+          days: rentalDays,
+          usageType: bookingUsageType,
+          amount: totalAmount,
+          dailyRate: pricedPerDay ? perDayRate : toCents(totalAmount / rentalDays),
+          invoiceDescription: bookingInvoiceDescription || null,
+          depositAmount: deposit > 0 ? deposit : null,
+          notes: notes ? String(notes).trim() : null,
+        })
 
-      invoiceEmail = await emailInvoiceToCreator({
-        admin,
-        pdf,
-        invoiceNumber,
-        subjectLine: `Invoice ${invoiceNumber} — ${vehicle.title} rental for ${customerName}`,
-        summaryLines: [
-          `Customer: ${customerName}`,
-          `Vehicle: ${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''}`,
-          `Use: ${usageTypeLabel(bookingUsageType)}`,
-          `Rental period: ${startDate} to ${endDate} (${rentalDays} day${rentalDays === 1 ? '' : 's'})`,
-        ],
-        total: totalAmount,
-        depositAmount: deposit > 0 ? deposit : null,
-      })
-    } catch (error) {
-      // A booking is already saved at this point — never fail it over an invoice.
-      console.error('Fleet invoice generation error:', error)
-      invoiceEmail = { sent: false, reason: 'Invoice could not be generated' }
+        invoiceEmail = await emailInvoiceToCreator({
+          admin,
+          pdf,
+          invoiceNumber,
+          subjectLine: `Invoice ${invoiceNumber} — ${vehicle.title} rental for ${customerName}`,
+          summaryLines: [
+            `Customer: ${customerName}`,
+            `Vehicle: ${vehicle.title}${vehicleRegistration(vehicle) ? ` (${vehicleRegistration(vehicle)})` : ''}`,
+            `Use: ${usageTypeLabel(bookingUsageType)}`,
+            `Rental period: ${startDate} to ${endDate} (${rentalDays} day${rentalDays === 1 ? '' : 's'})`,
+          ],
+          total: totalAmount,
+          depositAmount: deposit > 0 ? deposit : null,
+        })
+      } catch (error) {
+        // A booking is already saved at this point — never fail it over an invoice.
+        console.error('Fleet invoice generation error:', error)
+        invoiceEmail = { sent: false, reason: 'Invoice could not be generated' }
+      }
     }
 
     await logActivityServer({
@@ -433,7 +447,7 @@ export async function POST(request: NextRequest) {
       invoiceNumber,
       invoiceEmailed: invoiceEmail.sent,
       invoiceEmailError: invoiceEmail.sent ? null : invoiceEmail.reason || null,
-      invoiceDownloadUrl: `/api/xero/invoice-pdf?booking_id=${insertedBooking.id}&kind=fleet`,
+      invoiceDownloadUrl: invoiceNumber ? `/api/xero/invoice-pdf?booking_id=${insertedBooking.id}&kind=fleet` : null,
       invoice: invoiceResult.invoice,
       xeroConnected: invoiceResult.connected,
       invoiceRequested: wantsXeroInvoice,
@@ -465,12 +479,16 @@ export async function PATCH(request: NextRequest) {
     /* A day rate wins over a total when both arrive. The edit dialog sends a
        rate, and the total it implies depends on dates that may be changing in
        the same request - so the multiplication happens here, once the new
-       dates are known, rather than in the browser against the old ones. */
+       dates are known, rather than in the browser against the old ones.
+
+       A rate of 0 takes the price off: the booking becomes a no-charge hire.
+       Absent still means "leave it alone". */
     const nextDailyRate = dailyRateRaw === undefined || dailyRateRaw === null ? null : Number(dailyRateRaw)
     const updatingDailyRate = nextDailyRate !== null
-    if (updatingDailyRate && (!Number.isFinite(nextDailyRate) || nextDailyRate <= 0)) {
-      return NextResponse.json({ error: 'Amount per day must be greater than zero' }, { status: 400 })
+    if (updatingDailyRate && (!Number.isFinite(nextDailyRate) || nextDailyRate < 0)) {
+      return NextResponse.json({ error: 'Amount per day cannot be negative' }, { status: 400 })
     }
+    const clearingPrice = updatingDailyRate && nextDailyRate === 0
 
     const nextAmount = amountRaw === undefined || amountRaw === null ? null : Number(amountRaw)
     const updatingAmount = nextAmount !== null
@@ -554,26 +572,46 @@ export async function PATCH(request: NextRequest) {
        within the rounding that display costs. */
     const impliedRate = storedDays > 0 && storedTotal > 0 ? storedTotal / storedDays : null
     const rateChanged =
-      updatingDailyRate && (impliedRate === null || Math.abs(nextDailyRate! - impliedRate) > 0.01)
+      updatingDailyRate &&
+      !clearingPrice &&
+      (impliedRate === null || Math.abs(nextDailyRate! - impliedRate) > 0.01)
 
-    /* A retyped rate first, then a typed total, then whatever rate the booking
-       already implies — so a booking that predates day-rate pricing gets one
-       without its total being disturbed to fit. */
-    const rateAfter = rateChanged
-      ? nextDailyRate!
-      : updatingAmount && nextDays > 0
-        ? toCents(nextAmount! / nextDays)
-        : parsedNotes?.rental.dailyRate ?? impliedRate
+    /* Cleared first, then a retyped rate, then a typed total, then whatever
+       rate the booking already implies — so a booking that predates day-rate
+       pricing gets one without its total being disturbed to fit. */
+    const rateAfter = clearingPrice
+      ? null
+      : rateChanged
+        ? nextDailyRate!
+        : updatingAmount && nextDays > 0
+          ? toCents(nextAmount! / nextDays)
+          : parsedNotes?.rental.dailyRate || impliedRate
 
-    /* Recomputed only when something that determines it moved: a retyped rate,
-       a typed total, or dates that changed the length of the hire. */
-    const totalAfter = rateChanged
-      ? toCents(nextDailyRate! * nextDays)
-      : updatingAmount
-        ? nextAmount!
-        : daysChanged && rateAfter != null
-          ? toCents(rateAfter * nextDays)
-          : storedTotal
+    /* Recomputed only when something that determines it moved: a cleared or
+       retyped rate, a typed total, or dates that changed the length of the
+       hire. */
+    const totalAfter = clearingPrice
+      ? 0
+      : rateChanged
+        ? toCents(nextDailyRate! * nextDays)
+        : updatingAmount
+          ? nextAmount!
+          : daysChanged && rateAfter != null
+            ? toCents(rateAfter * nextDays)
+            : storedTotal
+
+    /* A booking made without a price has no invoice number. Once it is given
+       one, it needs a number like any other priced hire. */
+    const issueInvoice = Boolean(parsedNotes) && !parsedNotes?.invoice && storedTotal <= 0 && totalAfter > 0
+    const invoiceAfter = issueInvoice
+      ? {
+          number: await nextInvoiceNumber(),
+          issuedAt: new Date().toISOString(),
+          dueDate: nextEnd ?? parsedNotes!.rental.endDate,
+          issuedByName: admin.full_name,
+          issuedByEmail: admin.email,
+        }
+      : parsedNotes?.invoice
 
     const pick = (value: unknown, fallback: string | null | undefined) =>
       value === undefined ? fallback ?? null : String(value).trim() || null
@@ -581,6 +619,7 @@ export async function PATCH(request: NextRequest) {
     const updatedNotes = parsedNotes
       ? JSON.stringify({
           ...parsedNotes,
+          invoice: invoiceAfter,
           customer: {
             ...parsedNotes.customer,
             firstName: patchable.firstName === undefined
@@ -610,8 +649,10 @@ export async function PATCH(request: NextRequest) {
               patchable.usageType === undefined
                 ? parsedNotes.rental.usageType
                 : normalizeUsageType(String(patchable.usageType)),
-            depositAmount:
-              patchable.depositAmount === undefined
+            /* No price, nothing to put down against it. */
+            depositAmount: clearingPrice
+              ? null
+              : patchable.depositAmount === undefined
                 ? parsedNotes.rental.depositAmount ?? null
                 : Math.max(0, Number(patchable.depositAmount) || 0) || null,
             invoiceDescription: pick(patchable.invoiceDescription, parsedNotes.rental.invoiceDescription),
@@ -631,8 +672,9 @@ export async function PATCH(request: NextRequest) {
            total moved for any other reason: a new day rate, or dates that made
            the hire longer. The bookings list reads this column, so it showed
            one number while the invoice showed another. Written only when the
-           total actually moved, so an unrelated edit does not touch it. */
-        ...(totalAfter > 0 && totalAfter !== storedTotal ? { amount: totalAfter } : {}),
+           total actually moved, so an unrelated edit does not touch it. A
+           price taken off stores null, which the list shows as "—". */
+        ...(totalAfter !== storedTotal ? { amount: totalAfter > 0 ? totalAfter : null } : {}),
         ...(updatingOperationalStatus
           ? { status: operationalStatusRaw === 'cancelled' ? 'cancelled' : 'confirmed' }
           : {}),

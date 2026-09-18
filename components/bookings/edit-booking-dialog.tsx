@@ -65,7 +65,7 @@ function draftFrom(booking: UnifiedBooking): Draft {
     startDate: booking.date || '',
     endDate: fleet?.endDate || booking.date || '',
     usageType: fleet?.usageType || 'tour',
-    dailyRate: fleet?.dailyRate != null ? String(round2(fleet.dailyRate)) : '',
+    dailyRate: fleet?.dailyRate ? String(round2(fleet.dailyRate)) : '',
     invoiceDescription: fleet?.invoiceDescription || '',
   }
 }
@@ -131,6 +131,10 @@ export function EditBookingDialog({
      office reads back to the customer, so both are on screen. */
   const fleetDays = rentalDays(draft.startDate, draft.endDate)
   const fleetTotal = (Number(draft.dailyRate) || 0) * fleetDays
+  /* A fleet hire saved without a price has no invoice to view or send. Read
+     off the saved booking rather than the draft, so typing a rate does not
+     offer an invoice that will only exist once this is saved. */
+  const noCharge = isFleet && !(Number(booking.amount) > 0)
   const defaultInvoiceDescription = fleetInvoiceDescription({
     vehicleName: booking.tour_or_vehicle || 'Vehicle',
     usageType: draft.usageType,
@@ -161,12 +165,9 @@ export function EditBookingDialog({
               notes: draft.notes,
               /* The rate, not the total. The server re-multiplies it against
                  whatever dates this same save is setting, so changing the end
-                 date re-prices the hire instead of leaving a stale total. */
-              ...(draft.dailyRate
-                ? { dailyRate: Number(draft.dailyRate) }
-                : draft.amount
-                  ? { amount: Number(draft.amount) }
-                  : {}),
+                 date re-prices the hire instead of leaving a stale total.
+                 Blank goes as 0, which the server reads as no charge. */
+              dailyRate: draft.dailyRate ? Number(draft.dailyRate) : 0,
             }),
           })
         : await fetch('/api/bookings', {
@@ -351,11 +352,11 @@ export function EditBookingDialog({
                   ))}
                 </select>
               </div>
-              {field('Amount per day (R)', 'dailyRate', 'number')}
+              {field('Amount per day (R, optional)', 'dailyRate', 'number')}
               <div>
                 <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>Total</label>
                 <div style={{ ...inputStyle, display: 'flex', alignItems: 'center', background: theme.bronzeBg, borderColor: theme.bronzeBorder, fontWeight: 700 }}>
-                  {fleetTotal > 0 ? formatRands(fleetTotal) : '—'}
+                  {fleetTotal > 0 ? formatRands(fleetTotal) : 'No charge'}
                   {fleetDays > 0 && (
                     <span style={{ fontWeight: 400, color: theme.textMuted, marginLeft: 8, fontSize: 12 }}>
                       {fleetDays} day{fleetDays === 1 ? '' : 's'}
@@ -377,7 +378,7 @@ export function EditBookingDialog({
           )}
         </div>
 
-        {isFleet && (
+        {isFleet && fleetTotal > 0 && (
           <div style={{ marginTop: 12 }}>
             <label style={{ display: 'block', ...fieldLabel, marginBottom: 4 }}>
               Invoice description (optional)
@@ -403,20 +404,22 @@ export function EditBookingDialog({
               {saving ? 'Saving…' : 'Save changes'}
             </button>
           )}
-          <button
-            type="button"
-            onClick={sendToClient}
-            disabled={sending || !draft.customerEmail.trim()}
-            title={
-              draft.customerEmail.trim()
-                ? `Email the invoice to ${draft.customerEmail.trim()}`
-                : 'This booking has no email address'
-            }
-            style={{ ...secondaryButton, opacity: draft.customerEmail.trim() ? 1 : 0.5 }}
-          >
-            {sending ? 'Sending…' : 'Send invoice to client'}
-          </button>
-          {onViewInvoice && (
+          {!noCharge && (
+            <button
+              type="button"
+              onClick={sendToClient}
+              disabled={sending || !draft.customerEmail.trim()}
+              title={
+                draft.customerEmail.trim()
+                  ? `Email the invoice to ${draft.customerEmail.trim()}`
+                  : 'This booking has no email address'
+              }
+              style={{ ...secondaryButton, opacity: draft.customerEmail.trim() ? 1 : 0.5 }}
+            >
+              {sending ? 'Sending…' : 'Send invoice to client'}
+            </button>
+          )}
+          {onViewInvoice && !noCharge && (
             <button
               type="button"
               onClick={() => {

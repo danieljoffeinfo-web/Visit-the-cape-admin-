@@ -209,7 +209,8 @@ export function normalizeFleetRow(
           ? 'cancelled'
           : notes?.rental.operationalStatus || (notes?.rental.paymentReceived ? 'paid' : 'pending'),
     invoice_status: invoiceStatus || null,
-    amount: row.amount ?? notes?.rental.totalAmount ?? null,
+    // A no-charge hire has a total of 0, which should read as no price, not R 0.
+    amount: row.amount ?? (notes?.rental.totalAmount || null),
     created_at: row.created_at,
     ...(notes
       ? {
@@ -217,8 +218,10 @@ export function normalizeFleetRow(
             endDate: notes.rental.endDate,
             days: notes.rental.days,
             dailyRate:
-              notes.rental.dailyRate ??
-              (notes.rental.days > 0 ? notes.rental.totalAmount / notes.rental.days : null),
+              notes.rental.dailyRate ||
+              (notes.rental.days > 0 && notes.rental.totalAmount > 0
+                ? notes.rental.totalAmount / notes.rental.days
+                : null),
             usageType: notes.rental.usageType || 'tour',
             invoiceDescription: notes.rental.invoiceDescription ?? null,
             accountNumber: notes.customer.accountNumber ?? null,
@@ -294,10 +297,12 @@ export function bookingHasViewableInvoice(
 ) {
   if (link) return true
   if (booking.invoice_status) return true
-  /* Fleet and add-on bookings always have an invoice to show, because the
-     dashboard generates one from the booking itself rather than waiting for
-     Xero. Everything else needs a link or a status first. */
-  return booking.kind === 'fleet' || booking.kind === 'addon'
+  /* Fleet and add-on bookings have an invoice to show, because the dashboard
+     generates one from the booking itself rather than waiting for Xero — except
+     a fleet hire with no price, which has nothing to invoice. Everything else
+     needs a link or a status first. */
+  if (booking.kind === 'fleet') return Number(booking.amount) > 0
+  return booking.kind === 'addon'
 }
 
 export function invoiceLabelForBooking(

@@ -89,7 +89,7 @@ export async function getFleetOperationalSnapshot(): Promise<FleetOperationalSna
       startDate: notes.rental.startDate,
       endDate: notes.rental.endDate,
       status: row.status || 'confirmed',
-      amount: row.amount ?? notes.rental.totalAmount ?? null,
+      amount: row.amount ?? (notes.rental.totalAmount || null),
       isActiveToday: active,
     })
   }

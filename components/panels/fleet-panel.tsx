@@ -313,8 +313,9 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
       toast.error('Enter the customer name')
       return
     }
-    if (!payload.dailyRate || Number(payload.dailyRate) <= 0) {
-      toast.error('Enter the amount per day')
+    // No amount per day is fine: the vehicle goes out with no price and no invoice.
+    if (payload.dailyRate && Number(payload.dailyRate) < 0) {
+      toast.error('The amount per day cannot be negative')
       return
     }
     if (payload.depositRequired && (!payload.depositAmount || Number(payload.depositAmount) <= 0)) {
@@ -340,8 +341,8 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
           ...payload,
           /* The server multiplies the rate out against its own reading of the
              dates, so the total below is only what the operator was shown. */
-          dailyRate: Number(payload.dailyRate),
-          amount: Number(payload.amount),
+          dailyRate: payload.dailyRate ? Number(payload.dailyRate) : null,
+          amount: Number(payload.amount) || null,
           depositAmount: payload.depositRequired ? Number(payload.depositAmount) : null,
           seatsBooked: payload.seatsBooked ? Number(payload.seatsBooked) : vehicleSeats(vehicle || { duration_label: '1 seat' }) || 1,
         }),
@@ -351,6 +352,11 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
 
       setBookOpen(false)
       loadFleet()
+
+      if (!result.invoiceNumber) {
+        toast.success('Vehicle booked out. No price, so no invoice was made.')
+        return
+      }
 
       toast.success(
         result.invoiceEmailed
@@ -485,22 +491,24 @@ export function FleetPanel({ onNavigate }: { onNavigate: (panel: string) => void
                       {item.customerName} · {format(parseISO(item.startDate), 'd MMM')} → {format(parseISO(item.endDate), 'd MMM yyyy')}
                     </div>
                     <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 4 }}>
-                      {money(item.totalAmount)}
-                      {item.depositAmount
+                      {item.totalAmount > 0 ? money(item.totalAmount) : 'No charge'}
+                      {item.totalAmount > 0 && item.depositAmount
                         ? ` · ${money(Number(item.depositAmount))} upfront, ${money(Math.max(0, item.totalAmount - Number(item.depositAmount)))} balance`
                         : ''}
                     </div>
-                    <div style={{ fontSize: 12, marginTop: 4, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span style={{ color: theme.textFaint }}>{item.invoiceNumber || item.invoice?.status || 'No invoice'}</span>
-                      <a
-                        href={`/api/xero/invoice-pdf?booking_id=${encodeURIComponent(item.booking.id)}&kind=fleet`}
-                        target="_blank"
-                        rel="noopener"
-                        style={{ color: theme.bronzeDark, fontWeight: 600, textDecoration: 'none' }}
-                      >
-                        Download invoice
-                      </a>
-                    </div>
+                    {item.totalAmount > 0 && (
+                      <div style={{ fontSize: 12, marginTop: 4, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ color: theme.textFaint }}>{item.invoiceNumber || item.invoice?.status || 'No invoice'}</span>
+                        <a
+                          href={`/api/xero/invoice-pdf?booking_id=${encodeURIComponent(item.booking.id)}&kind=fleet`}
+                          target="_blank"
+                          rel="noopener"
+                          style={{ color: theme.bronzeDark, fontWeight: 600, textDecoration: 'none' }}
+                        >
+                          Download invoice
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

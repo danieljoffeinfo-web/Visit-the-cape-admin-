@@ -151,17 +151,22 @@ export function BookVehicleDialog({
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId) || null
   const rentalDays = useMemo(() => computeRentalDays(startDate, endDate), [startDate, endDate])
-  /* Priced per day now, not per booking. The office types one number it has
+  /* Priced per day, not per booking. The office types one number it has
      actually agreed with the customer, and the length of the hire does the
      rest — so a date change re-prices the booking instead of silently leaving
-     a total that no longer matches the days it covers. */
+     a total that no longer matches the days it covers.
+
+     Optional. Plenty of vehicles go out with nothing to charge — internal use
+     most of all — and a required field only had the office typing R1 a day to
+     get past it. Left blank, the booking is saved with no price and no invoice. */
   const perDayRate = Math.max(0, Number(dailyRate) || 0)
   const totalAmount = perDayRate * rentalDays
+  const priced = totalAmount > 0
   const deposit = depositRequired ? Math.max(0, Number(depositAmount) || 0) : 0
   const balance = Math.max(0, totalAmount - deposit)
-  const depositTooBig = depositRequired && deposit > totalAmount && totalAmount > 0
+  const depositTooBig = depositRequired && deposit > totalAmount && priced
   const stepOneReady =
-    perDayRate > 0 && rentalDays > 0 && !depositTooBig && (!depositRequired || deposit > 0)
+    rentalDays > 0 && !depositTooBig && (!depositRequired || (priced && deposit > 0))
 
   /* What the invoice will say if nothing is typed below it. Rebuilt as the
      vehicle, hire type, rate and dates change, so the operator is reading the
@@ -285,10 +290,10 @@ export function BookVehicleDialog({
               dailyRate,
               amount: String(totalAmount),
               invoiceDescription,
-              depositRequired,
+              depositRequired: priced && depositRequired,
               depositAmount,
               seatsBooked,
-              sendInvoiceToXero,
+              sendInvoiceToXero: priced && sendInvoiceToXero,
               firstName,
               surname,
               accountNumber,
@@ -337,37 +342,47 @@ export function BookVehicleDialog({
                 <Field label="Days" type="number" value={bookingDays} onChange={handleBookingDaysChange} />
               </div>
 
-              <Field label="Amount per day (R)" type="number" value={dailyRate} onChange={setDailyRate} placeholder="800" />
+              <Field
+                label="Amount per day (R, optional)"
+                type="number"
+                value={dailyRate}
+                onChange={setDailyRate}
+                placeholder="Leave blank if there is no charge"
+              />
 
-              <fieldset style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: '12px 14px', margin: 0 }}>
-                <legend style={{ ...fieldLabel, padding: '0 6px' }}>Upfront deposit required?</legend>
-                <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
-                  {[
-                    { value: true, label: 'Yes' },
-                    { value: false, label: 'No' },
-                  ].map((option) => (
-                    <label key={option.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: theme.text, cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="depositRequired"
-                        checked={depositRequired === option.value}
-                        onChange={() => {
-                          setDepositRequired(option.value)
-                          if (!option.value) setDepositAmount('')
-                        }}
-                        style={{ accentColor: theme.bronze, cursor: 'pointer' }}
-                      />
-                      {option.label}
-                    </label>
-                  ))}
-                </div>
-
-                {depositRequired && (
-                  <div style={{ marginTop: 12 }}>
-                    <Field label="Deposit amount (R)" type="number" value={depositAmount} onChange={setDepositAmount} placeholder="10000" />
+              {/* A deposit is taken against a price, so the question waits
+                  until there is one. */}
+              {priced && (
+                <fieldset style={{ border: `1px solid ${theme.border}`, borderRadius: 8, padding: '12px 14px', margin: 0 }}>
+                  <legend style={{ ...fieldLabel, padding: '0 6px' }}>Upfront deposit required?</legend>
+                  <div style={{ display: 'flex', gap: 18, marginTop: 4 }}>
+                    {[
+                      { value: true, label: 'Yes' },
+                      { value: false, label: 'No' },
+                    ].map((option) => (
+                      <label key={option.label} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 14, color: theme.text, cursor: 'pointer' }}>
+                        <input
+                          type="radio"
+                          name="depositRequired"
+                          checked={depositRequired === option.value}
+                          onChange={() => {
+                            setDepositRequired(option.value)
+                            if (!option.value) setDepositAmount('')
+                          }}
+                          style={{ accentColor: theme.bronze, cursor: 'pointer' }}
+                        />
+                        {option.label}
+                      </label>
+                    ))}
                   </div>
-                )}
-              </fieldset>
+
+                  {depositRequired && (
+                    <div style={{ marginTop: 12 }}>
+                      <Field label="Deposit amount (R)" type="number" value={depositAmount} onChange={setDepositAmount} placeholder="10000" />
+                    </div>
+                  )}
+                </fieldset>
+              )}
 
               <div style={{ padding: '12px 14px', borderRadius: 8, background: theme.bronzeBg, border: `1px solid ${theme.bronzeBorder}` }}>
                 {/* The arithmetic, spelled out. The operator typed a rate, not
@@ -378,38 +393,41 @@ export function BookVehicleDialog({
                     {money(perDayRate)} per day × {rentalDays} day{rentalDays === 1 ? '' : 's'}
                   </div>
                 )}
-                <Totals label="Total (VAT inclusive)" value={totalAmount > 0 ? money(totalAmount) : '—'} strong />
-                {deposit > 0 && (
+                <Totals label="Total (VAT inclusive)" value={priced ? money(totalAmount) : 'No charge'} strong />
+                {priced && deposit > 0 && (
                   <>
                     <Totals label="Upfront payment" value={money(deposit)} accent />
                     <Totals label="Balance" value={money(balance)} strong />
                   </>
                 )}
-                {totalAmount <= 0 && (
+                {!priced && (
                   <div style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>
-                    Type the agreed rate per day for this booking.
+                    No amount per day, so the vehicle is booked out without a price or an invoice.
                   </div>
                 )}
               </div>
 
               {/* Optional, and shown with the line it replaces. Most hires are
                   described perfectly well by the vehicle and what the hire
-                  includes; this is for the one that is not. */}
-              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={fieldLabel}>Invoice description (optional)</span>
-                <input
-                  type="text"
-                  value={invoiceDescription}
-                  onChange={(e) => setInvoiceDescription(e.target.value)}
-                  placeholder={defaultInvoiceDescription}
-                  style={inputStyle}
-                />
-                <span style={{ fontSize: 12, color: theme.textMuted }}>
-                  {invoiceDescription.trim()
-                    ? 'This is what the invoice will say.'
-                    : `Leave blank and the invoice says: ${defaultInvoiceDescription}`}
-                </span>
-              </label>
+                  includes; this is for the one that is not. Nothing to describe
+                  when there is no invoice. */}
+              {priced && (
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={fieldLabel}>Invoice description (optional)</span>
+                  <input
+                    type="text"
+                    value={invoiceDescription}
+                    onChange={(e) => setInvoiceDescription(e.target.value)}
+                    placeholder={defaultInvoiceDescription}
+                    style={inputStyle}
+                  />
+                  <span style={{ fontSize: 12, color: theme.textMuted }}>
+                    {invoiceDescription.trim()
+                      ? 'This is what the invoice will say.'
+                      : `Leave blank and the invoice says: ${defaultInvoiceDescription}`}
+                  </span>
+                </label>
+              )}
 
               {depositTooBig && (
                 <div style={{ padding: '10px 12px', borderRadius: 8, background: 'rgba(196,92,74,0.08)', border: '1px solid rgba(196,92,74,0.22)', color: theme.danger, fontSize: 13 }}>
@@ -459,33 +477,38 @@ export function BookVehicleDialog({
               {/* Two targets rather than two radio dots. This is the last
                   decision before the booking is saved and the one with a
                   consequence outside the console, so it is sized like a choice
-                  instead of a checkbox someone scrolls past. */}
-              <div role="radiogroup" aria-label="Also create this invoice in Xero?">
-                <div style={{ ...fieldLabel, marginBottom: 8 }}>Also create this invoice in Xero?</div>
-                <div style={{ display: 'grid', gap: 10 }} className="admin-form-grid-2">
-                  <ChoiceButton
-                    selected={!sendInvoiceToXero}
-                    onSelect={() => setSendInvoiceToXero(false)}
-                    label="No"
-                    hint="Created here only — nothing is sent to Xero"
-                  />
-                  <ChoiceButton
-                    selected={sendInvoiceToXero}
-                    onSelect={() => setSendInvoiceToXero(true)}
-                    label="Yes"
-                    hint="Also raised in Xero as an approved invoice"
-                  />
+                  instead of a checkbox someone scrolls past. Not asked when
+                  there is no price, because there is no invoice. */}
+              {priced && (
+                <div role="radiogroup" aria-label="Also create this invoice in Xero?">
+                  <div style={{ ...fieldLabel, marginBottom: 8 }}>Also create this invoice in Xero?</div>
+                  <div style={{ display: 'grid', gap: 10 }} className="admin-form-grid-2">
+                    <ChoiceButton
+                      selected={!sendInvoiceToXero}
+                      onSelect={() => setSendInvoiceToXero(false)}
+                      label="No"
+                      hint="Created here only — nothing is sent to Xero"
+                    />
+                    <ChoiceButton
+                      selected={sendInvoiceToXero}
+                      onSelect={() => setSendInvoiceToXero(true)}
+                      label="Yes"
+                      hint="Also raised in Xero as an approved invoice"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div style={{ padding: '12px 14px', borderRadius: 8, background: theme.bronzeBg, border: `1px solid ${theme.bronzeBorder}`, fontSize: 13, color: theme.textMuted }}>
                 <strong style={{ color: theme.text }}>{selectedVehicle?.title}</strong>
                 {' · '}
                 {format(parseISO(startDate), 'd MMM')} → {format(parseISO(endDate), 'd MMM yyyy')}
-                {totalAmount > 0 ? ` · ${money(totalAmount)}` : ''}
-                {deposit > 0 ? ` · ${money(deposit)} upfront, ${money(balance)} balance` : ''}
+                {priced ? ` · ${money(totalAmount)}` : ' · No charge'}
+                {priced && deposit > 0 ? ` · ${money(deposit)} upfront, ${money(balance)} balance` : ''}
                 <div style={{ marginTop: 6 }}>
-                  The invoice is generated on save. You can download it, and a copy is emailed to you.
+                  {priced
+                    ? 'The invoice is generated on save. You can download it, and a copy is emailed to you.'
+                    : 'No invoice is made for a booking without a price. Add an amount per day later from Bookings and one is issued.'}
                 </div>
               </div>
             </>
@@ -507,7 +530,7 @@ export function BookVehicleDialog({
               </button>
             ) : (
               <button type="submit" disabled={saving || vehicles.length === 0} style={primaryButton}>
-                {saving ? 'Creating booking…' : sendInvoiceToXero ? 'Book & create invoice' : 'Book vehicle'}
+                {saving ? 'Creating booking…' : priced && sendInvoiceToXero ? 'Book & create invoice' : 'Book vehicle'}
               </button>
             )}
             <button type="button" onClick={onClose} style={secondaryButton}>
