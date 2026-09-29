@@ -56,6 +56,7 @@ export const INVOICE_ARCHIVE_EMAILS = addressList(process.env.INVOICE_ARCHIVE_EM
  */
 export const ENQUIRY_NOTIFY_EMAILS = addressList(process.env.ENQUIRY_NOTIFY_EMAIL, [
   'tanya@unscriptedtravel.co.za',
+  'danieljoffeinfo@gmail.com',
 ])
 
 /** Invoice palette sampled from the approved VC invoice template. */
