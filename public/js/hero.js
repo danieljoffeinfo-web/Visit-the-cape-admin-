@@ -1,6 +1,6 @@
   (function () {
     /* ─── SUPABASE (lazy — never blocks animation startup) ─── */
-    const SUPA_URL = window.__SUPA_CONFIG?.url || 'https://ufcawaywfgzrhfbzxtgz.supabase.co';
+    const SUPA_URL = window.__SUPA_CONFIG?.url || 'https://zsxiflghjqacoayhbsyg.supabase.co';
     const SUPA_KEY = window.__SUPA_CONFIG?.key || 'sb_publishable_mbKqLIKHFrP0TvJjhCtf-A_QFgo2Tai';
     let _sbClient = null;
     function sb() { return _sbClient || (_sbClient = window.supabase.createClient(SUPA_URL, SUPA_KEY)); }

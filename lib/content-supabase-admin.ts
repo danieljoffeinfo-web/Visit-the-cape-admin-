@@ -1,24 +1,22 @@
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
-const DEFAULT_CONTENT_URL = 'https://ufcawaywfgzrhfbzxtgz.supabase.co'
-
-let client: SupabaseClient | null = null
-
-export function getContentSupabaseAdmin() {
-  if (client) return client
-
-  const url = (process.env.CONTENT_SUPABASE_URL?.trim() || DEFAULT_CONTENT_URL).replace(/\/$/, '')
-  const key = process.env.CONTENT_SUPABASE_SERVICE_ROLE_KEY?.trim()
-
-  if (!key) {
-    throw new Error('CONTENT_SUPABASE_SERVICE_ROLE_KEY is not configured')
-  }
-
-  client = createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-
-  return client
+/**
+ * The website's content tables (tours, blog_posts, add_ons, site_settings,
+ * private_tour_bookings) and its enquiries / tag-along bookings.
+ *
+ * These used to live in a separate "Visit the Cape Main" Supabase project
+ * (ufcawaywfgzrhfbzxtgz), reached with CONTENT_SUPABASE_URL and
+ * CONTENT_SUPABASE_SERVICE_ROLE_KEY. In October 2026 the two projects were
+ * merged into this one to stop paying for both, so the "content" client is now
+ * simply the admin client. CONTENT_SUPABASE_* are ignored and can be deleted
+ * from Vercel.
+ *
+ * The function is kept so the call sites (and enquiries-server / bookings-db,
+ * which still distinguish a "content" source) don't need to change.
+ */
+export function getContentSupabaseAdmin(): SupabaseClient {
+  return supabaseAdmin
 }
 
 export type WebsiteTour = {
